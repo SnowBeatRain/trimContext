@@ -1,0 +1,2 @@
+{"messages":[{"role":"system","content":"You are helpful."},{"role":"user","content":"Hello"},{"role":"assistant","content":"Hi there"}]}
+{"role":"developer","content":"Always keep this instruction."}

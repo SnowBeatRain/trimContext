@@ -1,0 +1,10 @@
+node_modules/
+dist/
+tmp-real-validation/
+datasets/private/
+reports/
+coverage/
+.env
+.env.*
+*.test.json
+*.test.jsonl

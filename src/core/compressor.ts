@@ -1,0 +1,58 @@
+import { readFile, writeFile } from "node:fs/promises";
+import { analyzeMessages, parseJsonl } from "./analyzer.js";
+import { createReport } from "./reporter.js";
+import type { AnalysisReport } from "../types/report.js";
+import type { NormalizedMessage } from "../types/message.js";
+
+export interface CompressResult {
+  removedMessages: number;
+  report: AnalysisReport;
+}
+
+export async function compressFile(inputFile: string, outputFile: string): Promise<CompressResult> {
+  const input = await readFile(inputFile, "utf8");
+  const parsed = parseJsonl(input, inputFile);
+  const analyzed = analyzeMessages(parsed);
+  const report = createReport(analyzed, inputFile);
+  const removeIds = new Set(
+    analyzed
+      .filter((message) => message.decision === "remove_candidate" && !message.protected)
+      .map((message) => message.id)
+  );
+
+  const output = parsed[0]?.source === "openai-jsonl"
+    ? compressOpenAiLines(input, analyzed, removeIds)
+    : analyzed
+        .filter((message) => !removeIds.has(message.id))
+        .map((message) => message.rawLine)
+        .join("\n");
+
+  await writeFile(outputFile, output, "utf8");
+  return { removedMessages: removeIds.size, report };
+}
+
+function compressOpenAiLines(input: string, analyzed: NormalizedMessage[], removeIds: Set<string>): string {
+  const byLine = new Map<number, typeof analyzed>();
+  for (const message of analyzed) {
+    const list = byLine.get(message.sourceLine) ?? [];
+    list.push(message);
+    byLine.set(message.sourceLine, list);
+  }
+
+  return input
+    .split(/\r?\n/)
+    .map((line, index) => ({ line, sourceLine: index + 1 }))
+    .filter(({ line }) => line.trim().length > 0)
+    .flatMap(({ line, sourceLine }) => {
+      const messages = byLine.get(sourceLine) ?? [];
+      if (messages.length === 0) return [line];
+      const raw = JSON.parse(line) as Record<string, unknown>;
+      if (Array.isArray(raw.messages)) {
+        const kept = raw.messages.filter((_, index) => !removeIds.has(messages[index]?.id ?? ""));
+        if (kept.length === 0) return [];
+        return [JSON.stringify({ ...raw, messages: kept })];
+      }
+      return removeIds.has(messages[0].id) ? [] : [line];
+    })
+    .join("\n");
+}

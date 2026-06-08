@@ -1,0 +1,7 @@
+{"type":"system","uuid":"sys-1","timestamp":"2026-06-05T10:00:00.000Z","sessionId":"sess-1","message":{"role":"system","content":"You are Claude Code. Follow project instructions."}}
+{"type":"user","uuid":"u-1","parentUuid":"sys-1","timestamp":"2026-06-05T10:01:00.000Z","sessionId":"sess-1","message":{"role":"user","content":"Analyze src/app.ts and remember we use TypeScript only."}}
+{"type":"assistant","uuid":"a-1","parentUuid":"u-1","timestamp":"2026-06-05T10:02:00.000Z","sessionId":"sess-1","message":{"role":"assistant","content":[{"type":"text","text":"I will inspect the file."},{"type":"tool_use","id":"tool-1","name":"Read","input":{"file_path":"src/app.ts"}}]}}
+{"type":"user","uuid":"tr-1","parentUuid":"a-1","timestamp":"2026-06-05T10:03:00.000Z","sessionId":"sess-1","message":{"role":"tool","content":[{"type":"tool_result","tool_use_id":"tool-1","content":"export const app = true;"}]}}
+{"type":"assistant","uuid":"a-2","parentUuid":"tr-1","timestamp":"2026-06-05T10:04:00.000Z","sessionId":"sess-1","message":{"role":"assistant","content":"The file exports app = true."}}
+{"type":"user","uuid":"u-2","parentUuid":"a-2","timestamp":"2026-06-05T10:05:00.000Z","sessionId":"sess-1","message":{"role":"user","content":"Correction: instead use src/main.ts and ignore previous file."}}
+{"type":"assistant","uuid":"a-3","parentUuid":"u-2","timestamp":"2026-06-05T10:06:00.000Z","sessionId":"sess-1","message":{"role":"assistant","content":"Understood. I will use src/main.ts."}}
