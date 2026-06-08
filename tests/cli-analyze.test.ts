@@ -16,13 +16,10 @@ describe("analyze CLI", () => {
     });
 
     expect(stdout).toContain("trimctx analysis");
-    expect(stdout).toContain("messages:");
-    expect(stdout).toContain("tokens:");
-    expect(stdout).toContain("protected:");
-    expect(stdout).toContain("remove candidates:");
-    expect(stdout).toContain("compress candidates:");
-    expect(stdout).toContain("estimated saving:");
-    expect(stdout).toContain("top reasons:");
+    expect(stdout).toContain("messages /");
+    expect(stdout).toContain("tokens");
+    expect(stdout).toContain("health:");
+    expect(stdout).toContain("rot:");
     expect(stdout).toContain("next:");
     expect(stdout).not.toContain('"messages": [');
   });

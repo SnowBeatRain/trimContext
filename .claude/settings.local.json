@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__codegraph__codegraph_files",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npm run *)",
+      "Bash(node *)",
+      "Bash(npx tsx *)",
+      "Bash(npm link *)",
+      "Bash(where trimctx *)",
+      "Bash(git rm *)",
+      "Bash(npm test *)",
+      "Bash(read f *)",
+      "Bash(grep -rn \"C:\\\\\\\\\\\\\\\\Users\" --include=\"*.md\" --include=\"*.json\" --include=\"*.ts\" .)",
+      "Bash(npm pack *)",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(trimctx analyze *)",
+      "Bash(trimctx resume *)",
+      "Bash(rm .claude/commands/trimctx.md)",
+      "Bash(mkdir -p .claude/commands/trimctx)"
+    ]
+  }
+}

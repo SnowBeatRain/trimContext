@@ -78,7 +78,8 @@ function computeScores(
       0.15 * redundancy_score +
       0.1 * orphan_tool_score
   );
-  const rot_score = clamp(Math.max(base_rot_score, low_value_score));
+  const importance_discount = computeImportanceDiscount(message);
+  const rot_score = clamp(Math.max(base_rot_score, low_value_score) - importance_discount);
 
   return {
     superseded_score,
@@ -164,4 +165,24 @@ function jaccard(a: string[], b: string[]): number {
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(1, Number(value.toFixed(4))));
+}
+
+const IMPORTANCE_DISCOUNTS: Record<string, number> = {
+  contains_code_block: 0.15,
+  contains_error_stack: 0.15,
+  contains_git_diff: 0.15,
+  contains_test_failure: 0.15,
+  contains_shell_command: 0.1,
+  contains_architecture_or_api_decision: 0.1,
+  tool_result_referenced_later: 0.1,
+  contains_file_path: 0.05,
+  references_tool_result: 0.05
+};
+
+function computeImportanceDiscount(message: NormalizedMessage): number {
+  let discount = 0;
+  for (const reason of message.reasons ?? []) {
+    discount += IMPORTANCE_DISCOUNTS[reason] ?? 0;
+  }
+  return discount;
 }

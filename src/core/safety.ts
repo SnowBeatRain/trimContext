@@ -1,7 +1,14 @@
 import type { NormalizedMessage, Reason } from "../types/message.js";
 
+const HARD_PROTECT_REASONS: Reason[] = [
+  "system_or_developer_message",
+  "contains_memory_instruction",
+  "contains_user_decision",
+  "recent_message"
+];
+
 export function applySafetyRules(messages: NormalizedMessage[]): NormalizedMessage[] {
-  const recentStart = findRecentWindowStart(messages, 6);
+  const recentStart = findRecentWindowStart(messages, 30);
   const referencedToolResults = findReferencedToolResults(messages);
 
   return messages.map((message, index) => {
@@ -50,21 +57,7 @@ export function applySafetyRules(messages: NormalizedMessage[]): NormalizedMessa
 
     const next = { ...message, reasons: [...reasons] };
     next.protected = next.reasons.some((reason) =>
-      [
-        "system_or_developer_message",
-        "recent_message",
-        "contains_code_block",
-        "contains_error_stack",
-        "contains_file_path",
-        "contains_shell_command",
-        "contains_git_diff",
-        "contains_test_failure",
-        "contains_memory_instruction",
-        "contains_user_decision",
-        "contains_architecture_or_api_decision",
-        "tool_result_referenced_later",
-        "references_tool_result"
-      ].includes(reason)
+      HARD_PROTECT_REASONS.includes(reason)
     );
     return next;
   });
@@ -79,17 +72,8 @@ function referencesAnyToolResult(content: string, ids: Set<string>): boolean {
   return false;
 }
 
-function findRecentWindowStart(messages: NormalizedMessage[], userTurns: number): number {
-  let seen = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === "user" && !messages[index].tool?.isToolResult) {
-      seen += 1;
-      if (seen === userTurns) {
-        return index;
-      }
-    }
-  }
-  return seen > 0 ? 0 : messages.length;
+function findRecentWindowStart(messages: NormalizedMessage[], count: number): number {
+  return Math.max(0, messages.length - count);
 }
 
 function findReferencedToolResults(messages: NormalizedMessage[]): Set<string> {
