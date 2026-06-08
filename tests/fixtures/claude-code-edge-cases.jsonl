@@ -1,0 +1,8 @@
+{"type":"mode","mode":"default","sessionId":"edge-session"}
+{"type":"user","isMeta":true,"uuid":"meta-1","sessionId":"edge-session","message":{"role":"user","content":"Injected skill instructions should be protected metadata"}}
+{"type":"assistant","uuid":"stream-start","sessionId":"edge-session","message":{"id":"assistant-stream-1","role":"assistant","content":"Draft answer","usage":{"input_tokens":0,"output_tokens":0}}}
+{"type":"assistant","uuid":"stream-final","sessionId":"edge-session","message":{"id":"assistant-stream-1","role":"assistant","content":"Final answer","usage":{"input_tokens":12,"output_tokens":8}}}
+{"type":"assistant","uuid":"tool-use-1","sessionId":"edge-session","message":{"role":"assistant","content":[{"type":"text","text":"Reading files"},{"type":"tool_use","id":"tool-1","name":"Read","input":{"file_path":"src/app.ts"}}]}}
+{"type":"user","uuid":"tool-result-string","sessionId":"edge-session","message":{"role":"tool","content":[{"type":"tool_result","tool_use_id":"tool-1","content":"string result content"}]}}
+{"type":"user","uuid":"tool-result-list","sessionId":"edge-session","message":{"role":"tool","content":[{"type":"tool_result","tool_use_id":"tool-2","content":[{"type":"text","text":"list result line 1"},{"type":"text","text":"list result line 2"}]}]}}
+{"type":"system","subtype":"away_summary","uuid":"away-1","sessionId":"edge-session","summary":"Previous conversation was compacted"}

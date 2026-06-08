@@ -14,8 +14,12 @@ export function applySafetyRules(messages: NormalizedMessage[]): NormalizedMessa
   return messages.map((message, index) => {
     const reasons = new Set<Reason>(message.reasons ?? []);
     const content = message.content;
+    const raw = message.raw as Record<string, unknown> | undefined;
 
     if (message.role === "system" || message.role === "developer") {
+      reasons.add("system_or_developer_message");
+    }
+    if (raw?.subtype === "away_summary") {
       reasons.add("system_or_developer_message");
     }
     if (index >= recentStart) {

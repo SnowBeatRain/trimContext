@@ -12,6 +12,13 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
   lines.push("");
   lines.push(`  ${s.total_messages} messages / ${formatTokens(s.total_tokens)}`);
   lines.push(`  health: ${healthLabel(health, color)}  rot: ${formatRatio(rotRate)} (${rotCount} candidates)`);
+
+  if (report.warnings.length > 0) {
+    for (const w of report.warnings) {
+      lines.push(`  ! ${w}`);
+    }
+  }
+
   lines.push("");
 
   if (rotCount > 0) {

@@ -90,4 +90,19 @@ describe("safety rules", () => {
     expect(protectedMessages[1].reasons).toContain("tool_result_referenced_later");
     expect(protectedMessages[1].protected).toBe(false);
   });
+
+  test("protects away_summary messages", () => {
+    const messages: NormalizedMessage[] = [
+      {
+        ...message("m1", "system", "compacted context"),
+        raw: { type: "system", subtype: "away_summary", message: { role: "system", content: "compacted context" } }
+      },
+      ...padding(35)
+    ];
+
+    const protectedMessages = applySafetyRules(messages);
+
+    expect(protectedMessages[0].protected).toBe(true);
+    expect(protectedMessages[0].reasons).toContain("system_or_developer_message");
+  });
 });

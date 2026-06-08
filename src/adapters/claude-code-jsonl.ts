@@ -2,11 +2,34 @@ import { flattenContent, isRecord, normalizeRole } from "./content.js";
 import type { NormalizedMessage } from "../types/message.js";
 
 export function parseClaudeCodeJsonl(input: string, file = "<input>"): NormalizedMessage[] {
-  return input
+  const entries = input
     .split(/\r?\n/)
     .map((line, index) => ({ line, sourceLine: index + 1 }))
-    .filter(({ line }) => line.trim().length > 0)
-    .map(({ line, sourceLine }) => parseLine(line, sourceLine, file));
+    .filter(({ line }) => line.trim().length > 0);
+
+  const results: NormalizedMessage[] = [];
+  const seenMessageIds = new Map<string, number>();
+
+  for (const { line, sourceLine } of entries) {
+    const parsed = parseLine(line, sourceLine, file);
+    const raw = parsed.raw as Record<string, unknown> | undefined;
+    const messageId = isRecord(raw?.message) ? String(raw!.message.id ?? "") : "";
+
+    if (messageId) {
+      const prevIndex = seenMessageIds.get(messageId);
+      if (prevIndex !== undefined) {
+        if (isRecord(raw?.message) && raw!.message.usage) {
+          results[prevIndex] = parsed;
+        }
+        continue;
+      }
+      seenMessageIds.set(messageId, results.length);
+    }
+
+    results.push(parsed);
+  }
+
+  return results;
 }
 
 function parseLine(line: string, sourceLine: number, file: string): NormalizedMessage {
@@ -17,10 +40,15 @@ function parseLine(line: string, sourceLine: number, file: string): NormalizedMe
 
   const message = isRecord(raw.message) ? raw.message : undefined;
   const type = typeof raw.type === "string" ? raw.type : undefined;
-  const role = type === "system" ? "system" : normalizeRole(message?.role, normalizeRole(type));
-  const flattened = message
+  const isMeta = type === "user" && raw.isMeta === true;
+  const role = type === "system" || isMeta ? "system" : normalizeRole(message?.role, normalizeRole(type));
+  let flattened = message
     ? flattenContent(message.content ?? raw.content)
     : flattenClaudeMetadata(raw, type);
+
+  if (isMeta) {
+    flattened = { ...flattened, text: `[isMeta] ${flattened.text}` };
+  }
 
   return {
     id: typeof raw.uuid === "string" ? raw.uuid : `${file}:${sourceLine}`,

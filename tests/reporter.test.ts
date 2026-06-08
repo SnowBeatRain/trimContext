@@ -45,4 +45,49 @@ describe("createReport", () => {
       { reason: "low_reference_in_later_context", count: 1 }
     ]);
   });
+
+  test("warns when Claude Code input contains an away_summary compact signal", () => {
+    const message = analyzedMessage("m1", ["old_message"]);
+    const report = createReport(
+      [
+        {
+          ...message,
+          source: "claude-code-jsonl",
+          raw: {
+            type: "system",
+            subtype: "away_summary"
+          }
+        }
+      ],
+      "session.jsonl"
+    );
+
+    expect(report.warnings.join("\n")).toContain("session_compacted");
+    expect(report.warnings.join("\n")).toContain("away_summary");
+  });
+
+  test("warns for compact_boundary signals", () => {
+    const message = analyzedMessage("m1", ["old_message"]);
+    const report = createReport(
+      [
+        {
+          ...message,
+          source: "claude-code-jsonl",
+          raw: {
+            type: "system",
+            subtype: "compact_boundary"
+          }
+        }
+      ],
+      "session.jsonl"
+    );
+
+    expect(report.warnings.join("\n")).toContain("session_compacted");
+    expect(report.warnings.join("\n")).toContain("compact_boundary");
+  });
+
+  test("returns empty warnings when no compact signals", () => {
+    const report = createReport([analyzedMessage("m1", ["old_message"])], "session.jsonl");
+    expect(report.warnings).toEqual([]);
+  });
 });

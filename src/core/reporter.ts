@@ -6,6 +6,7 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
   const removeCandidates = analyzedMessages.filter((message) => message.decision === "remove_candidate");
   const totalTokens = analyzedMessages.reduce((sum, message) => sum + message.tokens, 0);
   const savingTokens = removeCandidates.reduce((sum, message) => sum + message.tokens, 0);
+  const warnings = detectWarnings(messages);
 
   return {
     schema_version: "trimctx.report.v1",
@@ -25,8 +26,25 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
     },
     messages: analyzedMessages,
     remove_candidates: removeCandidates,
-    warnings: []
+    warnings
   };
+}
+
+function detectWarnings(messages: NormalizedMessage[]): string[] {
+  const warnings: string[] = [];
+  const compactSubtypes = messages.flatMap((m) => {
+    const raw = m.raw as Record<string, unknown> | undefined;
+    if (!raw || raw.type !== "system") return [];
+    return raw.subtype === "away_summary" || raw.subtype === "compact_boundary" ? [String(raw.subtype)] : [];
+  });
+
+  if (compactSubtypes.length > 0) {
+    const uniqueSubtypes = [...new Set(compactSubtypes)].sort();
+    warnings.push(
+      `session_compacted: ${compactSubtypes.length} compact event(s) detected (${uniqueSubtypes.join(", ")}) — conversation was previously compressed`
+    );
+  }
+  return warnings;
 }
 
 function countTopReasons(messages: AnalyzedMessage[]): AnalysisReport["summary"]["top_reasons"] {
