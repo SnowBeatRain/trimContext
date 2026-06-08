@@ -8,13 +8,4 @@ coverage/
 .env.*
 *.test.json
 *.test.jsonl
-
-# Internal files (not for public release)
-AGENTS.md
-PLAN.md
-keyan.md
 .claude/
-docs/requirements.md
-docs/execution-plan.md
-docs/status-and-next-steps.md
-docs/superpowers/
