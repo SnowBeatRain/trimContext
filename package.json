@@ -1,11 +1,41 @@
 {
   "name": "trimctx",
   "version": "0.1.0",
-  "description": "Local CLI for analyzing and safely trimming long AI conversation context.",
+  "description": "Local CLI for analyzing and safely trimming long AI conversation context. Supports Claude Code and OpenAI JSONL formats.",
   "type": "module",
+  "license": "MIT",
+  "author": "trimctx contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trimctx/trimctx.git"
+  },
+  "homepage": "https://github.com/trimctx/trimctx#readme",
+  "bugs": {
+    "url": "https://github.com/trimctx/trimctx/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "openai",
+    "context",
+    "context-rot",
+    "token-optimization",
+    "cli",
+    "conversation",
+    "jsonl"
+  ],
   "bin": {
     "trimctx": "./dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "docs/usage.md",
+    "docs/usage_zh.md",
+    "docs/roadmap.md",
+    "README.md",
+    "README_zh.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",

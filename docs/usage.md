@@ -1,174 +1,172 @@
-# trimctx 使用说明
+# Usage Guide
 
-本文档说明当前源码版 trimctx 的安装、运行和命令使用方式。项目尚未公开发布到 npm，以下命令默认在项目根目录运行。
+This guide covers installing, running, and understanding trimctx CLI commands.
 
-## 1. 环境要求
+[中文版](usage_zh.md)
 
-- Node.js 20+
-- npm
-- Windows / macOS / Linux
+## Requirements
 
-当前验证环境主要是 Windows。
+- Node.js 20 or later
 
-## 2. 安装依赖
+## Installation
+
+### npm (when published)
 
 ```bash
+npm install -g trimctx
+```
+
+### From source
+
+```bash
+git clone https://github.com/trimctx/trimctx.git
+cd trimctx
 npm install
-```
-
-## 3. 运行测试和构建
-
-```bash
-npm test
 npm run build
 ```
 
-## 4. 从源码运行
-
-```bash
-npx tsx src/cli.ts --help
-```
-
-分析一个 JSONL 文件：
-
-```bash
-npx tsx src/cli.ts analyze path/to/session.jsonl
-```
-
-写入完整报告：
-
-```bash
-npx tsx src/cli.ts report path/to/session.jsonl -o report.json
-```
-
-生成安全压缩副本：
-
-```bash
-npx tsx src/cli.ts compress path/to/session.jsonl -o session.trimmed.jsonl
-```
-
-## 5. 构建后运行
-
-```bash
-npm run build
-node dist/cli.js --help
-```
-
-分析：
-
-```bash
-node dist/cli.js analyze path/to/session.jsonl
-```
-
-报告：
-
-```bash
-node dist/cli.js report path/to/session.jsonl -o report.json
-```
-
-压缩：
-
-```bash
-node dist/cli.js compress path/to/session.jsonl -o session.trimmed.jsonl
-```
-
-## 6. 支持的输入格式
-
-当前支持：
-
-- Claude Code JSONL
-- OpenAI JSONL
-
-暂不支持：
-
-- 纯文本对话
-- 数据库
-- 远程 API
-- 浏览器页面抓取
-
-## 7. analyze
-
-当前 v0.1 行为：
-
-```bash
-npx tsx src/cli.ts analyze path/to/session.jsonl
-```
-
-输出完整 JSON report。
-
-v0.2 计划行为：
+## Quick Start
 
 ```bash
 trimctx analyze path/to/session.jsonl
 ```
 
-默认输出短摘要；完整 JSON 改为：
+Expected output:
+
+```text
+trimctx analysis
+
+messages: 633
+tokens: 218,385
+protected: 338
+remove candidates: 41
+compress candidates: 30
+estimated saving: 5,592 tokens (2.56%)
+
+top reasons:
+- recent_message: 241
+- superseded_by_later_instruction: 195
+- old_message: 190
+
+next:
+- trimctx report <file> -o report.json
+- trimctx compress <file> -o output.jsonl
+```
+
+## Commands
+
+### `trimctx analyze <file>`
+
+Analyzes a JSONL conversation file and prints a summary.
+
+**Options:**
+
+| Flag | Description |
+|---|---|
+| `--json` | Output full JSON report instead of summary |
 
 ```bash
-trimctx analyze path/to/session.jsonl --json
+# Short summary (default)
+trimctx analyze session.jsonl
+
+# Full JSON report
+trimctx analyze session.jsonl --json
 ```
 
-## 8. report
+### `trimctx report <file> -o <report.json>`
+
+Writes a complete JSON report to a file. The report includes:
+
+- **input** — source file metadata
+- **summary** — total messages, tokens, protected count, candidates, estimated savings
+- **messages** — per-message tokens, decision, reasons, and scores
+- **remove_candidates** — list of messages safe to remove
+- **warnings** — any issues encountered during analysis
 
 ```bash
-npx tsx src/cli.ts report path/to/session.jsonl -o report.json
+trimctx report session.jsonl -o report.json
 ```
 
-输出完整 JSON 报告。报告包含：
+### `trimctx compress <file> -o <output.jsonl>`
 
-- 输入文件信息
-- summary
-- 每条 message 的 tokens / decision / reasons / scores
-- remove_candidates
-- warnings
+Generates a compressed copy of the conversation. Only non-protected `remove_candidate` messages are excluded.
 
-## 9. compress
+**The original file is never modified.**
+
+The `-o` flag is required — you must specify where to write the output.
 
 ```bash
-npx tsx src/cli.ts compress path/to/session.jsonl -o session.trimmed.jsonl
+trimctx compress session.jsonl -o session.trimmed.jsonl
 ```
 
-`compress` 只写入新文件，不修改原文件。
+**Deletion rules:**
 
-v0.1 删除规则：
+| Decision | Action |
+|---|---|
+| `keep_protected` | Kept |
+| `keep` | Kept |
+| `compress_candidate` | Kept (not deleted in v0.1) |
+| `remove_candidate` | Removed, only if not protected |
 
-| decision | 行为 |
-| --- | --- |
-| `keep_protected` | 保留 |
-| `keep` | 保留 |
-| `compress_candidate` | 保留 |
-| `remove_candidate` | 删除，前提是不是 protected |
+## Supported Input Formats
 
-## 10. 安全注意事项
+| Format | Status |
+|---|---|
+| Claude Code JSONL | Supported |
+| OpenAI Chat Completion JSONL | Supported |
 
-- 不要把输出路径设为输入文件路径。
-- 不要提交真实 transcript。
-- 真实样本验证输出放在 `tmp-real-validation/`。
-- 私有数据放在 `datasets/private/`。
-- 公开 fixture 必须先脱敏。
+## Safety Model
 
-## 11. 常见验证流程
+trimctx protects the following content by default. These messages are never removed:
+
+- `system` / `developer` messages
+- Recent 6 turns of `user` / `assistant` messages
+- Code blocks, error stacks, file paths, shell commands, git diffs
+- Test failure messages
+- Memory-class instructions ("remember", "from now on", "don't forget")
+- Explicit user decisions
+- Architecture / API / schema / configuration changes
+- Tool results referenced by subsequent natural-language summaries
+
+## Verifying Safety
+
+After running `compress`, verify that the original file was not modified:
 
 ```bash
-npm test
-npm run build
-npx tsx src/cli.ts analyze tests/fixtures/claude-code-realistic.jsonl
-npx tsx src/cli.ts report tests/fixtures/claude-code-realistic.jsonl -o tmp-real-validation/report.json
-npx tsx src/cli.ts compress tests/fixtures/claude-code-realistic.jsonl -o tmp-real-validation/compressed.jsonl
+# Linux / macOS
+sha256sum session.jsonl
+
+# Windows PowerShell
+Get-FileHash -Algorithm SHA256 -LiteralPath "session.jsonl"
 ```
 
-如果验证真实 Claude Code 样本，请先记录输入文件 hash，压缩后再次确认 hash 不变。
+Run the hash check before and after `compress` — they must match.
 
-PowerShell 示例：
+## Scoring Dimensions
 
-```powershell
-Get-FileHash -Algorithm SHA256 -LiteralPath "path\to\session.jsonl"
+Each message is scored across multiple dimensions:
+
+| Dimension | Description |
+|---|---|
+| `superseded_score` | Later messages override or correct earlier instructions |
+| `low_reference_score` | Not referenced by subsequent messages |
+| `age_score` | Exponential decay based on position in conversation |
+| `redundancy_score` | High similarity with nearby messages |
+| `orphan_tool_score` | Tool calls/results not connected to later context |
+| `low_value_score` | Metadata, acknowledgments, or low-information content |
+
+The combined `rot_score` determines the decision:
+
+```text
+protected => keep_protected
+rot_score >= 0.80 => remove_candidate
+rot_score >= 0.60 => compress_candidate
+otherwise => keep
 ```
 
-## 12. 当前限制
+## Limitations
 
-- `analyze` 目前仍输出完整 JSON，大文件下不适合人工阅读。
-- 暂无 `latest` / `sessions` / `doctor`。
-- 暂无 Claude Code slash command / hooks / statusline。
-- 暂无 npm 发布包。
-
+- `analyze` summary output is available in v0.2+; v0.1 outputs full JSON
+- No automatic session discovery (`latest` / `sessions` planned for v0.2)
+- No environment diagnostics (`doctor` planned for v0.2)
+- No AI tool integrations (planned for v0.3+)
