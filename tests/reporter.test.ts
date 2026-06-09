@@ -86,8 +86,22 @@ describe("createReport", () => {
     expect(report.warnings.join("\n")).toContain("compact_boundary");
   });
 
-  test("returns empty warnings when no compact signals", () => {
+  test("includes analysis warnings for approximate tokens and report-only compression candidates", () => {
+    const candidate = analyzedMessage("m1", ["old_message"]);
+    candidate.decision = "compress_candidate";
+
+    const report = createReport([candidate], "session.jsonl");
+
+    expect(report.warnings.join("\n")).toContain(
+      "Token counts are approximate local estimates, not model-specific tokenizer counts."
+    );
+    expect(report.warnings.join("\n")).toContain(
+      "compress_candidate messages are report-only in this version and are kept during compression."
+    );
+  });
+
+  test("returns no compact-signal warnings when input has no compact signals", () => {
     const report = createReport([analyzedMessage("m1", ["old_message"])], "session.jsonl");
-    expect(report.warnings).toEqual([]);
+    expect(report.warnings.join("\n")).not.toContain("session_compacted");
   });
 });

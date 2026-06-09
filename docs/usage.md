@@ -1,20 +1,17 @@
 # Usage Guide
 
-This guide covers installing, running, and understanding trimctx CLI commands.
+This guide explains how to run trimctx safely against local Claude Code or OpenAI JSONL conversation files.
 
 [中文版](usage_zh.md)
 
 ## Requirements
 
 - Node.js 20 or later
+- A JSONL conversation file from Claude Code or an OpenAI-style chat export
+
+trimctx is local-only: it does not call an LLM, upload files, or use a database.
 
 ## Installation
-
-### npm (when published)
-
-```bash
-npm install -g trimctx
-```
 
 ### From source
 
@@ -25,13 +22,36 @@ npm install
 npm run build
 ```
 
+Run the source CLI during development:
+
+```bash
+npx tsx src/cli.ts analyze path/to/session.jsonl
+```
+
+Run the compiled CLI after `npm run build`:
+
+```bash
+node dist/cli.js analyze path/to/session.jsonl
+```
+
+### Global npm install
+
+Use this only after the package has been published to npm:
+
+```bash
+npm install -g trimctx
+trimctx analyze path/to/session.jsonl
+```
+
 ## Quick Start
+
+Analyze a file and print a short summary:
 
 ```bash
 trimctx analyze path/to/session.jsonl
 ```
 
-Expected output:
+Typical summary shape:
 
 ```text
 trimctx analysis
@@ -53,109 +73,139 @@ next:
 - trimctx compress <file> -o output.jsonl
 ```
 
+Write a full JSON report before compressing:
+
+```bash
+trimctx report path/to/session.jsonl -o report.json
+```
+
+Generate a compressed copy only after reviewing the report:
+
+```bash
+trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
+```
+
+## Recommended Workflow
+
+1. Run `analyze` to see whether trimctx finds meaningful candidates.
+2. Run `report` and inspect the reasons for `remove_candidate` messages.
+3. Keep the original JSONL file unchanged.
+4. Run `compress` with `-o` to create a new file.
+5. Compare the original file hash before and after compression if you need safety evidence.
+
+```bash
+sha256sum session.jsonl
+trimctx report session.jsonl -o report.json
+trimctx compress session.jsonl -o session.trimmed.jsonl
+sha256sum session.jsonl
+```
+
+The two hashes for `session.jsonl` should match.
+
 ## Commands
 
 ### `trimctx analyze <file>`
 
-Analyzes a JSONL conversation file and prints a summary.
+Analyze a Claude Code or OpenAI JSONL conversation and print a terminal summary.
 
-**Options:**
+```bash
+trimctx analyze session.jsonl
+```
+
+Options:
 
 | Flag | Description |
 |---|---|
-| `--json` | Output full JSON report instead of summary |
+| `--json` | Print the full JSON report instead of the short summary |
+| `--color` | Colorize the terminal summary |
+| `--recent-window <count>` | Hard-protect the most recent N messages; default `30` |
+| `--remove-threshold <score>` | `rot_score` threshold for `remove_candidate`; default `0.80` |
+| `--compress-threshold <score>` | `rot_score` threshold for `compress_candidate`; default `0.60` |
+
+Examples:
 
 ```bash
-# Short summary (default)
-trimctx analyze session.jsonl
-
-# Full JSON report
 trimctx analyze session.jsonl --json
+trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 ```
 
 ### `trimctx report <file> -o <report.json>`
 
-Writes a complete JSON report to a file. The report includes:
-
-- **input** — source file metadata
-- **summary** — total messages, tokens, protected count, candidates, estimated savings
-- **messages** — per-message tokens, decision, reasons, and scores
-- **remove_candidates** — list of messages safe to remove
-- **warnings** — any issues encountered during analysis
+Write a complete JSON report.
 
 ```bash
 trimctx report session.jsonl -o report.json
 ```
 
+The report includes:
+
+- `input` — source file metadata
+- `summary` — message counts, token estimates, protected count, candidate counts, and estimated savings
+- `messages` — per-message token estimates, decisions, reasons, and scores
+- `remove_candidates` — messages selected for safe removal by current thresholds
+- `warnings` — parser or analysis issues encountered during processing
+
 ### `trimctx compress <file> -o <output.jsonl>`
 
-Generates a compressed copy of the conversation. Only non-protected `remove_candidate` messages are excluded.
-
-**The original file is never modified.**
-
-The `-o` flag is required — you must specify where to write the output.
+Create a new JSONL file. The `-o` flag is required.
 
 ```bash
 trimctx compress session.jsonl -o session.trimmed.jsonl
 ```
 
-**Deletion rules:**
+`compress` removes only non-protected `remove_candidate` messages. It keeps `compress_candidate` messages because they are currently report-only.
 
-| Decision | Action |
+| Decision | Behavior |
 |---|---|
 | `keep_protected` | Kept |
 | `keep` | Kept |
-| `compress_candidate` | Kept (not deleted in v0.1) |
-| `remove_candidate` | Removed, only if not protected |
+| `compress_candidate` | Kept; report-only candidate |
+| `remove_candidate` | Removed only if not protected |
+
+### `trimctx resume`
+
+Analyze the most recently modified Claude Code `.jsonl` session under `~/.claude/projects/`.
+
+```bash
+trimctx resume
+trimctx resume --json
+trimctx resume --compress session.trimmed.jsonl
+```
+
+`resume` uses Claude Code's local session directory. If no session exists there, it exits with an error. It does not scan arbitrary directories.
 
 ## Supported Input Formats
 
 | Format | Status |
 |---|---|
 | Claude Code JSONL | Supported |
-| OpenAI Chat Completion JSONL | Supported |
+| OpenAI Chat Completion-style JSONL | Supported |
+| Plain text transcripts | Not supported |
+| Remote APIs or databases | Not supported |
 
-## Safety Model
+## Report Decisions
 
-trimctx protects the following content by default. These messages are never removed:
-
-- `system` / `developer` messages
-- Recent 6 turns of `user` / `assistant` messages
-- Code blocks, error stacks, file paths, shell commands, git diffs
-- Test failure messages
-- Memory-class instructions ("remember", "from now on", "don't forget")
-- Explicit user decisions
-- Architecture / API / schema / configuration changes
-- Tool results referenced by subsequent natural-language summaries
-
-## Verifying Safety
-
-After running `compress`, verify that the original file was not modified:
-
-```bash
-# Linux / macOS
-sha256sum session.jsonl
-
-# Windows PowerShell
-Get-FileHash -Algorithm SHA256 -LiteralPath "session.jsonl"
-```
-
-Run the hash check before and after `compress` — they must match.
+| Decision | Meaning |
+|---|---|
+| `keep_protected` | High-risk or recent content protected by safety rules |
+| `keep` | Content does not meet candidate thresholds |
+| `compress_candidate` | Possibly low-value content, but not removed by current compressor |
+| `remove_candidate` | Non-protected content that meets the removal threshold |
 
 ## Scoring Dimensions
 
-Each message is scored across multiple dimensions:
+Each message can receive scores across these dimensions:
 
 | Dimension | Description |
 |---|---|
 | `superseded_score` | Later messages override or correct earlier instructions |
-| `low_reference_score` | Not referenced by subsequent messages |
-| `age_score` | Exponential decay based on position in conversation |
-| `redundancy_score` | High similarity with nearby messages |
-| `orphan_tool_score` | Tool calls/results not connected to later context |
+| `low_reference_score` | The message is not referenced by later context |
+| `age_score` | Older messages receive more decay |
+| `redundancy_score` | The message is similar to nearby content |
+| `orphan_tool_score` | Tool calls or results are not connected to later context |
 | `low_value_score` | Metadata, acknowledgments, or low-information content |
 
-The combined `rot_score` determines the decision:
+The combined `rot_score` maps to decisions after protection rules are applied:
 
 ```text
 protected => keep_protected
@@ -164,9 +214,9 @@ rot_score >= 0.60 => compress_candidate
 otherwise => keep
 ```
 
-## Limitations
+## Current Limitations
 
-- `analyze` summary output is available in v0.2+; v0.1 outputs full JSON
-- No automatic session discovery (`latest` / `sessions` planned for v0.2)
-- No environment diagnostics (`doctor` planned for v0.2)
-- No AI tool integrations (planned for v0.3+)
+- `compress_candidate` does not rewrite messages into summaries.
+- Token counts are local estimates, not exact model-tokenizer counts.
+- No Web UI, MCP server, installer, or slash-command integration is included in the current CLI.
+- Real long-session validation is still ongoing, so review reports before using compressed output as a replacement context.

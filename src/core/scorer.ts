@@ -1,4 +1,5 @@
 import type { Decision, NormalizedMessage, Reason, RotScores } from "../types/message.js";
+import type { ResolvedAnalysisOptions } from "./options.js";
 
 const STOP_WORDS = new Set([
   "the",
@@ -23,7 +24,7 @@ const STOP_WORDS = new Set([
   "you"
 ]);
 
-export function scoreMessages(messages: NormalizedMessage[]): NormalizedMessage[] {
+export function scoreMessages(messages: NormalizedMessage[], options: Pick<ResolvedAnalysisOptions, "removeThreshold" | "compressThreshold"> = { removeThreshold: 0.8, compressThreshold: 0.6 }): NormalizedMessage[] {
   const toolUses = new Set(messages.map((message) => message.tool?.toolUseId).filter(Boolean));
 
   return messages.map((message, index) => {
@@ -39,9 +40,9 @@ export function scoreMessages(messages: NormalizedMessage[]): NormalizedMessage[
     if (scores.low_value_score >= 0.6) reasons.add("low_value_metadata");
 
     let decision: Decision = message.protected ? "keep_protected" : "keep";
-    if (!message.protected && scores.rot_score >= 0.8) {
+    if (!message.protected && scores.rot_score >= options.removeThreshold) {
       decision = "remove_candidate";
-    } else if (!message.protected && scores.rot_score >= 0.6) {
+    } else if (!message.protected && scores.rot_score >= options.compressThreshold) {
       decision = "compress_candidate";
     }
 

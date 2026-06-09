@@ -72,7 +72,7 @@ v0.1 使用近似 tokenizer，后续可替换为更精确 tokenizer。
 必须保护：
 
 - system / developer
-- 最近 6 轮 user / assistant
+- 最近 30 条消息
 - 代码块
 - 错误栈
 - 文件路径
@@ -127,11 +127,7 @@ otherwise => keep
 
 ### FR-6: analyze
 
-当前 v0.1 行为：
-
-- `analyze <file>` 输出完整 JSON 报告。
-
-v0.2 目标行为：
+当前行为：
 
 - `analyze <file>` 默认输出短摘要。
 - `analyze <file> --json` 输出完整 JSON。
@@ -146,6 +142,7 @@ v0.2 目标行为：
 - 不删除 keep。
 - 不删除 compress_candidate。
 - 只删除非 protected 的 remove_candidate。
+- 拒绝把输出路径写成输入文件本身。
 
 如果没有 `-o`，命令必须失败。
 
@@ -204,11 +201,11 @@ Phase 0 至少需要 5 个真实 Claude Code 长会话私有样本：
 
 1. `analyze` 默认短摘要。
 2. `analyze --json`。
-3. report top reasons。
-4. Phase 0 多样本验证。
-5. `sessions` / `latest`。
-6. `doctor`。
-7. Claude Code hooks / statusline。
+3. report top reasons 和 warnings。
+4. JSONL 解析诊断与 unsafe output path 护栏。
+5. Phase 0 多样本验证和 validation summary。
+6. 基于真实样本结果调整 safety/scorer 默认值。
+7. 等 Phase 0 完成后再评估是否需要额外 session discovery / diagnostics 命令。
 
 ## 11. 文档关系
 

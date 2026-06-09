@@ -27,7 +27,7 @@ trimctx 是一个本地 AI 长对话上下文精简工具。目标是读取 Clau
 - 增加 `analyze --json`。
 - 增加 top reasons。
 - 补齐真实 Claude Code 多样本验证。
-- 再做 `latest` / `sessions` / `doctor`。
+- 不再把 `latest` / `sessions` / `doctor` 作为近期主线；若未来确实需要，等 Phase 0 验证完成后重新评估。
 - 保持“宁可少删，也不要误删”的安全原则。
 
 ## Technical Constraints
@@ -81,6 +81,5 @@ C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-museum\5c574dba-0f62-406b-980b
 
 真实长会话已经可以解析，safety/scorer 也已经能产生可信候选。当前主要问题：
 
-- `analyze` 输出完整 JSON，真实文件下不适合人工查看。
 - Phase 0 还缺 5 个多样本验证和人工标注。
-- `latest` / `sessions` / `doctor` 尚未实现。
+- 近期工作应收敛现有 `resume` / `analyze` / `report` / `compress`，不新增 `latest` / `sessions` / `doctor`。

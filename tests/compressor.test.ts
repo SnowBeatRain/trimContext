@@ -33,4 +33,40 @@ describe("compressor", () => {
     expect(result.removedMessages).toBeGreaterThanOrEqual(1);
     expect(result.report.remove_candidates.every((candidate) => candidate.reasons.length > 0)).toBe(true);
   });
+
+  test("rejects output paths that resolve to the input file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
+    const input = join(dir, "session.jsonl");
+    await writeFile(input, '{"role":"user","content":"hello"}\n', "utf8");
+
+    await expect(compressFile(input, input)).rejects.toThrow(/output file must be different from input file/i);
+  });
+
+  test("removes only matching messages from OpenAI messages arrays", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
+    const input = join(dir, "openai.jsonl");
+    const output = join(dir, "openai.trimmed.jsonl");
+    const padding = Array.from({ length: 35 }, (_, i) =>
+      JSON.stringify({ role: i % 2 === 0 ? "user" : "assistant", content: `padding ${i}` })
+    );
+    const original = [
+      JSON.stringify({
+        messages: [
+          { role: "system", content: "System stays" },
+          { role: "assistant", content: "Use old payment endpoint legacy charge api" },
+          { role: "assistant", content: "Use old payment endpoint legacy charge api" },
+          { role: "user", content: "Correction: instead use new billing endpoint" }
+        ]
+      }),
+      ...padding
+    ].join("\n");
+    await writeFile(input, original, "utf8");
+
+    await compressFile(input, output);
+    const compressed = await readFile(output, "utf8");
+
+    expect(compressed).toContain("System stays");
+    expect(compressed).toContain("new billing endpoint");
+    expect(compressed).not.toContain("legacy charge api");
+  });
 });

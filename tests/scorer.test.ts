@@ -66,4 +66,27 @@ describe("scorer", () => {
     ]);
     expect(lowValue.every((item) => item.reasons?.includes("low_value_metadata"))).toBe(true);
   });
+
+  test("allows callers to tune recent window and decision thresholds", () => {
+    const base = [
+      message("m1", "assistant", "Use old payment endpoint legacy charge api"),
+      message("m2", "assistant", "Use old payment endpoint legacy charge api"),
+      { ...message("m3", "tool", "large unused output"), tool: { isToolResult: true, toolResultFor: "missing-tool" } },
+      message("m4", "user", "Correction: instead use new billing endpoint"),
+      message("m5", "assistant", "Okay use new billing endpoint"),
+      ...padding(30)
+    ];
+
+    const defaultAnalyzed = analyzeMessages(base);
+    const tunedAnalyzed = analyzeMessages(base, {
+      recentWindow: 0,
+      removeThreshold: 0.95,
+      compressThreshold: 0.5
+    });
+
+    expect(defaultAnalyzed.at(-1)?.decision).toBe("keep_protected");
+    expect(tunedAnalyzed.at(-1)?.decision).not.toBe("keep_protected");
+    expect(defaultAnalyzed[0].decision).toBe("remove_candidate");
+    expect(tunedAnalyzed[0].decision).toBe("compress_candidate");
+  });
 });

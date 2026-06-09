@@ -45,11 +45,12 @@ npx trimctx@latest install claude-code
    - compressor
 
 2. CLI
-   - `trimctx analyze <file>`
-   - `trimctx report <file> -o report.json`
-   - `trimctx compress <file> -o output.jsonl`
-   - `trimctx latest`
-   - `trimctx doctor`
+   - 当前主线：`trimctx analyze <file>`
+   - 当前主线：`trimctx analyze <file> --json`
+   - 当前主线：`trimctx report <file> -o report.json`
+   - 当前主线：`trimctx compress <file> -o output.jsonl`
+   - 当前主线：`trimctx resume`
+   - 非近期主线：额外 session discovery / diagnostics 命令，等 Phase 0 验证完成后再评估
 
 3. AI Integrations
    - `trimctx install claude-code`
@@ -79,16 +80,20 @@ npx trimctx@latest install claude-code
 - parser / tokenizer / safety / scorer / compressor
 - 自动化测试
 
-### v0.2：一步安装
+### v0.2：可用 CLI
 
-目标：用户不用找 JSONL 文件。
+目标：真实用户能用短摘要查看分析结果，并逐步减少手动查找 JSONL 文件的成本。
 
-新增：
+新增/收敛：
 
-- `trimctx latest`
-- `trimctx doctor`
-- `trimctx install claude-code`
-- `/trimctx`
+- `analyze` 默认短摘要
+- `analyze --json`
+- `trimctx resume`
+- report top reasons 和 warnings
+- 更好的 JSONL 解析诊断与 unsafe output path 护栏
+- Phase 0 多样本验证报告
+
+额外 session discovery / diagnostics 命令不作为近期主线；`install claude-code` 和 `/trimctx` 进入后续集成阶段。
 
 ### v0.3：实时辅助
 
@@ -116,7 +121,7 @@ trimctx 的第一原则是：宁可少删，也不要误删。
 永远保护：
 
 - system / developer
-- 最近 6 轮
+- 最近 30 条消息
 - 代码块
 - 错误栈
 - 文件路径
@@ -132,11 +137,10 @@ protected 消息永不删除。
 
 ## 当前问题
 
-v0.1 核心已经可运行，但真实长会话验证显示规则过保守：
+v0.1 核心已经可运行，真实长会话验证也能产出一批可解释候选；当前主线问题是：
 
-- protected 比例过高
-- tool_use / tool_result 一旦互相引用就大量保护
-- 元事件和大块 attachment 尚未单独降权
-- `analyze` 输出完整 JSON，真实文件下不适合人工查看
+- Phase 0 还缺 5 个多样本验证和人工标注。
+- 近期应继续打磨当前已实现 CLI，不新增额外 discovery/diagnostics 命令。
+- 安装器和 slash command 应等 CLI 与验证结果稳定后再做。
 
-下一步应该先调规则和 CLI 输出，而不是马上做安装器。
+下一步应该先补齐多样本验证、确认 safety/scorer 的误删风险，并把现有命令的用户体验稳定下来，而不是马上做安装器。

@@ -1,3 +1,4 @@
+import { createAnalysisWarnings } from "./diagnostics.js";
 import type { AnalysisReport, AnalyzedMessage } from "../types/report.js";
 import type { NormalizedMessage } from "../types/message.js";
 
@@ -26,7 +27,7 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
     },
     messages: analyzedMessages,
     remove_candidates: removeCandidates,
-    warnings
+    warnings: [...warnings, ...createAnalysisWarnings(messages)]
   };
 }
 

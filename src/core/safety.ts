@@ -1,14 +1,23 @@
 import type { NormalizedMessage, Reason } from "../types/message.js";
+import type { ResolvedAnalysisOptions } from "./options.js";
 
 const HARD_PROTECT_REASONS: Reason[] = [
   "system_or_developer_message",
   "contains_memory_instruction",
   "contains_user_decision",
-  "recent_message"
+  "recent_message",
+  "contains_code_block",
+  "contains_error_stack",
+  "contains_file_path",
+  "contains_shell_command",
+  "contains_git_diff",
+  "contains_test_failure",
+  "contains_architecture_or_api_decision",
+  "tool_result_referenced_later"
 ];
 
-export function applySafetyRules(messages: NormalizedMessage[]): NormalizedMessage[] {
-  const recentStart = findRecentWindowStart(messages, 30);
+export function applySafetyRules(messages: NormalizedMessage[], options: Pick<ResolvedAnalysisOptions, "recentWindow"> = { recentWindow: 30 }): NormalizedMessage[] {
+  const recentStart = findRecentWindowStart(messages, options.recentWindow);
   const referencedToolResults = findReferencedToolResults(messages);
 
   return messages.map((message, index) => {

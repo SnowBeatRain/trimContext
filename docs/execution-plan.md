@@ -134,8 +134,10 @@ trimctx statusline
 
 ```bash
 trimctx analyze <file>
+trimctx analyze <file> --json
 trimctx report <file> -o <report.json>
 trimctx compress <file> -o <output.jsonl>
+trimctx resume
 ```
 
 交付物：
@@ -152,26 +154,28 @@ trimctx compress <file> -o <output.jsonl>
 
 ### v0.2: Claude Code 友好 CLI
 
-目标：用户不用自己找 session 文件。
+目标：用户可以先用清晰短摘要和完整报告理解当前会话，不需要阅读巨大的原始 JSON。
 
-候选命令：
+当前主线命令：
 
 ```bash
-trimctx sessions
-trimctx latest
-trimctx analyze --latest
-trimctx analyze --session <id>
-trimctx doctor
+trimctx analyze <file>
+trimctx analyze <file> --json
+trimctx report <file> -o report.json
+trimctx compress <file> -o output.jsonl
+trimctx resume
 ```
 
 交付物：
 
-- 自动扫描 Claude Code transcript 目录。
-- 列出最近 session。
-- 按项目筛选 session。
 - `analyze` 默认输出短摘要。
 - `analyze --json` 输出完整 JSON。
-- `doctor` 输出环境和权限诊断。
+- `report` 输出完整机器可读报告。
+- `compress` 生成安全压缩副本且拒绝覆盖输入文件。
+- `resume` 分析最近 Claude Code session。
+- report top reasons 和 warnings。
+- JSONL 解析错误包含可定位的文件和行号。
+- 阈值参数仅作为高级验证/调参选项，不作为普通用户主路径。
 
 ### v0.3: Claude Code Hooks 和 Status Line
 
@@ -424,7 +428,7 @@ if (protected) {
 永远保护：
 
 - system / developer。
-- 最近 6 轮 user/assistant。
+- 最近 30 条消息。
 - 包含代码块。
 - 包含错误栈。
 - 包含文件路径。
@@ -520,7 +524,7 @@ v0.1 `compress` 只做安全压缩：
 - 不覆盖输入文件。
 - 不删除 protected。
 - 不删除 unknown。
-- 不删除最近 6 轮。
+- 不删除最近 30 条消息。
 - 不自动总结。
 - 不调用 LLM。
 
@@ -553,7 +557,7 @@ npm run build
 安全验收：
 
 - system/developer 消息没有被删除。
-- 最近 6 轮没有被删除。
+- 最近 30 条消息没有被删除。
 - protected 消息没有被删除。
 - compress 输出为新文件。
 - 输入文件 hash 不变。
@@ -591,42 +595,39 @@ npm run build
 - 大文件分析时能看到主要保护/候选原因。
 - 测试覆盖 reason 计数。
 
-### Task 3: Session Discovery
+### Task 3: Current CLI Stability
 
-目标：用户不用手动找 JSONL。
+目标：稳定当前已实现命令，不新增额外 CLI surface。
 
-候选命令：
+当前命令：
 
 ```bash
-trimctx sessions
-trimctx latest
-trimctx analyze --latest
-trimctx analyze --session <id>
+trimctx analyze <file>
+trimctx analyze <file> --json
+trimctx report <file> -o report.json
+trimctx compress <file> -o output.jsonl
+trimctx resume
 ```
 
 验收：
 
-- Windows Claude Code transcript 目录可扫描。
-- 能按最近修改时间排序。
-- 输出 session id、项目、消息数量或文件大小。
+- 默认 `analyze` 输出短摘要，`--json` 输出完整报告。
+- `report` 与 `analyze --json` 的 JSON 语义一致。
+- `compress` 拒绝覆盖输入文件，且原文件 hash 不变。
+- JSONL 解析错误包含可定位的文件和行号。
+- 阈值参数错误使用用户能理解的 CLI flag 名称。
 
-### Task 4: Doctor
+### Task 4: Phase 0 Safety Calibration
 
-目标：诊断用户环境是否可用。
-
-候选命令：
-
-```bash
-trimctx doctor
-```
+目标：用真实样本判断 safety/scorer 是否过宽或过窄。
 
 验收：
 
-- 检查 Node.js 版本。
-- 检查 Claude Code transcript 目录是否存在。
-- 检查能否读取样本 session。
-- 检查输出目录是否可写。
-- 输出 actionable next steps。
+- 统计每个样本的 protected / remove_candidate / compress_candidate 数量和比例。
+- 记录 top reasons，避免结果被单一保护原因淹没。
+- 人工抽查 remove_candidate，确认 critical false deletion = 0。
+- 基于验证结果调整默认阈值或保护规则。
+- 不提交真实样本、真实报告或压缩输出。
 
 ### Task 5: Phase 0 Validation Report
 
@@ -653,12 +654,12 @@ reports/phase0/validation-summary.md
 不要同时开很多方向。按这个顺序走：
 
 1. 完成 `analyze` 默认短摘要和 `--json`。
-2. 补 report top reasons。
+2. 补 report top reasons 和 warnings。
 3. 补齐 5 个真实长对话的私有验证样本。
 4. 做 Phase 0 validation summary。
-5. 实现 `sessions` / `latest`。
-6. 实现 `doctor`。
-7. 再决定是否进入 Claude Code hooks/statusline。
+5. 基于真实样本验证调整 safety/scorer 默认值。
+6. 稳定当前 `resume` / `analyze` / `report` / `compress` 的错误处理和用户说明。
+7. 再决定是否需要新增 session discovery / diagnostics 命令或进入 Claude Code hooks/statusline。
 
 ## 19. 最关键判断
 

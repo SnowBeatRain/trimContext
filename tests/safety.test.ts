@@ -22,7 +22,7 @@ function padding(count: number): NormalizedMessage[] {
 }
 
 describe("safety rules", () => {
-  test("marks reasons for all rules, hard-protects only system/memory/decision/recent", () => {
+  test("hard-protects every documented safety category", () => {
     const messages: NormalizedMessage[] = [
       message("m1", "system", "System rules"),
       message("m2", "assistant", "```ts\nconst x = 1\n```"),
@@ -39,21 +39,25 @@ describe("safety rules", () => {
 
     const protectedMessages = applySafetyRules(messages);
 
-    // 硬保护：system、decision、memory（不受 recent 影响）
+    // 硬保护：所有 README / usage 承诺“永不删除”的类别（不受 recent 影响）
     expect(protectedMessages[0].protected).toBe(true);
     expect(protectedMessages[0].reasons).toContain("system_or_developer_message");
+    expect(protectedMessages[1].protected).toBe(true);
+    expect(protectedMessages[1].reasons).toContain("contains_code_block");
+    expect(protectedMessages[2].protected).toBe(true);
+    expect(protectedMessages[2].reasons).toContain("contains_error_stack");
+    expect(protectedMessages[3].protected).toBe(true);
+    expect(protectedMessages[3].reasons).toContain("contains_file_path");
+    expect(protectedMessages[4].protected).toBe(true);
+    expect(protectedMessages[4].reasons).toContain("contains_shell_command");
+    expect(protectedMessages[5].protected).toBe(true);
+    expect(protectedMessages[5].reasons).toContain("contains_git_diff");
     expect(protectedMessages[6].protected).toBe(true);
     expect(protectedMessages[6].reasons).toContain("contains_user_decision");
     expect(protectedMessages[7].protected).toBe(true);
     expect(protectedMessages[7].reasons).toContain("contains_memory_instruction");
-
-    // 重要性信号：有 reason 但不是硬保护（旧消息不在 recent 窗口内）
-    expect(protectedMessages[1].reasons).toContain("contains_code_block");
-    expect(protectedMessages[1].protected).toBe(false);
-    expect(protectedMessages[2].reasons).toContain("contains_error_stack");
-    expect(protectedMessages[2].protected).toBe(false);
-    expect(protectedMessages[4].reasons).toContain("contains_shell_command");
-    expect(protectedMessages[4].protected).toBe(false);
+    expect(protectedMessages[8].protected).toBe(true);
+    expect(protectedMessages[8].reasons).toContain("tool_result_referenced_later");
 
     // recent：最后 30 条消息被硬保护
     const last = protectedMessages[protectedMessages.length - 1];
@@ -88,7 +92,7 @@ describe("safety rules", () => {
     const protectedMessages = applySafetyRules(messages);
 
     expect(protectedMessages[1].reasons).toContain("tool_result_referenced_later");
-    expect(protectedMessages[1].protected).toBe(false);
+    expect(protectedMessages[1].protected).toBe(true);
   });
 
   test("protects away_summary messages", () => {

@@ -29,9 +29,10 @@ For the task-level execution plan, dataset requirements, validation criteria, an
    - Write compressed copies.
 
 2. CLI
-   - Expose stable commands for analyze, report, compress, doctor, and latest session discovery.
+   - Expose stable commands for analyze, report, compress, and resume.
    - Keep default output readable for humans.
    - Keep full JSON available for automation.
+   - Treat additional session discovery or diagnostics commands as post-Phase-0 candidates, not the current mainline.
 
 3. AI Integrations
    - Install slash commands or hooks for Claude Code.
@@ -105,9 +106,9 @@ Make the CLI comfortable for real users, not just internal validation.
 - Human-readable default output for `trimctx analyze <file>`.
 - `trimctx analyze <file> --json` for full JSON output.
 - `trimctx report <file> -o <report.json>` remains the full machine-readable report path.
-- `trimctx latest` finds the most recent supported local transcript.
-- `trimctx doctor` checks environment, readable transcript locations, package version, and write permissions.
+- `trimctx resume` analyzes the most recent Claude Code transcript.
 - Better error messages for unsupported JSONL, unreadable files, and unsafe output paths.
+- Advanced threshold flags exist for validation/tuning, but the default path should remain conservative and simple.
 
 ### User Experience
 
@@ -141,9 +142,10 @@ next:
 
 - `analyze` output fits in a terminal screen for large sessions.
 - `analyze --json` preserves current full JSON behavior.
-- `latest` works for Claude Code on Windows at minimum.
-- `doctor` reports actionable next steps.
+- `resume` works for the latest Claude Code session.
 - Tests cover human summary output and JSON output separately.
+- Threshold/options validation is covered for invalid values and unsafe combinations.
+- Phase 0 validation confirms the conservative defaults do not create critical false deletions.
 
 ### Not Included
 
@@ -276,14 +278,13 @@ Keep the core engine vendor-neutral and expand integrations or heavier detection
 
 ## Current Priority
 
-The next project phase should finish v0.2 before investing further in installers:
+The next project phase should finish Phase 0 validation and stabilize the current CLI before investing further in installers or additional discovery commands:
 
-1. Change `analyze` default output to a short human summary.
-2. Add `analyze --json`.
-3. Add top reason summary to reports.
-4. Add `latest` for Claude Code transcripts.
-5. Add `doctor`.
-6. Re-run real-session validation.
+1. Complete multi-sample private real-session validation.
+2. Produce a validation summary with protected/remove/compress ratios, top reasons, and manual review notes.
+3. Re-run real-session validation after each scoring/safety change.
+4. Keep `analyze`, `analyze --json`, `report`, `compress`, and `resume` as the active CLI surface.
+5. Re-evaluate additional session discovery or diagnostics commands only after Phase 0 evidence shows they are necessary.
 
 Only after this should v0.3 installation work begin.
 

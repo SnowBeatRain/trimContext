@@ -1,24 +1,20 @@
 import { flattenContent, isRecord, normalizeRole } from "./content.js";
+import { parseJsonlRecords } from "../core/diagnostics.js";
 import type { NormalizedMessage } from "../types/message.js";
 
 export function parseClaudeCodeJsonl(input: string, file = "<input>"): NormalizedMessage[] {
-  const entries = input
-    .split(/\r?\n/)
-    .map((line, index) => ({ line, sourceLine: index + 1 }))
-    .filter(({ line }) => line.trim().length > 0);
-
   const results: NormalizedMessage[] = [];
   const seenMessageIds = new Map<string, number>();
 
-  for (const { line, sourceLine } of entries) {
-    const parsed = parseLine(line, sourceLine, file);
-    const raw = parsed.raw as Record<string, unknown> | undefined;
-    const messageId = isRecord(raw?.message) ? String(raw!.message.id ?? "") : "";
+  for (const { raw, line, sourceLine } of parseJsonlRecords(input, file)) {
+    const parsed = parseRecord(raw, line, sourceLine, file);
+    const rawObj = parsed.raw as Record<string, unknown> | undefined;
+    const messageId = isRecord(rawObj?.message) ? String(rawObj!.message.id ?? "") : "";
 
     if (messageId) {
       const prevIndex = seenMessageIds.get(messageId);
       if (prevIndex !== undefined) {
-        if (isRecord(raw?.message) && raw!.message.usage) {
+        if (isRecord(rawObj?.message) && rawObj!.message.usage) {
           results[prevIndex] = parsed;
         }
         continue;
@@ -32,8 +28,7 @@ export function parseClaudeCodeJsonl(input: string, file = "<input>"): Normalize
   return results;
 }
 
-function parseLine(line: string, sourceLine: number, file: string): NormalizedMessage {
-  const raw: unknown = JSON.parse(line);
+function parseRecord(raw: unknown, line: string, sourceLine: number, file: string): NormalizedMessage {
   if (!isRecord(raw)) {
     throw new Error(`Invalid Claude Code JSONL record at line ${sourceLine}`);
   }

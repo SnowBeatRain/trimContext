@@ -1,15 +1,11 @@
 import { flattenContent, isRecord, normalizeRole } from "./content.js";
+import { parseJsonlRecords } from "../core/diagnostics.js";
 import type { NormalizedMessage } from "../types/message.js";
 
 export function parseOpenAiJsonl(input: string, file = "<input>"): NormalizedMessage[] {
   const messages: NormalizedMessage[] = [];
 
-  input
-    .split(/\r?\n/)
-    .map((line, index) => ({ line, sourceLine: index + 1 }))
-    .filter(({ line }) => line.trim().length > 0)
-    .forEach(({ line, sourceLine }) => {
-      const raw: unknown = JSON.parse(line);
+  parseJsonlRecords(input, file).forEach(({ raw, line, sourceLine }) => {
       if (!isRecord(raw)) {
         throw new Error(`Invalid OpenAI JSONL record at line ${sourceLine}`);
       }
@@ -20,7 +16,6 @@ export function parseOpenAiJsonl(input: string, file = "<input>"): NormalizedMes
         });
         return;
       }
-
       messages.push(normalizeOpenAiMessage(raw, line, sourceLine, `${file}:${sourceLine}`));
     });
 

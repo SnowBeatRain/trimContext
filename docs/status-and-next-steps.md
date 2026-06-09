@@ -14,8 +14,10 @@
 v0.1 Phase 0 核心 CLI 已经实现：
 
 - `trimctx analyze <file>`
+- `trimctx analyze <file> --json`
 - `trimctx report <file> -o <report.json>`
 - `trimctx compress <file> -o <output.jsonl>`
+- `trimctx resume`（扫描 `~/.claude/projects/` 中最近修改的 Claude Code `.jsonl`）
 - Claude Code JSONL parser
 - OpenAI JSONL parser
 - ApproxTokenizer
@@ -65,7 +67,7 @@ C:\Users\kele\.claude\projects\C--Users-kele\fffc50ff-b984-4dd8-8cd0-bcc6aa583b4
 
 - 11 条记录
 - 能解析
-- 因样本太短，最近 6 轮规则导致全部 protected
+- 因样本太短，最近 30 条消息规则导致全部 protected
 - 不适合验证清理效果
 
 ### 样本 2
@@ -98,7 +100,7 @@ C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-museum\5c574dba-0f62-406b-980b
 
 结论：
 
-parser 可用，scorer/safety 已经能在真实长会话里产出一批可解释的低风险候选。下一步重点转向 CLI 输出体验和 Phase 0 多样本验证。
+parser 可用，scorer/safety 已经能在真实长会话里产出一批可解释的低风险候选。下一步重点转向 Phase 0 多样本验证。
 
 ## 已缓解的问题
 
@@ -157,49 +159,20 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 
 ## 当前主要问题
 
-### 1. CLI 输出不适合真实文件
+### 1. Phase 0 多样本验证仍未完成
 
-当前 `analyze` 输出完整 JSON。真实文件会输出上万行，不利于用户判断。
-
-应该调整为：
+当前 CLI 输出体验已经进入 v0.2 形态：
 
 - `analyze` 默认输出短摘要
 - `report` 输出完整 JSON
 - `analyze --json` 输出完整 JSON
+- `resume` 可分析最近 Claude Code session
+
+剩余重点是按 `docs/execution-plan.md` 补齐 5 个真实 Claude Code 长会话私有样本验证。
 
 ## 下一步执行顺序
 
-### Step 1：改 CLI 输出体验
-
-目标：
-
-```bash
-trimctx analyze session.jsonl
-```
-
-默认输出：
-
-```text
-trimctx analysis
-
-messages: 633
-tokens: 218,385
-protected: 338
-remove candidates: 41
-compress candidates: 30
-estimated saving: 5,592 tokens (2.56%)
-
-top reasons:
-- recent_message: 241
-- superseded_by_later_instruction: 195
-- old_message: 190
-
-next:
-- trimctx report <file> -o report.json
-- trimctx compress <file> -o output.jsonl
-```
-
-### Step 2：补 Phase 0 多样本验证
+### Step 1：补 Phase 0 多样本验证
 
 按 `docs/execution-plan.md` 补齐 5 个真实 Claude Code 长会话的私有验证样本，并输出：
 
@@ -214,7 +187,7 @@ reports/phase0/validation-summary.md
 - 验证 remove_candidate precision
 - 确认 critical false deletion = 0
 
-### Step 3：重新验证真实样本和压缩安全
+### Step 2：重新验证真实样本和压缩安全
 
 用样本 2 跑：
 
@@ -230,13 +203,15 @@ npx tsx src/cli.ts analyze "C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-mu
 - reasons 可解释
 - `compress` 仍不修改原文件
 
-### Step 4：继续 v0.2 session discovery / doctor
+### Step 3：收敛当前 CLI，不新增命令
 
-只有当 CLI 输出和多样本验证可信后，再做：
+只有当 CLI 输出和多样本验证可信后，才重新评估是否需要额外 session discovery / diagnostics 命令。当前阶段继续打磨：
 
-- `trimctx sessions`
-- `trimctx latest`
-- `trimctx doctor`
+- `trimctx analyze <file>`
+- `trimctx analyze <file> --json`
+- `trimctx report <file> -o <report.json>`
+- `trimctx compress <file> -o <output.jsonl>`
+- `trimctx resume`
 
 安装器和 `/trimctx` 放到后续 Claude Code 集成阶段。
 
@@ -246,4 +221,4 @@ npx tsx src/cli.ts analyze "C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-mu
 
 当前最重要任务：
 
-**完成 v0.2 CLI 可用性：`analyze` 默认短摘要、`analyze --json`、top reasons、`latest` / `sessions`、`doctor`，并按 `docs/execution-plan.md` 补齐 Phase 0 多样本验证。**
+**补齐 Phase 0 多样本验证，确认当前 CLI 的安全性和可用性，再决定是否需要新增命令。**

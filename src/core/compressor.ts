@@ -1,6 +1,7 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { analyzeMessages, parseJsonl } from "./analyzer.js";
 import { createReport } from "./reporter.js";
+import type { AnalysisOptions } from "./options.js";
 import type { AnalysisReport } from "../types/report.js";
 import type { NormalizedMessage } from "../types/message.js";
 
@@ -9,10 +10,14 @@ export interface CompressResult {
   report: AnalysisReport;
 }
 
-export async function compressFile(inputFile: string, outputFile: string): Promise<CompressResult> {
+export async function compressFile(inputFile: string, outputFile: string, options: AnalysisOptions = {}): Promise<CompressResult> {
+  if (await sameFile(inputFile, outputFile)) {
+    throw new Error("Output file must be different from input file");
+  }
+
   const input = await readFile(inputFile, "utf8");
   const parsed = parseJsonl(input, inputFile);
-  const analyzed = analyzeMessages(parsed);
+  const analyzed = analyzeMessages(parsed, options);
   const report = createReport(analyzed, inputFile);
   const removeIds = new Set(
     analyzed
@@ -55,4 +60,13 @@ function compressOpenAiLines(input: string, analyzed: NormalizedMessage[], remov
       return removeIds.has(messages[0].id) ? [] : [line];
     })
     .join("\n");
+}
+
+async function sameFile(inputFile: string, outputFile: string): Promise<boolean> {
+  try {
+    const [inputStat, outputStat] = await Promise.all([stat(inputFile), stat(outputFile)]);
+    return inputStat.dev === outputStat.dev && inputStat.ino === outputStat.ino;
+  } catch {
+    return inputFile === outputFile;
+  }
 }

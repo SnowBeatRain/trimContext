@@ -1,22 +1,19 @@
 # 使用说明
 
-本文档介绍 trimctx CLI 的安装、命令和使用方式。
+本文档说明如何安全地在本地 Claude Code 或 OpenAI JSONL 对话文件上运行 trimctx。
 
 [English](usage.md)
 
 ## 环境要求
 
 - Node.js 20 或更高版本
+- 来自 Claude Code 或 OpenAI 风格聊天导出的 JSONL 对话文件
+
+trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库。
 
 ## 安装
 
-### npm 安装（发布后可用）
-
-```bash
-npm install -g trimctx
-```
-
-### 从源码构建
+### 从源码运行
 
 ```bash
 git clone https://github.com/trimctx/trimctx.git
@@ -25,13 +22,36 @@ npm install
 npm run build
 ```
 
+开发时运行源码 CLI：
+
+```bash
+npx tsx src/cli.ts analyze path/to/session.jsonl
+```
+
+运行 `npm run build` 后使用编译产物：
+
+```bash
+node dist/cli.js analyze path/to/session.jsonl
+```
+
+### 全局 npm 安装
+
+仅当包已经发布到 npm 后使用：
+
+```bash
+npm install -g trimctx
+trimctx analyze path/to/session.jsonl
+```
+
 ## 快速开始
+
+分析文件并输出短摘要：
 
 ```bash
 trimctx analyze path/to/session.jsonl
 ```
 
-预期输出：
+典型摘要形态：
 
 ```text
 trimctx analysis
@@ -53,109 +73,139 @@ next:
 - trimctx compress <file> -o output.jsonl
 ```
 
+压缩前建议先写出完整 JSON 报告：
+
+```bash
+trimctx report path/to/session.jsonl -o report.json
+```
+
+审查报告后，再生成压缩副本：
+
+```bash
+trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
+```
+
+## 推荐流程
+
+1. 运行 `analyze`，确认 trimctx 是否找到了有意义的候选。
+2. 运行 `report`，检查 `remove_candidate` 消息的原因。
+3. 保留原始 JSONL 文件不变。
+4. 运行带 `-o` 的 `compress`，创建新文件。
+5. 如果需要安全证据，在压缩前后比较原文件 hash。
+
+```bash
+sha256sum session.jsonl
+trimctx report session.jsonl -o report.json
+trimctx compress session.jsonl -o session.trimmed.jsonl
+sha256sum session.jsonl
+```
+
+两次 `session.jsonl` 的 hash 应一致。
+
 ## 命令
 
 ### `trimctx analyze <file>`
 
-分析 JSONL 对话文件并输出摘要。
+分析 Claude Code 或 OpenAI JSONL 对话，并输出终端摘要。
 
-**选项：**
+```bash
+trimctx analyze session.jsonl
+```
+
+选项：
 
 | 参数 | 说明 |
 |---|---|
-| `--json` | 输出完整 JSON 报告而非摘要 |
+| `--json` | 输出完整 JSON 报告，而不是短摘要 |
+| `--color` | 给终端摘要加颜色 |
+| `--recent-window <count>` | 硬保护最近 N 条消息，默认 `30` |
+| `--remove-threshold <score>` | `remove_candidate` 的 `rot_score` 阈值，默认 `0.80` |
+| `--compress-threshold <score>` | `compress_candidate` 的 `rot_score` 阈值，默认 `0.60` |
+
+示例：
 
 ```bash
-# 短摘要（默认）
-trimctx analyze session.jsonl
-
-# 完整 JSON 报告
 trimctx analyze session.jsonl --json
+trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 ```
 
 ### `trimctx report <file> -o <report.json>`
 
-将完整 JSON 报告写入文件。报告包含：
-
-- **input** — 输入文件元信息
-- **summary** — 消息总数、token 数、保护数量、候选数、预计节省量
-- **messages** — 每条消息的 token 数、决策、原因和评分
-- **remove_candidates** — 可安全删除的消息列表
-- **warnings** — 分析过程中遇到的问题
+写出完整 JSON 报告。
 
 ```bash
 trimctx report session.jsonl -o report.json
 ```
 
+报告包含：
+
+- `input` — 输入文件元信息
+- `summary` — 消息数、token 估算、protected 数量、候选数和预计节省量
+- `messages` — 每条消息的 token 估算、决策、原因和评分
+- `remove_candidates` — 按当前阈值选出的可安全移除消息
+- `warnings` — 解析或分析过程中遇到的问题
+
 ### `trimctx compress <file> -o <output.jsonl>`
 
-生成对话的压缩副本。仅排除非 protected 的 `remove_candidate` 消息。
-
-**原始文件永远不会被修改。**
-
-`-o` 参数为必填项——必须指定输出路径。
+创建新的 JSONL 文件。`-o` 参数必填。
 
 ```bash
 trimctx compress session.jsonl -o session.trimmed.jsonl
 ```
 
-**删除规则：**
+`compress` 只移除非 protected 的 `remove_candidate` 消息。它会保留 `compress_candidate` 消息，因为当前这些候选只用于报告。
 
 | 决策 | 行为 |
 |---|---|
 | `keep_protected` | 保留 |
 | `keep` | 保留 |
-| `compress_candidate` | 保留（v0.1 不删除） |
-| `remove_candidate` | 删除，仅当非 protected 时 |
+| `compress_candidate` | 保留；仅报告候选 |
+| `remove_candidate` | 仅在非 protected 时移除 |
+
+### `trimctx resume`
+
+分析 `~/.claude/projects/` 下最近修改的 Claude Code `.jsonl` 会话。
+
+```bash
+trimctx resume
+trimctx resume --json
+trimctx resume --compress session.trimmed.jsonl
+```
+
+`resume` 使用 Claude Code 的本地会话目录。如果该目录没有会话文件，它会报错退出。它不会扫描任意目录。
 
 ## 支持的输入格式
 
 | 格式 | 状态 |
 |---|---|
 | Claude Code JSONL | 已支持 |
-| OpenAI Chat Completion JSONL | 已支持 |
+| OpenAI Chat Completion 风格 JSONL | 已支持 |
+| 纯文本转录 | 不支持 |
+| 远程 API 或数据库 | 不支持 |
 
-## 安全模型
+## 报告决策
 
-trimctx 默认保护以下内容，这些消息永远不会被删除：
-
-- `system` / `developer` 消息
-- 最近 6 轮 `user` / `assistant` 消息
-- 代码块、错误栈、文件路径、shell 命令、git diff
-- 测试失败信息
-- 记忆类指令（"记住"、"从现在开始"、"不要忘记"）
-- 用户明确决策
-- 架构 / API / schema / 配置变更
-- 被后续自然语言总结引用的关键 tool_result
-
-## 安全验证
-
-运行 `compress` 后，验证原始文件未被修改：
-
-```bash
-# Linux / macOS
-sha256sum session.jsonl
-
-# Windows PowerShell
-Get-FileHash -Algorithm SHA256 -LiteralPath "session.jsonl"
-```
-
-在 `compress` 前后各运行一次哈希校验——两次结果必须一致。
+| 决策 | 含义 |
+|---|---|
+| `keep_protected` | 被安全规则保护的高风险或近期内容 |
+| `keep` | 未达到候选阈值的内容 |
+| `compress_candidate` | 可能低价值，但当前 compressor 不会移除 |
+| `remove_candidate` | 非 protected 且达到移除阈值的内容 |
 
 ## 评分维度
 
-每条消息在多个维度上进行评分：
+每条消息可能在以下维度上获得评分：
 
 | 维度 | 说明 |
 |---|---|
 | `superseded_score` | 后续消息覆盖或纠正了早期指令 |
-| `low_reference_score` | 后续消息未引用此消息 |
-| `age_score` | 基于在对话中位置的指数衰减 |
-| `redundancy_score` | 与相邻消息高度相似 |
-| `orphan_tool_score` | 工具调用/结果与后续上下文无关联 |
+| `low_reference_score` | 后续上下文没有引用该消息 |
+| `age_score` | 越旧的消息衰减越高 |
+| `redundancy_score` | 与相邻内容相似 |
+| `orphan_tool_score` | 工具调用或结果与后续上下文无关联 |
 | `low_value_score` | 元信息、确认回复或低信息量内容 |
 
-综合 `rot_score` 决定最终决策：
+在保护规则之后，综合 `rot_score` 映射为决策：
 
 ```text
 protected => keep_protected
@@ -166,7 +216,7 @@ otherwise => keep
 
 ## 当前限制
 
-- `analyze` 摘要输出在 v0.2+ 可用；v0.1 输出完整 JSON
-- 暂无自动会话发现（`latest` / `sessions` 计划在 v0.2）
-- 暂无环境诊断（`doctor` 计划在 v0.2）
-- 暂无 AI 工具集成（计划在 v0.3+）
+- `compress_candidate` 不会被改写成摘要。
+- token 数是本地估算，不是特定模型 tokenizer 的精确计数。
+- 当前 CLI 不包含 Web UI、MCP server、安装器或 slash command 集成。
+- 真实长会话验证仍在进行中，因此建议先审查报告，再把压缩输出当作替代上下文使用。

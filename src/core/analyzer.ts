@@ -1,25 +1,24 @@
 import { parseClaudeCodeJsonl } from "../adapters/claude-code-jsonl.js";
 import { parseOpenAiJsonl } from "../adapters/openai-jsonl.js";
+import { parseJsonlRecords } from "./diagnostics.js";
+import { resolveAnalysisOptions, type AnalysisOptions } from "./options.js";
 import { applySafetyRules } from "./safety.js";
 import { scoreMessages } from "./scorer.js";
 import { ApproxTokenizer } from "./tokenizer.js";
 import type { NormalizedMessage } from "../types/message.js";
 
-export function analyzeMessages(messages: NormalizedMessage[]): NormalizedMessage[] {
+export function analyzeMessages(messages: NormalizedMessage[], options: AnalysisOptions = {}): NormalizedMessage[] {
+  const resolved = resolveAnalysisOptions(options);
   const tokenizer = new ApproxTokenizer();
   const withTokens = messages.map((message) => ({
     ...message,
     tokens: tokenizer.countMessage(message.content)
   }));
-  return scoreMessages(applySafetyRules(withTokens));
+  return scoreMessages(applySafetyRules(withTokens, resolved), resolved);
 }
 
 export function parseJsonl(input: string, file = "<input>"): NormalizedMessage[] {
-  const records = input
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .slice(0, 25)
-    .map((line) => JSON.parse(line) as unknown);
+  const records = parseJsonlRecords(input, file).slice(0, 25).map((record) => record.raw);
 
   if (records.length === 0) return [];
 
