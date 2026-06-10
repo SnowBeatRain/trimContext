@@ -1,27 +1,46 @@
 # trimctx
 
-A local-first TypeScript CLI for inspecting long AI conversation JSONL files and producing conservative, auditable trimming recommendations.
+**A local-first CLI that analyzes and safely trims long AI conversation context.**
 
-trimctx currently supports Claude Code and OpenAI-style JSONL conversations. It analyzes each message, marks protected content, explains why a message should be kept or considered for removal, writes JSON reports, and can generate a compressed copy that leaves the original file untouched.
+When you use Claude Code, Cursor, or other AI assistants for hours, conversation history accumulates stale messages — old errors, superseded instructions, orphaned tool outputs, metadata noise. This is **context rot**: the conversation gets slower, more expensive, and the model starts pulling in irrelevant history.
 
-**Safety rule: trimctx prefers missing a deletion over deleting the wrong message.** `compress` never edits the input JSONL file in place.
+trimctx reads your JSONL conversation files, identifies low-value or stale messages, explains why, and generates a safe compressed copy — **without ever modifying the original file**.
+
+**Safety rule: trimctx prefers missing a deletion over deleting the wrong message.**
 
 [中文说明](README_zh.md)
 
-## Current Status
+## What it looks like
 
-trimctx is an early CLI tool. The implemented commands are:
+```
+$ trimctx analyze ~/.claude/projects/my-project/abc123.jsonl
 
-- `trimctx analyze <file>` — print a short analysis summary, or full JSON with `--json`
-- `trimctx report <file> -o <report.json>` — write a complete JSON report
-- `trimctx compress <file> -o <output.jsonl>` — write a safe compressed copy
-- `trimctx resume` — analyze the newest Claude Code session under `~/.claude/projects/`
+trimctx analysis
+
+  633 messages / 218K tokens
+  health: MODERATE  rot: 10.8% (68 candidates)
+
+  breakdown:
+    remove:       41 messages (5.6K tokens)
+    compress:     27 messages
+    protected:    338 messages
+    saving:       5.6K tokens (2.6%)
+
+  top reasons:
+    - metadata noise: 18
+    - old content: 15
+    - superseded: 12
+    - orphan tool result: 8
+    - low reference: 6
+
+  next:
+    trimctx compress "~/.claude/projects/my-project/abc123.jsonl" -o trimmed.jsonl
+    trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
+```
 
 ## Quick Start
 
-### Run from source
-
-Requires Node.js 20+.
+**Requires Node.js 20+.**
 
 ```bash
 git clone https://github.com/trimctx/trimctx.git
@@ -30,54 +49,50 @@ npm install
 npm run build
 ```
 
-Analyze a conversation file:
+Analyze a conversation:
 
 ```bash
 npx tsx src/cli.ts analyze path/to/session.jsonl
 ```
 
-Write a full report:
+Write a full JSON report for review:
 
 ```bash
 npx tsx src/cli.ts report path/to/session.jsonl -o report.json
 ```
 
-Generate a compressed copy:
+Generate a compressed copy (original untouched):
 
 ```bash
 npx tsx src/cli.ts compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
 
-After building, you can run the compiled CLI directly:
+Analyze the most recent Claude Code session automatically:
 
 ```bash
-node dist/cli.js analyze path/to/session.jsonl
+npx tsx src/cli.ts resume
 ```
 
-### Global npm install
+## Who should use this
 
-The package is prepared for npm-style global installation, but use this only after a version has been published to npm:
+- **Claude Code / Cursor users** with long-running sessions that hit context limits
+- **Developers** who want to understand what's filling up their AI context window
+- **Teams** that want to audit and compress shared conversation logs before archiving
 
-```bash
-npm install -g trimctx
-trimctx analyze path/to/session.jsonl
-```
+## How it works
 
-## What trimctx Does
-
-- Detects Claude Code JSONL and OpenAI JSONL input formats.
-- Normalizes messages, tool-use blocks, tool results, and metadata events for analysis.
-- Estimates token counts locally without calling an LLM or remote API.
-- Protects high-risk content such as recent messages, system/developer instructions, user decisions, code, errors, file paths, commands, diffs, schema/API/config changes, and referenced tool results.
-- Scores lower-value or stale content using dimensions such as age, redundancy, low reference, orphaned tool output, superseded instructions, and metadata noise.
-- Produces human-readable summaries and full JSON reports with decisions and reasons.
-- Writes compressed JSONL copies by excluding only non-protected `remove_candidate` messages.
+1. **Parse** — Auto-detects Claude Code JSONL and OpenAI JSONL formats.
+2. **Normalize** — Unifies message structures, tool-use blocks, tool results, and metadata events.
+3. **Protect** — Flags high-risk content as protected (system prompts, recent messages, user decisions, code, errors, diffs, config changes, memory instructions).
+4. **Score** — Evaluates remaining messages on dimensions like age, redundancy, reference count, orphaned tool output, and metadata noise.
+5. **Report** — Outputs human-readable summaries and full JSON reports with per-message decisions and reasons.
+6. **Compress** — Writes a new JSONL excluding only non-protected `remove_candidate` messages.
 
 ## Commands
 
 ### `trimctx analyze <file>`
 
-Analyze a Claude Code or OpenAI JSONL conversation.
+Print a terminal summary or full JSON report.
 
 ```bash
 trimctx analyze session.jsonl
@@ -85,46 +100,40 @@ trimctx analyze session.jsonl --json
 trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 ```
 
-Options:
-
 | Flag | Default | Description |
 |---|---:|---|
-| `--json` | `false` | Print the full JSON report instead of the short summary |
-| `--color` | `false` | Colorize the terminal summary |
-| `--recent-window <count>` | `30` | Hard-protect the most recent N messages |
-| `--remove-threshold <score>` | `0.80` | Minimum `rot_score` for `remove_candidate` |
-| `--compress-threshold <score>` | `0.60` | Minimum `rot_score` for `compress_candidate` |
+| `--json` | `false` | Full JSON report instead of terminal summary |
+| `--color` | `false` | Colorize terminal output |
+| `--recent-window <N>` | `30` | Hard-protect the N most recent messages |
+| `--remove-threshold <score>` | `0.80` | Minimum rot_score to mark as `remove_candidate` |
+| `--compress-threshold <score>` | `0.60` | Minimum rot_score to mark as `compress_candidate` |
 
 ### `trimctx report <file> -o <report.json>`
 
-Write a complete JSON report to a file.
+Write a complete JSON report including per-message decisions, scores, reasons, and warnings.
 
 ```bash
 trimctx report session.jsonl -o report.json
 ```
 
-The report includes input metadata, summary counts, per-message decisions, token estimates, scores, reasons, remove candidates, and warnings.
-
 ### `trimctx compress <file> -o <output.jsonl>`
 
-Write a new JSONL file that excludes only non-protected `remove_candidate` messages.
+Write a safe compressed copy. The original file is never modified.
 
 ```bash
 trimctx compress session.jsonl -o session.trimmed.jsonl
 ```
 
-Decision behavior:
-
-| Decision | Output behavior |
+| Decision | Behavior |
 |---|---|
-| `keep_protected` | Kept |
+| `keep_protected` | Always kept |
 | `keep` | Kept |
-| `compress_candidate` | Kept; currently report-only |
-| `remove_candidate` | Removed only when not protected |
+| `compress_candidate` | Kept (report-only for now) |
+| `remove_candidate` | Removed only if not protected |
 
 ### `trimctx resume`
 
-Find the most recently modified `.jsonl` session under `~/.claude/projects/` and analyze it.
+Find and analyze the most recent Claude Code session under `~/.claude/projects/`.
 
 ```bash
 trimctx resume
@@ -132,53 +141,49 @@ trimctx resume --json
 trimctx resume --compress session.trimmed.jsonl
 ```
 
-`resume` is intended for Claude Code local session folders. It does not discover OpenAI files outside `~/.claude/projects/`.
-
 ## Supported Inputs
 
-| Input | Status |
+| Format | Status |
 |---|---|
 | Claude Code JSONL | Supported |
-| OpenAI Chat Completion-style JSONL | Supported |
+| OpenAI Chat Completion JSONL | Supported |
 | Plain text transcripts | Not supported |
 | Databases or remote APIs | Not supported |
 
 ## Safety Model
 
-trimctx protects content that is likely to remain important:
+trimctx protects content that is likely still important:
 
 - `system` and `developer` messages
-- the most recent messages in the configured recent window
-- memory-like instructions such as "remember", "from now on", or "don't forget"
-- explicit user decisions and corrections
-- code blocks, stack traces, file paths, shell commands, and git diffs
-- test failures and debugging evidence
-- architecture, API, schema, and configuration changes
-- tool results referenced later by natural-language summaries
+- The most recent N messages (configurable, default 30)
+- Memory-like instructions ("remember", "from now on", "don't forget")
+- Explicit user decisions and corrections
+- Code blocks, stack traces, file paths, shell commands, and git diffs
+- Test failures and debugging evidence
+- Architecture, API, schema, and configuration changes
+- Tool results referenced later in the conversation
 
-To verify that `compress` did not modify the original file, compare a hash before and after running it:
+**Verify the original is untouched:**
 
 ```bash
 sha256sum session.jsonl
 trimctx compress session.jsonl -o session.trimmed.jsonl
 sha256sum session.jsonl
+# The two hashes should match.
 ```
 
-The two hashes for `session.jsonl` should match.
+## Current Limitations
 
-## Limitations
-
-- `compress_candidate` is currently a report-only decision; trimctx does not rewrite or summarize messages.
-- Token counts are local estimates, not exact model-specific tokenizer counts.
-- Phase 0 still needs more real long-session validation before aggressive defaults should be trusted.
-- trimctx does not provide a Web UI, MCP server, database, installer, or Claude Code slash command yet.
+- `compress_candidate` messages are kept as-is (no rewriting or summarizing yet).
+- Token counts are local estimates, not model-specific tokenizer counts.
+- The tool has been validated on real Claude Code and OpenAI sessions, but edge cases may exist — review the report before relying on compressed output.
+- No Web UI, MCP server, installer, or Claude Code slash command yet.
 
 ## Documentation
 
-- [Usage Guide](docs/usage.md) — detailed command examples, outputs, and safety checks
-- [Roadmap](docs/roadmap.md) — planned milestones and release criteria
-- [Requirements](docs/requirements.md) — project scope, constraints, and acceptance criteria
-- [Current Status](docs/status-and-next-steps.md) — implementation status and next steps
+- [Usage Guide](docs/usage.md) — detailed commands, outputs, and safety verification
+- [Roadmap](docs/roadmap.md) — planned milestones and features
+- [Requirements](docs/requirements.md) — project scope and acceptance criteria
 
 ## Development
 
@@ -187,6 +192,10 @@ npm install
 npm test
 npm run build
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code guidelines, and PR process.
 
 ## License
 
