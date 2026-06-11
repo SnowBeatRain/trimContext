@@ -165,6 +165,8 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 `compress` removes only non-protected `remove_candidate` messages. It keeps `compress_candidate` messages because they are currently report-only.
 
+If a report contains `compress_candidate` messages but no `remove_candidate` messages, the parser and scorer can still be working correctly. It means the messages crossed the reporting threshold but did not cross the stricter removal threshold. This is expected for safety-sensitive or sparsely validated formats such as Codex/Hermes rollout files.
+
 | Decision | Behavior |
 |---|---|
 | `keep_protected` | Kept |
@@ -224,6 +226,8 @@ rot_score >= 0.80 => remove_candidate
 rot_score >= 0.60 => compress_candidate
 otherwise => keep
 ```
+
+The default `0.80` removal threshold is deliberately high. Lower it only for private validation runs where you manually review the generated report and can tolerate more aggressive candidates.
 
 ## Current Limitations
 

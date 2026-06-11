@@ -165,6 +165,8 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 `compress` 只移除非 protected 的 `remove_candidate` 消息。它会保留 `compress_candidate` 消息，因为当前这些候选只用于报告。
 
+如果报告里有 `compress_candidate`，但没有 `remove_candidate`，parser 和 scorer 仍可能是正常工作的。这表示消息达到了报告阈值，但没有达到更严格的删除阈值。对于 Codex/Hermes rollout 这类安全敏感或真实标注样本还不充分的格式，这是符合预期的保守结果。
+
 | 决策 | 行为 |
 |---|---|
 | `keep_protected` | 保留 |
@@ -224,6 +226,8 @@ rot_score >= 0.80 => remove_candidate
 rot_score >= 0.60 => compress_candidate
 otherwise => keep
 ```
+
+默认 `0.80` 删除阈值是有意设置得较高。只有在私有验证运行中人工审查过生成报告、并能接受更激进候选时，才建议降低阈值。
 
 ## 当前限制
 

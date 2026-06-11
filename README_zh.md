@@ -131,6 +131,8 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `compress_candidate` | 保留（当前仅报告） |
 | `remove_candidate` | 仅在非 protected 时移除 |
 
+`compress_candidate` 是有意保守的信号：它表示 trimctx 发现了过期或低价值迹象，但还没有足够证据安全删除该消息。某些格式，尤其是 Codex/Hermes rollout 文件，在默认阈值下可能产生 0 条 `remove_candidate`；这应视为安全优先的结果，而不是 parser 失败。
+
 ### `trimctx resume`
 
 查找并分析 `~/.claude/projects/` 下最近修改的 Claude Code 会话。
@@ -178,6 +180,7 @@ sha256sum session.jsonl
 - `compress_candidate` 消息保持原样（暂不改写或摘要）。
 - token 数是本地估算，不等同于特定模型 tokenizer 的精确计数。
 - Claude Code 和 Codex/Hermes rollout 路径已用本地样本验证；真实多样本验证仍在进行中，OpenAI 还需要用户提供真实导出样本后，Phase 0 才能覆盖所有已支持来源。建议先审查报告，再使用压缩输出。
+- 默认阈值优先避免误删，而不是最大化 token 节省；只有在用私有验证样本审查报告后，才建议下调阈值。
 - 暂无 Web UI、MCP server、安装器或 Claude Code slash command。
 
 ## 文档

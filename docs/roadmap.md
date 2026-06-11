@@ -94,7 +94,7 @@ Implemented. The core CLI now supports Claude Code, OpenAI, and Codex/Hermes rol
 
 - Add regression tests for real-session edge cases using sanitized fixtures.
 - Add report summary helpers for top reasons and top candidate categories.
-- Decide whether `compress_candidate` should produce summaries later or remain report-only in v0.1.
+- Keep `compress_candidate` report-only in v0.1; decide on later summarization only after private validation shows safe precision across supported formats.
 
 ## v0.2: Usable CLI
 
@@ -110,6 +110,7 @@ Make the CLI comfortable for real users, not just internal validation.
 - `trimctx resume` analyzes the most recent Claude Code transcript.
 - Better error messages for unsupported JSONL, unreadable files, and unsafe output paths.
 - Advanced threshold flags exist for validation/tuning, but the default path should remain conservative and simple.
+- Zero `remove_candidate` results on a real sample are acceptable when messages do not cross the stricter removal threshold; document this as conservative safety behavior rather than treating it as parser failure.
 
 ### User Experience
 

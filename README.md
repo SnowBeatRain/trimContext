@@ -131,6 +131,8 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `compress_candidate` | Kept (report-only for now) |
 | `remove_candidate` | Removed only if not protected |
 
+`compress_candidate` is intentionally conservative: it means trimctx found a stale or low-value signal, but not enough evidence to remove the message safely. Some formats, especially Codex/Hermes rollout files, may produce zero `remove_candidate` messages under default thresholds; treat that as a safety-first result rather than a parser failure.
+
 ### `trimctx resume`
 
 Find and analyze the most recent Claude Code session under `~/.claude/projects/`.
@@ -178,6 +180,7 @@ sha256sum session.jsonl
 - `compress_candidate` messages are kept as-is (no rewriting or summarizing yet).
 - Token counts are local estimates, not model-specific tokenizer counts.
 - Claude Code and Codex/Hermes rollout paths have been exercised on local samples; real multi-sample validation is still in progress, and OpenAI still needs a user-provided real export before Phase 0 is complete for every supported family. Review the report before relying on compressed output.
+- Default thresholds prefer avoiding false deletions over maximizing token savings; lower thresholds only after reviewing reports against private validation samples.
 - No Web UI, MCP server, installer, or Claude Code slash command yet.
 
 ## Documentation
