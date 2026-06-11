@@ -78,6 +78,95 @@ describe("compressor", () => {
     expect(compressed.split("\n")).toHaveLength(4);
   });
 
+  test("preserves skipped Codex records even while removing stale messages", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
+    const input = join(dir, "codex-skipped-with-removal.jsonl");
+    const output = join(dir, "codex-skipped-with-removal.trimmed.jsonl");
+    const padding = Array.from({ length: 35 }, (_, i) =>
+      JSON.stringify({
+        timestamp: `2026-06-09T05:52:${String(i).padStart(2, "0")}.000Z`,
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: i % 2 === 0 ? "user" : "assistant",
+          content: [{ type: "input_text", text: `padding ${i}` }]
+        }
+      })
+    );
+    const skippedRecords = [
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:38.000Z",
+        type: "event_msg",
+        payload: { msg: "event metadata stays" }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:39.000Z",
+        type: "turn_context",
+        payload: { turn_id: "turn-001", cwd: "/home/user/project" }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:40.000Z",
+        type: "response_item",
+        payload: { type: "reasoning", encrypted_content: "abc123encrypted" }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:41.000Z",
+        type: "compacted",
+        payload: { message: "compaction marker stays" }
+      })
+    ];
+    const original = [
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:37.175Z",
+        type: "session_meta",
+        payload: {
+          id: "test-session-002",
+          base_instructions: { text: "You are a helpful assistant." }
+        }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:42.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Use old payment endpoint legacy charge api" }]
+        }
+      }),
+      ...skippedRecords,
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:43.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Use old payment endpoint legacy charge api" }]
+        }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:44.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "Correction: instead use new billing endpoint" }]
+        }
+      }),
+      ...padding
+    ].join("\n");
+    await writeFile(input, original, "utf8");
+
+    await compressFile(input, output, { recentWindow: 0 });
+    const compressed = await readFile(output, "utf8");
+
+    expect(compressed).not.toContain("legacy charge api");
+    expect(compressed).toContain("event metadata stays");
+    expect(compressed).toContain("turn-001");
+    expect(compressed).toContain("abc123encrypted");
+    expect(compressed).toContain("compaction marker stays");
+    expect(compressed).toContain("new billing endpoint");
+  });
+
   test("rejects output paths that resolve to the input file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
     const input = join(dir, "session.jsonl");
