@@ -13,6 +13,7 @@ const HARD_PROTECT_REASONS: Reason[] = [
   "contains_git_diff",
   "contains_test_failure",
   "contains_architecture_or_api_decision",
+  "contains_tool_interaction",
   "tool_result_referenced_later"
 ];
 
@@ -60,6 +61,9 @@ export function applySafetyRules(messages: NormalizedMessage[], options: Pick<Re
     }
     if (/(architecture|schema|配置|架构|接口|数据库|package\.json|tsconfig)/i.test(content)) {
       reasons.add("contains_architecture_or_api_decision");
+    }
+    if (message.tool?.isToolUse || message.tool?.isToolResult) {
+      reasons.add("contains_tool_interaction");
     }
     if (message.tool?.isToolResult && message.tool.toolResultFor && referencedToolResults.has(message.tool.toolResultFor)) {
       reasons.add("tool_result_referenced_later");

@@ -107,6 +107,50 @@ describe("parseCodexJsonl", () => {
     expect(customCall!.tool?.toolUseId).toBe("call-002");
   });
 
+  it("hard-protects Codex tool calls and tool results by structure", () => {
+    const input = [
+      JSON.stringify({
+        timestamp: "2026-01-01T00:00:00.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "web_search",
+          call_id: "call-search-001",
+          arguments: JSON.stringify({ query: "current package version" }),
+        },
+      }),
+      JSON.stringify({
+        timestamp: "2026-01-01T00:00:01.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call-search-001",
+          output: "version result from remote registry",
+        },
+      }),
+      JSON.stringify({
+        timestamp: "2026-01-01T00:00:02.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Using call-search-001, the current version is 1.2.3." }],
+        },
+      }),
+    ].join("\n");
+
+    const analyzed = analyzeMessages(parseCodexJsonl(input), { recentWindow: 0 });
+    const toolUse = analyzed.find((m) => m.tool?.isToolUse && m.tool.toolUseId === "call-search-001");
+    const toolResult = analyzed.find((m) => m.tool?.isToolResult && m.tool.toolResultFor === "call-search-001");
+
+    expect(toolUse?.protected).toBe(true);
+    expect(toolUse?.decision).toBe("keep_protected");
+    expect(toolUse?.reasons).toContain("contains_tool_interaction");
+    expect(toolResult?.protected).toBe(true);
+    expect(toolResult?.decision).toBe("keep_protected");
+    expect(toolResult?.reasons).toContain("contains_tool_interaction");
+  });
+
   it("skips reasoning records (encrypted content)", async () => {
     const input = await readFile(fixturePath, "utf-8");
     const messages = parseCodexJsonl(input, fixturePath);

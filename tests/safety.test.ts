@@ -65,7 +65,7 @@ describe("safety rules", () => {
     expect(last.reasons).toContain("recent_message");
   });
 
-  test("does not protect old tool calls or results just because their own tool id appears", () => {
+  test("does not mark tool calls or results as later-referenced just because their own tool id appears", () => {
     const messages: NormalizedMessage[] = [
       { ...message("m1", "assistant", "[tool_use Read tool-1] {\"file_path\":\"src/app.ts\"}"), tool: { isToolUse: true, toolUseId: "tool-1", toolName: "Read" } },
       { ...message("m2", "tool", "[tool_result tool-1] old read output"), tool: { isToolResult: true, toolResultFor: "tool-1" } },
@@ -76,9 +76,11 @@ describe("safety rules", () => {
     const protectedMessages = applySafetyRules(messages);
 
     expect(protectedMessages[0].reasons).not.toContain("references_tool_result");
-    expect(protectedMessages[0].protected).toBe(false);
+    expect(protectedMessages[0].reasons).toContain("contains_tool_interaction");
+    expect(protectedMessages[0].protected).toBe(true);
     expect(protectedMessages[1].reasons).not.toContain("tool_result_referenced_later");
-    expect(protectedMessages[1].protected).toBe(false);
+    expect(protectedMessages[1].reasons).toContain("contains_tool_interaction");
+    expect(protectedMessages[1].protected).toBe(true);
   });
 
   test("marks tool_result_referenced_later as importance signal when later text references its id", () => {

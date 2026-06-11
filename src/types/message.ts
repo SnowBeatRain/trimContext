@@ -27,6 +27,7 @@ export type Reason =
   | "contains_user_decision"
   | "contains_architecture_or_api_decision"
   | "tool_result_referenced_later"
+  | "contains_tool_interaction"
   | "references_tool_result"
   | "superseded_by_later_instruction"
   | "low_reference_in_later_context"
