@@ -66,6 +66,7 @@ export interface NormalizedMessage {
   sessionId?: string;
   parentId?: string;
   tool?: MessageToolInfo;
+  sourceIndex?: number;
   tokens?: number;
   protected?: boolean;
   scores?: RotScores;

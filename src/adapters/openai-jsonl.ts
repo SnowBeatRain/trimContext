@@ -12,19 +12,25 @@ export function parseOpenAiJsonl(input: string, file = "<input>"): NormalizedMes
 
       if (Array.isArray(raw.messages)) {
         raw.messages.forEach((entry, messageIndex) => {
-          messages.push(normalizeOpenAiMessage(entry, line, sourceLine, `${file}:${sourceLine}:${messageIndex + 1}`));
+          const normalized = normalizeOpenAiMessage(entry, line, sourceLine, `${file}:${sourceLine}:${messageIndex + 1}`);
+          if (normalized) {
+            messages.push({ ...normalized, sourceIndex: messageIndex });
+          }
         });
         return;
       }
-      messages.push(normalizeOpenAiMessage(raw, line, sourceLine, `${file}:${sourceLine}`));
+      const normalized = normalizeOpenAiMessage(raw, line, sourceLine, `${file}:${sourceLine}`);
+      if (normalized) {
+        messages.push(normalized);
+      }
     });
 
   return messages;
 }
 
-function normalizeOpenAiMessage(raw: unknown, rawLine: string, sourceLine: number, id: string): NormalizedMessage {
+function normalizeOpenAiMessage(raw: unknown, rawLine: string, sourceLine: number, id: string): NormalizedMessage | null {
   if (!isRecord(raw)) {
-    throw new Error(`Invalid OpenAI message at line ${sourceLine}`);
+    return null;
   }
   const flattened = flattenContent(raw.content);
   const role = normalizeRole(raw.role);

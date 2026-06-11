@@ -59,7 +59,8 @@ function compressOpenAiLines(input: string, analyzed: NormalizedMessage[], remov
       if (messages.length === 0) return [line];
       const raw = JSON.parse(line) as Record<string, unknown>;
       if (Array.isArray(raw.messages)) {
-        const kept = raw.messages.filter((_, index) => !removeIds.has(messages[index]?.id ?? ""));
+        const bySourceIndex = new Map(messages.map((message) => [message.sourceIndex, message]));
+        const kept = raw.messages.filter((_, index) => !removeIds.has(bySourceIndex.get(index)?.id ?? ""));
         if (kept.length === 0) return [];
         return [JSON.stringify({ ...raw, messages: kept })];
       }

@@ -113,4 +113,37 @@ describe("compressor", () => {
     expect(compressed).toContain("new billing endpoint");
     expect(compressed).not.toContain("legacy charge api");
   });
+
+  test("keeps OpenAI messages array indices aligned when records contain skipped entries", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
+    const input = join(dir, "openai-skipped.jsonl");
+    const output = join(dir, "openai-skipped.trimmed.jsonl");
+    const padding = Array.from({ length: 35 }, (_, i) =>
+      JSON.stringify({ role: i % 2 === 0 ? "user" : "assistant", content: `padding ${i}` })
+    );
+    const original = [
+      JSON.stringify({
+        messages: [
+          { role: "system", content: "System stays" },
+          "unknown raw entry stays in place",
+          { role: "assistant", content: "Use old payment endpoint legacy charge api" },
+          { role: "assistant", content: "Use old payment endpoint legacy charge api" },
+          { role: "user", content: "Correction: instead use new billing endpoint" }
+        ]
+      }),
+      ...padding
+    ].join("\n");
+    await writeFile(input, original, "utf8");
+
+    await compressFile(input, output, { recentWindow: 0 });
+    const compressed = await readFile(output, "utf8");
+    const firstLine = JSON.parse(compressed.split("\n")[0]) as { messages: unknown[] };
+
+    expect(firstLine.messages).toEqual([
+      { role: "system", content: "System stays" },
+      "unknown raw entry stays in place",
+      { role: "user", content: "Correction: instead use new billing endpoint" }
+    ]);
+    expect(compressed).not.toContain("legacy charge api");
+  });
 });
