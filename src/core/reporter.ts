@@ -23,12 +23,53 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
       estimated_saving_tokens: savingTokens,
       protected_messages: analyzedMessages.filter((message) => message.protected).length,
       compress_candidates: analyzedMessages.filter((message) => message.decision === "compress_candidate").length,
-      top_reasons: countTopReasons(analyzedMessages)
+      top_reasons: countTopReasons(analyzedMessages),
+      score_diagnostics: createScoreDiagnostics(analyzedMessages)
     },
     messages: analyzedMessages,
     remove_candidates: removeCandidates,
     warnings: [...warnings, ...createAnalysisWarnings(messages)]
   };
+}
+
+function createScoreDiagnostics(messages: AnalyzedMessage[]): AnalysisReport["summary"]["score_diagnostics"] {
+  const rotScores = messages.map((message) => message.rot_score).sort((left, right) => left - right);
+
+  return {
+    max_rot_score: roundScore(rotScores.at(-1) ?? 0),
+    p90_rot_score: percentile(rotScores, 0.9),
+    near_remove_threshold_count: messages.filter((message) => message.rot_score >= 0.7 && message.rot_score < 0.8).length,
+    protected_high_rot_count: messages.filter((message) => message.protected && message.rot_score >= 0.6).length,
+    decision_score_ranges: {
+      keep: scoreRange(messages.filter((message) => message.decision === "keep")),
+      keep_protected: scoreRange(messages.filter((message) => message.decision === "keep_protected")),
+      compress_candidate: scoreRange(messages.filter((message) => message.decision === "compress_candidate")),
+      remove_candidate: scoreRange(messages.filter((message) => message.decision === "remove_candidate"))
+    }
+  };
+}
+
+function scoreRange(messages: AnalyzedMessage[]): AnalysisReport["summary"]["score_diagnostics"]["decision_score_ranges"]["keep"] {
+  if (messages.length === 0) return { count: 0, min: 0, max: 0, avg: 0 };
+
+  const scores = messages.map((message) => message.rot_score);
+  const sum = scores.reduce((total, score) => total + score, 0);
+  return {
+    count: messages.length,
+    min: roundScore(Math.min(...scores)),
+    max: roundScore(Math.max(...scores)),
+    avg: roundScore(sum / messages.length)
+  };
+}
+
+function percentile(sortedScores: number[], ratio: number): number {
+  if (sortedScores.length === 0) return 0;
+  const index = Math.ceil(sortedScores.length * ratio) - 1;
+  return roundScore(sortedScores[Math.max(0, Math.min(index, sortedScores.length - 1))]);
+}
+
+function roundScore(score: number): number {
+  return Number(score.toFixed(4));
 }
 
 function detectWarnings(messages: NormalizedMessage[]): string[] {

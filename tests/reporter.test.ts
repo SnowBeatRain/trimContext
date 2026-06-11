@@ -100,6 +100,39 @@ describe("createReport", () => {
     );
   });
 
+  test("includes score diagnostics for threshold tuning without changing decisions", () => {
+    const keep = analyzedMessage("m1", ["old_message"]);
+    keep.decision = "keep";
+    keep.rot_score = 0.42;
+    keep.scores = { ...keep.scores, rot_score: 0.42 };
+
+    const reportOnly = analyzedMessage("m2", ["old_message"]);
+    reportOnly.decision = "compress_candidate";
+    reportOnly.protected = true;
+    reportOnly.rot_score = 0.79;
+    reportOnly.scores = { ...reportOnly.scores, rot_score: 0.79 };
+
+    const removable = analyzedMessage("m3", ["old_message"]);
+    removable.rot_score = 0.86;
+    removable.scores = { ...removable.scores, rot_score: 0.86 };
+
+    const report = createReport([keep, reportOnly, removable], "session.jsonl");
+
+    expect(report.summary.score_diagnostics).toEqual({
+      max_rot_score: 0.86,
+      p90_rot_score: 0.86,
+      near_remove_threshold_count: 1,
+      protected_high_rot_count: 1,
+      decision_score_ranges: {
+        keep: { count: 1, min: 0.42, max: 0.42, avg: 0.42 },
+        keep_protected: { count: 0, min: 0, max: 0, avg: 0 },
+        compress_candidate: { count: 1, min: 0.79, max: 0.79, avg: 0.79 },
+        remove_candidate: { count: 1, min: 0.86, max: 0.86, avg: 0.86 }
+      }
+    });
+    expect(report.remove_candidates).toHaveLength(1);
+  });
+
   test("returns no compact-signal warnings when input has no compact signals", () => {
     const report = createReport([analyzedMessage("m1", ["old_message"])], "session.jsonl");
     expect(report.warnings.join("\n")).not.toContain("session_compacted");

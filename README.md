@@ -178,6 +178,7 @@ sha256sum session.jsonl
 ## Current Limitations
 
 - `compress_candidate` messages are kept as-is (no rewriting or summarizing yet).
+- JSON reports include `summary.score_diagnostics` to inspect score distribution before changing thresholds; diagnostics do not change compression behavior.
 - Token counts are local estimates, not model-specific tokenizer counts.
 - Claude Code and Codex/Hermes rollout paths have been exercised on local samples; real multi-sample validation is still in progress, and OpenAI still needs a user-provided real export before Phase 0 is complete for every supported family. Review the report before relying on compressed output.
 - Default thresholds prefer avoiding false deletions over maximizing token savings; lower thresholds only after reviewing reports against private validation samples.

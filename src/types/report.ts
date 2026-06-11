@@ -25,6 +25,22 @@ export interface AnalysisSummary {
   protected_messages: number;
   compress_candidates: number;
   top_reasons: ReasonCount[];
+  score_diagnostics: ScoreDiagnostics;
+}
+
+export interface ScoreRange {
+  count: number;
+  min: number;
+  max: number;
+  avg: number;
+}
+
+export interface ScoreDiagnostics {
+  max_rot_score: number;
+  p90_rot_score: number;
+  near_remove_threshold_count: number;
+  protected_high_rot_count: number;
+  decision_score_ranges: Record<Decision, ScoreRange>;
 }
 
 export interface ReasonCount {

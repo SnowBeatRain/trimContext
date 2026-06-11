@@ -150,10 +150,12 @@ trimctx report session.jsonl -o report.json
 报告包含：
 
 - `input` — 输入文件元信息
-- `summary` — 消息数、token 估算、protected 数量、候选数和预计节省量
+- `summary` — 消息数、token 估算、protected 数量、候选数、预计节省量和评分诊断
 - `messages` — 每条消息的 token 估算、决策、原因和评分
 - `remove_candidates` — 按当前阈值选出的可安全移除消息
 - `warnings` — 解析或分析过程中遇到的问题
+
+`summary.score_diagnostics` 用于阈值调优和验证，包含 `max_rot_score`、`p90_rot_score`、`near_remove_threshold_count`、`protected_high_rot_count` 和 `decision_score_ranges`。这些诊断字段不会改变消息决策或压缩行为。
 
 ### `trimctx compress <file> -o <output.jsonl>`
 
@@ -228,6 +230,8 @@ otherwise => keep
 ```
 
 默认 `0.80` 删除阈值是有意设置得较高。只有在私有验证运行中人工审查过生成报告、并能接受更激进候选时，才建议降低阈值。
+
+调整阈值或评分权重前，应先查看 `summary.score_diagnostics`。如果 `compress_candidate` 明显低于删除阈值，且 `near_remove_threshold_count` 为 `0`，保守结果通常是符合预期的，而不是漏删。
 
 ## 当前限制
 

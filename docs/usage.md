@@ -150,10 +150,12 @@ trimctx report session.jsonl -o report.json
 The report includes:
 
 - `input` — source file metadata
-- `summary` — message counts, token estimates, protected count, candidate counts, and estimated savings
+- `summary` — message counts, token estimates, protected count, candidate counts, estimated savings, and score diagnostics
 - `messages` — per-message token estimates, decisions, reasons, and scores
 - `remove_candidates` — messages selected for safe removal by current thresholds
 - `warnings` — parser or analysis issues encountered during processing
+
+`summary.score_diagnostics` is for threshold tuning and validation. It includes `max_rot_score`, `p90_rot_score`, `near_remove_threshold_count`, `protected_high_rot_count`, and `decision_score_ranges`. These diagnostics do not change message decisions or compression behavior.
 
 ### `trimctx compress <file> -o <output.jsonl>`
 
@@ -228,6 +230,8 @@ otherwise => keep
 ```
 
 The default `0.80` removal threshold is deliberately high. Lower it only for private validation runs where you manually review the generated report and can tolerate more aggressive candidates.
+
+Use `summary.score_diagnostics` before changing thresholds or scoring weights. If `compress_candidate` messages are far below the removal threshold and `near_remove_threshold_count` is `0`, the conservative result is likely intentional rather than a missed deletion opportunity.
 
 ## Current Limitations
 

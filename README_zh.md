@@ -178,6 +178,7 @@ sha256sum session.jsonl
 ## 当前限制
 
 - `compress_candidate` 消息保持原样（暂不改写或摘要）。
+- JSON 报告包含 `summary.score_diagnostics`，用于在调整阈值前查看评分分布；诊断字段不会改变压缩行为。
 - token 数是本地估算，不等同于特定模型 tokenizer 的精确计数。
 - Claude Code 和 Codex/Hermes rollout 路径已用本地样本验证；真实多样本验证仍在进行中，OpenAI 还需要用户提供真实导出样本后，Phase 0 才能覆盖所有已支持来源。建议先审查报告，再使用压缩输出。
 - 默认阈值优先避免误删，而不是最大化 token 节省；只有在用私有验证样本审查报告后，才建议下调阈值。
