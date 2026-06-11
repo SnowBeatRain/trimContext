@@ -286,6 +286,7 @@ function formatValidationSummary(output: Phase0Output): string {
   lines.push("");
   lines.push("## Safety Notes");
   lines.push("- This summary intentionally excludes raw message content.");
+  lines.push("- `phase0-results.json` is private by default: it can include local paths, stderr, or error details and should not be published.");
   lines.push("- Hash comparison verifies that input JSONL files were not modified.");
   lines.push("- `compress_candidate` remains report-only and is kept during compression.");
   lines.push("- Threshold or weight changes require separate human review.");

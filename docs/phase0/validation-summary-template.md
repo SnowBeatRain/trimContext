@@ -1,6 +1,6 @@
 # Phase 0 Validation Summary
 
-Copy this template when a validation round is complete. Keep raw reports and filled private labels out of git unless they have been fully sanitized.
+Copy this template when a validation round is complete. Keep raw reports and filled private labels out of git unless they have been fully sanitized. Treat `phase0-results.json` as private by default because it can include local paths, `stderr`, and `error` details.
 
 ## Run Metadata
 

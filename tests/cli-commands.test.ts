@@ -49,6 +49,44 @@ describe("CLI commands", () => {
     expect(result.stderr).toContain("Output file must be different from input file");
   });
 
+  test("report rejects using the input file as output", async () => {
+    const { file } = await writeSessionFixture();
+
+    const result = await runCli(["report", file, "-o", file]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("Output file must be different from input file");
+  });
+
+  test("handoff rejects using the input file as output", async () => {
+    const { file } = await writeSessionFixture();
+
+    const result = await runCli(["handoff", file, "-o", file]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("Output file must be different from input file");
+  });
+
+  test("handoff rejects next-context using the input file as output", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const output = join(dir, "handoff.md");
+
+    const result = await runCli(["handoff", file, "-o", output, "--next-context", file]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("Next context file must be different from input file");
+  });
+
+  test("handoff rejects next-context using the handoff output file", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const output = join(dir, "handoff.md");
+
+    const result = await runCli(["handoff", file, "-o", output, "--next-context", output]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("Next context file must be different from handoff output file");
+  });
+
   test("resume analyzes the most recent Claude Code session under HOME", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
     const projectDir = join(home, ".claude", "projects", "project-a");

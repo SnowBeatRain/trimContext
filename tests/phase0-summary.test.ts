@@ -28,6 +28,8 @@ describe("phase0 validation summary", () => {
     expect(summary).toContain("codex-jsonl");
     expect(summary).toContain("openai-jsonl");
     expect(summary).toContain("## Safety Notes");
+    expect(summary).toContain("`phase0-results.json` is private by default");
+    expect(summary).toContain("local paths, stderr, or error details");
     expect(summary).not.toContain("Use old payment endpoint");
   });
 });

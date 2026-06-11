@@ -26,8 +26,8 @@ export function formatHandoff(report: AnalysisReport): string {
   lines.push(`- Near remove threshold: ${summary.score_diagnostics.near_remove_threshold_count}`);
   lines.push("");
   lines.push("## Continue From Here");
-  lines.push("- Treat `remove_candidate` as the only automatically removable class.");
-  lines.push("- Treat `compress_candidate` as report-only unless a human review promotes it.");
+  lines.push("- Treat `remove_candidate` as the only class eligible for destructive workflows, and still review it before use.");
+  lines.push("- Treat `compress_candidate` as report-only review signal; it stays preserved by default and is not promoted automatically.");
   lines.push("- Keep original JSONL unchanged; write compressed or handoff artifacts to new files.");
   lines.push("- If remove candidates are zero, continue from the health report instead of forcing deletion.");
   lines.push("");

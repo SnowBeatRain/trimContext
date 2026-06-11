@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { analyzeMessages, parseJsonl } from "./core/analyzer.js";
 import { compressFile } from "./core/compressor.js";
 import { createReport } from "./core/reporter.js";
@@ -69,6 +69,7 @@ program
   .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
   .description("Write a JSON analysis report.")
   .action(async (file: string, options: CliAnalysisOptions & { output: string }) => {
+    await assertDifferentFiles(file, options.output, "Output file must be different from input file");
     const report = await analyzeFile(file, parseAnalysisOptions(options));
     await writeFile(options.output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   });
@@ -96,6 +97,11 @@ program
   .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
   .description("Write markdown handoff artifacts for continuing a long conversation safely.")
   .action(async (file: string, options: CliAnalysisOptions & { output: string; nextContext?: string }) => {
+    await assertDifferentFiles(file, options.output, "Output file must be different from input file");
+    if (options.nextContext) {
+      await assertDifferentFiles(file, options.nextContext, "Next context file must be different from input file");
+      await assertDifferentFiles(options.output, options.nextContext, "Next context file must be different from handoff output file");
+    }
     const report = await analyzeFile(file, parseAnalysisOptions(options));
     await writeFile(options.output, formatHandoff(report), "utf8");
     if (options.nextContext) {
@@ -178,4 +184,22 @@ function parseOptionalNumber(value: string | undefined, flag: string): number | 
 async function analyzeFile(file: string, options: AnalysisOptions = {}) {
   const input = await readFile(file, "utf8");
   return createReport(analyzeMessages(parseJsonl(input, file), options), file);
+}
+
+async function assertDifferentFiles(leftFile: string, rightFile: string, message: string): Promise<void> {
+  if (await sameFile(leftFile, rightFile)) {
+    throw new Error(message);
+  }
+}
+
+async function sameFile(leftFile: string, rightFile: string): Promise<boolean> {
+  if (resolve(leftFile) === resolve(rightFile)) {
+    return true;
+  }
+  try {
+    const [leftStat, rightStat] = await Promise.all([stat(leftFile), stat(rightFile)]);
+    return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
+  } catch {
+    return false;
+  }
 }

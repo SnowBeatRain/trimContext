@@ -123,6 +123,8 @@ npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase
 
 验证流程见 `docs/phase0/phase0-plan.md`、`docs/phase0/manual-label-guide.md` 和 `docs/phase0/validation-summary-template.md`。
 
+`reports/phase0/phase0-results.json` 默认视为私有产物。它可能包含本机路径以及捕获到的 `stderr` 或 `error` 细节；对外只发布脱敏摘要或人工删改后的片段。
+
 ## 命令
 
 ### `trimctx analyze <file>`

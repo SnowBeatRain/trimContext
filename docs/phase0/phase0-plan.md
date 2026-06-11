@@ -40,6 +40,8 @@ Expected files:
 - `reports/phase0/<sample>.report.json`
 - `reports/phase0/<sample>.trimmed.jsonl`
 
+`phase0-results.json` is private by default: it may include local filesystem paths plus captured `stderr` or `error` details. Do not publish it directly; share only a sanitized `validation-summary.md` or a manually redacted excerpt.
+
 ## Command
 
 ```bash
@@ -65,7 +67,7 @@ The script prints JSON to stdout and writes the same aggregate file to `reports/
 - [ ] At least 5 samples were run.
 - [ ] All supported source families were represented.
 - [ ] No raw private JSONL files appear in `git status`.
-- [ ] `phase0-results.json` shows all input hashes unchanged.
+- [ ] `phase0-results.json` shows all input hashes unchanged and remains private or fully redacted.
 - [ ] Every `remove_candidate` was manually labeled.
 - [ ] Critical false deletions are zero.
 - [ ] Validation summary is filled from the template.

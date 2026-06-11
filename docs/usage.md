@@ -123,6 +123,8 @@ npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase
 
 The workflow is documented in `docs/phase0/phase0-plan.md`, `docs/phase0/manual-label-guide.md`, and `docs/phase0/validation-summary-template.md`.
 
+`reports/phase0/phase0-results.json` is private by default. It can include local paths plus captured `stderr` or `error` details, so publish only a sanitized summary or manually redacted excerpt.
+
 ## Commands
 
 ### `trimctx analyze <file>`
