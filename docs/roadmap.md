@@ -55,7 +55,7 @@ For the task-level execution plan, dataset requirements, validation criteria, an
 
 ### Goal
 
-Prove that trimctx can safely analyze real Claude Code and OpenAI JSONL transcripts from local files.
+Prove that trimctx can safely analyze local Claude Code, OpenAI, and Codex/Hermes rollout JSONL transcripts, then validate the supported families with private real-session samples during Phase 0.
 
 ### Deliverables
 
@@ -64,6 +64,7 @@ Prove that trimctx can safely analyze real Claude Code and OpenAI JSONL transcri
 - `trimctx compress <file> -o <output.jsonl>`
 - Claude Code JSONL parser
 - OpenAI JSONL parser
+- Codex/Hermes rollout JSONL parser
 - Approximate tokenizer
 - Safety rule engine
 - Rot/staleness scorer
@@ -82,7 +83,7 @@ Prove that trimctx can safely analyze real Claude Code and OpenAI JSONL transcri
 
 ### Current Status
 
-Implemented. The real Claude Code long-session sample with 633 messages now produces useful candidates after safety/scorer tuning:
+Implemented. The core CLI now supports Claude Code, OpenAI, and Codex/Hermes rollout JSONL inputs. The real Claude Code long-session sample with 633 messages produces useful candidates after safety/scorer tuning:
 
 - protected messages: 338
 - remove candidates: 41

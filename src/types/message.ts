@@ -6,7 +6,7 @@ export type MessageRole =
   | "tool"
   | "unknown";
 
-export type MessageSource = "claude-code-jsonl" | "openai-jsonl";
+export type MessageSource = "claude-code-jsonl" | "openai-jsonl" | "codex-jsonl";
 
 export type Decision =
   | "keep"

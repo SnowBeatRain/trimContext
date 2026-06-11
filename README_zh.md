@@ -2,7 +2,7 @@
 
 **本地优先的 CLI，用于分析和安全精简 AI 长对话上下文。**
 
-当你使用 Claude Code、Cursor 或其他 AI 助手连续工作数小时，对话历史会积累大量过期内容——旧报错、被覆盖的指令、孤立的工具输出、元信息噪音。这就是**上下文腐化（context rot）**：对话越来越慢、越来越贵，模型开始拉入不相关的历史。
+当你使用 Claude Code、Codex、Cursor 或其他 AI 助手连续工作数小时，对话历史会积累大量过期内容——旧报错、被覆盖的指令、孤立的工具输出、元信息噪音。这就是**上下文腐化（context rot）**：对话越来越慢、越来越贵，模型开始拉入不相关的历史。
 
 trimctx 读取你的 JSONL 对话文件，识别低价值或过期消息，解释原因，生成安全的压缩副本——**永远不修改原文件**。
 
@@ -75,13 +75,13 @@ npx tsx src/cli.ts resume
 
 ## 谁适合用
 
-- **Claude Code / Cursor 用户** — 长时间运行的会话触及上下文限制
+- **Claude Code / Codex / Cursor 用户** — 长时间运行的会话触及上下文限制
 - **开发者** — 想了解 AI 上下文窗口被什么内容占满
 - **团队** — 在归档前审查和压缩共享的对话日志
 
 ## 工作原理
 
-1. **解析** — 自动识别 Claude Code JSONL 和 OpenAI JSONL 格式。
+1. **解析** — 自动识别 Claude Code JSONL、OpenAI JSONL 和 Codex/Hermes rollout JSONL 格式。
 2. **归一化** — 统一消息结构、tool-use 块、tool result 和元事件。
 3. **保护** — 将高风险内容标记为 protected（system prompt、最近消息、用户决策、代码、错误、diff、配置变更、记忆指令）。
 4. **评分** — 基于消息年龄、重复度、后续引用度、孤立工具输出、元信息噪音等维度给剩余消息打分。
@@ -147,6 +147,7 @@ trimctx resume --compress session.trimmed.jsonl
 |---|---|
 | Claude Code JSONL | 已支持 |
 | OpenAI Chat Completion 风格 JSONL | 已支持 |
+| Codex/Hermes rollout JSONL | 已支持 |
 | 纯文本转录 | 不支持 |
 | 数据库或远程 API | 不支持 |
 
@@ -176,7 +177,7 @@ sha256sum session.jsonl
 
 - `compress_candidate` 消息保持原样（暂不改写或摘要）。
 - token 数是本地估算，不等同于特定模型 tokenizer 的精确计数。
-- 已在真实 Claude Code 和 OpenAI 会话上验证，但边界情况可能存在——建议先审查报告再使用压缩输出。
+- Claude Code 和 Codex/Hermes rollout 路径已用本地样本验证；真实多样本验证仍在进行中，OpenAI 还需要用户提供真实导出样本后，Phase 0 才能覆盖所有已支持来源。建议先审查报告，再使用压缩输出。
 - 暂无 Web UI、MCP server、安装器或 Claude Code slash command。
 
 ## 文档
@@ -184,6 +185,16 @@ sha256sum session.jsonl
 - [使用说明](docs/usage_zh.md) — 详细命令示例、输出和安全验证
 - [路线图](docs/roadmap.md) — 计划里程碑和功能
 - [需求说明](docs/requirements.md) — 项目范围和验收标准
+
+## Phase 0 验证
+
+在推荐给其他用户使用前，建议先用私有多样本数据集验证：
+
+```bash
+npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
+```
+
+详见 `docs/phase0/phase0-plan.md`、`docs/phase0/manual-label-guide.md` 和 `docs/phase0/validation-summary-template.md`，按安全优先流程完成验证。
 
 ## 开发
 

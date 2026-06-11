@@ -2,7 +2,7 @@
 
 **A local-first CLI that analyzes and safely trims long AI conversation context.**
 
-When you use Claude Code, Cursor, or other AI assistants for hours, conversation history accumulates stale messages — old errors, superseded instructions, orphaned tool outputs, metadata noise. This is **context rot**: the conversation gets slower, more expensive, and the model starts pulling in irrelevant history.
+When you use Claude Code, Codex, Cursor, or other AI assistants for hours, conversation history accumulates stale messages — old errors, superseded instructions, orphaned tool outputs, metadata noise. This is **context rot**: the conversation gets slower, more expensive, and the model starts pulling in irrelevant history.
 
 trimctx reads your JSONL conversation files, identifies low-value or stale messages, explains why, and generates a safe compressed copy — **without ever modifying the original file**.
 
@@ -75,13 +75,13 @@ npx tsx src/cli.ts resume
 
 ## Who should use this
 
-- **Claude Code / Cursor users** with long-running sessions that hit context limits
+- **Claude Code / Codex / Cursor users** with long-running sessions that hit context limits
 - **Developers** who want to understand what's filling up their AI context window
 - **Teams** that want to audit and compress shared conversation logs before archiving
 
 ## How it works
 
-1. **Parse** — Auto-detects Claude Code JSONL and OpenAI JSONL formats.
+1. **Parse** — Auto-detects Claude Code JSONL, OpenAI JSONL, and Codex/Hermes rollout JSONL formats.
 2. **Normalize** — Unifies message structures, tool-use blocks, tool results, and metadata events.
 3. **Protect** — Flags high-risk content as protected (system prompts, recent messages, user decisions, code, errors, diffs, config changes, memory instructions).
 4. **Score** — Evaluates remaining messages on dimensions like age, redundancy, reference count, orphaned tool output, and metadata noise.
@@ -147,6 +147,7 @@ trimctx resume --compress session.trimmed.jsonl
 |---|---|
 | Claude Code JSONL | Supported |
 | OpenAI Chat Completion JSONL | Supported |
+| Codex/Hermes rollout JSONL | Supported |
 | Plain text transcripts | Not supported |
 | Databases or remote APIs | Not supported |
 
@@ -176,7 +177,7 @@ sha256sum session.jsonl
 
 - `compress_candidate` messages are kept as-is (no rewriting or summarizing yet).
 - Token counts are local estimates, not model-specific tokenizer counts.
-- The tool has been validated on real Claude Code and OpenAI sessions, but edge cases may exist — review the report before relying on compressed output.
+- Claude Code and Codex/Hermes rollout paths have been exercised on local samples; real multi-sample validation is still in progress, and OpenAI still needs a user-provided real export before Phase 0 is complete for every supported family. Review the report before relying on compressed output.
 - No Web UI, MCP server, installer, or Claude Code slash command yet.
 
 ## Documentation
@@ -184,6 +185,16 @@ sha256sum session.jsonl
 - [Usage Guide](docs/usage.md) — detailed commands, outputs, and safety verification
 - [Roadmap](docs/roadmap.md) — planned milestones and features
 - [Requirements](docs/requirements.md) — project scope and acceptance criteria
+
+## Phase 0 validation
+
+Before recommending trimctx to other users, validate it on a private multi-sample dataset:
+
+```bash
+npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
+```
+
+See `docs/phase0/phase0-plan.md`, `docs/phase0/manual-label-guide.md`, and `docs/phase0/validation-summary-template.md` for the safety-first validation process.
 
 ## Development
 

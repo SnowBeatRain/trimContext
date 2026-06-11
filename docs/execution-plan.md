@@ -4,7 +4,7 @@
 
 ## 0. 一句话定义
 
-trimctx 是一个本地 CLI 工具，用来读取 Claude Code / AI Agent 长对话记录，识别过时、重复、未引用、低价值的上下文内容，输出可审计报告，并生成安全的压缩副本。
+trimctx 是一个本地 CLI 工具，用来读取 Claude Code / OpenAI / Codex 等 AI Agent 长对话记录，识别过时、重复、未引用、低价值的上下文内容，输出可审计报告，并生成安全的压缩副本。
 
 trimctx 不是聊天工具，不是新的 Agent 框架，不是 Web 平台，不是默认自动删除器，也不是 LLM 评测平台。
 
@@ -51,6 +51,7 @@ v0.1 只证明一件事：规则检测能不能在真实长对话里稳定找出
 | --- | --- | --- |
 | 读取 Claude Code JSONL | 做 | 第一优先级 |
 | 读取 OpenAI JSONL | 做基础版 | 作为通用格式 |
+| 读取 Codex/Hermes rollout JSONL | 做 | 解包 `payload` 后复用 OpenAI 归一化逻辑 |
 | 读取纯文本对话 | 暂不做 | 可作为后续兜底 parser |
 | 分析 token 数 | 做 | 先近似，后续可接 tiktoken |
 | 输出 JSON 报告 | 做 | `report` 命令保留完整机器可读数据 |
@@ -145,6 +146,7 @@ trimctx resume
 - CLI 可运行。
 - Claude Code JSONL parser。
 - OpenAI JSONL parser。
+- Codex/Hermes rollout JSONL parser。
 - token 统计。
 - `rot_score` 计算。
 - protected 保护规则。

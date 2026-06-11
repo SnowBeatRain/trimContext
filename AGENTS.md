@@ -6,7 +6,7 @@
 
 ## Project Goal
 
-trimctx 是一个本地 AI 长对话上下文精简工具。目标是读取 Claude Code / OpenAI 长对话 JSONL，识别过时、重复、低价值、未引用内容，输出可审计报告，并生成安全压缩副本。
+trimctx 是一个本地 AI 长对话上下文精简工具。目标是读取 Claude Code / OpenAI / Codex 长对话 JSONL，识别过时、重复、低价值、未引用内容，输出可审计报告，并生成安全压缩副本。
 
 最终产品体验是：用户安装一次后，在 AI 内一条命令即可分析当前会话，不需要手动寻找 `.jsonl` 文件。
 

@@ -27,22 +27,28 @@ export async function compressFile(inputFile: string, outputFile: string, option
 
   const output = parsed[0]?.source === "openai-jsonl"
     ? compressOpenAiLines(input, analyzed, removeIds)
-    : analyzed
-        .filter((message) => !removeIds.has(message.id))
-        .map((message) => message.rawLine)
-        .join("\n");
+    : compressJsonlLines(input, analyzed, removeIds);
 
   await writeFile(outputFile, output, "utf8");
   return { removedMessages: removeIds.size, report };
 }
 
+function compressJsonlLines(input: string, analyzed: NormalizedMessage[], removeIds: Set<string>): string {
+  const byLine = messagesBySourceLine(analyzed);
+  return input
+    .split(/\r?\n/)
+    .map((line, index) => ({ line, sourceLine: index + 1 }))
+    .filter(({ line }) => line.trim().length > 0)
+    .filter(({ sourceLine }) => {
+      const messages = byLine.get(sourceLine) ?? [];
+      return messages.length === 0 || messages.some((message) => !removeIds.has(message.id));
+    })
+    .map(({ line }) => line)
+    .join("\n");
+}
+
 function compressOpenAiLines(input: string, analyzed: NormalizedMessage[], removeIds: Set<string>): string {
-  const byLine = new Map<number, typeof analyzed>();
-  for (const message of analyzed) {
-    const list = byLine.get(message.sourceLine) ?? [];
-    list.push(message);
-    byLine.set(message.sourceLine, list);
-  }
+  const byLine = messagesBySourceLine(analyzed);
 
   return input
     .split(/\r?\n/)
@@ -60,6 +66,16 @@ function compressOpenAiLines(input: string, analyzed: NormalizedMessage[], remov
       return removeIds.has(messages[0].id) ? [] : [line];
     })
     .join("\n");
+}
+
+function messagesBySourceLine(analyzed: NormalizedMessage[]): Map<number, NormalizedMessage[]> {
+  const byLine = new Map<number, NormalizedMessage[]>();
+  for (const message of analyzed) {
+    const list = byLine.get(message.sourceLine) ?? [];
+    list.push(message);
+    byLine.set(message.sourceLine, list);
+  }
+  return byLine;
 }
 
 async function sameFile(inputFile: string, outputFile: string): Promise<boolean> {

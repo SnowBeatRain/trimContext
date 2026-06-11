@@ -1,76 +1,69 @@
-# Phase 0 人工标注指南
+# Phase 0 Manual Label Guide
 
-## 目标
+Use this guide to review trimctx output on private real-world sessions. Do not commit raw sessions, generated reports, or filled private labels.
 
-对每个验证样本的 `remove_candidate` 列表进行人工审查，判断 trimctx 的删除建议是否正确。
+## Prepare
 
-## 标注流程
-
-### 第一步：运行报告
+Run the batch validator:
 
 ```bash
-trimctx report datasets/private/raw/session-NNN.jsonl -o reports/phase0/session-NNN.report.json
+npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
 ```
 
-### 第二步：提取 remove_candidates
+For each generated `*.report.json`, inspect `remove_candidates` first. If a sample has no remove candidates, still inspect warnings and protected-message counts.
 
-从报告 JSON 中提取所有 `decision === "remove_candidate"` 的消息，记录：
+## Labels
 
-- `message_index`（在 messages 数组中的位置）
-- `role`（user / assistant / tool）
-- `reasons`（trimctx 给出的删除理由）
-- `content` 前 200 字符（用于人工判断）
+Assign one label to each remove candidate.
 
-### 第三步：逐条标注
+| Label | Meaning |
+| --- | --- |
+| `safe_remove` | Clearly obsolete, duplicated, superseded, low-value, or orphaned. Removing it should not harm future context. |
+| `unsafe_remove` | Contains still-relevant user intent, current instructions, credentials handling guidance, unresolved decisions, or context needed by later messages. |
+| `uncertain` | Human reviewer cannot confidently decide without replaying more context. Count as not safe for precision. |
 
-对每条 remove_candidate，判断：
+## Review Fields
 
-| 标签 | 含义 | 判断标准 |
-| --- | --- | --- |
-| `correct_remove` | 确实可以删除 | 内容过时、被后续覆盖、孤立 tool_result、重复解释 |
-| `wrong_remove` | 误判，实际应保留 | 包含最终采纳的方案、包含关键上下文、包含用户确认的决策 |
-| `borderline` | 边界情况 | 内容部分过时但仍有参考价值 |
+Record these fields in your private label file:
 
-### 第四步：记录标注
+- sample filename
+- source type
+- message id
+- source line
+- role
+- decision
+- reasons
+- rot score
+- label
+- short rationale
 
-写入 `datasets/private/labels/session-NNN.labels.json`：
+## Critical False Deletion Rules
 
-```json
-{
-  "session_id": "session-NNN",
-  "reviewer": "你的名字",
-  "review_date": "2026-06-09",
-  "labels": [
-    {
-      "message_index": 41,
-      "predicted_decision": "remove_candidate",
-      "human_label": "correct_remove",
-      "reason": "孤立 tool_result，后续无引用"
-    },
-    {
-      "message_index": 82,
-      "predicted_decision": "remove_candidate",
-      "human_label": "wrong_remove",
-      "reason": "包含最终采纳的架构决策"
-    }
-  ]
-}
+Mark a candidate as `unsafe_remove` immediately if it contains any of the following:
+
+- latest user requirement or correction
+- active task state
+- system/developer instruction
+- security or privacy constraint
+- API contract or schema decision still used later
+- tool result required to understand a later assistant response
+- unresolved error, blocker, or diagnostic clue
+
+## Metric Formulas
+
+```text
+remove_candidate_precision = safe_remove / (safe_remove + unsafe_remove + uncertain)
+critical_false_deletion = count(unsafe_remove where severity is critical)
+protected_recall = protected_should_keep / total_should_keep_sensitive_messages
 ```
 
-## 重点关注
+Phase 0 should not pass if `critical_false_deletion > 0`, even when aggregate precision is high.
 
-- **用户纠正模式**：用户说"不要这样做"后，旧方案应被删除，但纠正本身必须保留。
-- **tool_result 孤立**：如果后续 assistant 没有引用该 tool_result 的内容，通常可以删除。
-- **代码块**：如果代码块是最终采纳的版本，必须保留。
-- **系统消息**：任何 system/developer 消息都不应出现在 remove_candidate 中。
+## Tuning Loop
 
-## 计算指标
+If a false deletion appears:
 
-标注完成后：
-
-```
-precision = correct_remove / (correct_remove + wrong_remove)
-critical_false_deletion = wrong_remove 中包含 protected 内容的数量
-```
-
-目标：precision >= 70%，critical_false_deletion = 0。
+1. Copy only a redacted minimal fixture into `tests/fixtures/`.
+2. Add a unit test that reproduces the unsafe candidate.
+3. Update safety/scoring rules.
+4. Re-run `npm test`, `npm run build`, and Phase 0 validation.

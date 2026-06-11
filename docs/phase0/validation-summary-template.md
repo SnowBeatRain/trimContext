@@ -1,53 +1,55 @@
-# Phase 0 验证汇总
+# Phase 0 Validation Summary
 
-> 本文件由人工填写，记录多样本验证的实际结果。
+Copy this template when a validation round is complete. Keep raw reports and filled private labels out of git unless they have been fully sanitized.
 
-## 测试环境
+## Run Metadata
 
-- trimctx 版本：____
-- Node.js 版本：____
-- 测试日期：____
+- Date:
+- trimctx version:
+- Commit or branch:
+- Command:
+- Input directory:
+- Output directory:
 
-## 样本概览
+## Sample Overview
 
-| 样本 | 类型 | messages | tokens | remove_candidates | compress_candidates |
-| --- | --- | --- | --- | --- | --- |
-| session-001 | 功能开发 | | | | |
-| session-002 | Bug 调试 | | | | |
-| session-003 | 重构任务 | | | | |
-| session-004 | 文档/规划 | | | | |
-| session-005 | 长工具调用 | | | | |
-| **合计** | | | | | |
+| Sample | Source | Messages | Tokens | Remove candidates | Compress candidates | Warnings | Result |
+| --- | --- | ---: | ---: | ---: | ---: | --- | --- |
+|  |  |  |  |  |  |  |  |
 
-## 验收指标
+## Acceptance Metrics
 
-| 指标 | 目标 | 实际 | 通过? |
-| --- | --- | --- | --- |
-| parser success rate | >= 95% | | |
-| critical false deletion | = 0 | | |
-| protected recall | = 100% | | |
-| remove_candidate precision | >= 70% | | |
-| 原始文件完整性 | hash 不变 | | |
+| Metric | Target | Actual | Pass? | Notes |
+| --- | ---: | ---: | --- | --- |
+| Parser success rate | >= 95% |  |  |  |
+| Report success rate | >= 95% |  |  |  |
+| Compress success rate | >= 95% |  |  |  |
+| Input mutation | 0 |  |  |  |
+| Critical false deletion | 0 |  |  |  |
+| Protected recall | 100% |  |  |  |
+| Remove-candidate precision | >= 70% |  |  |  |
 
-## 人工审查发现
+## False Positives
 
-### 误判为 remove_candidate（实际应保留）
+List candidates trimctx wanted to remove but reviewers rejected.
 
-| 样本 | message_index | role | 原因 | 建议修复 |
-| --- | --- | --- | --- | --- |
-| | | | | |
+| Sample | Message id | Source line | Reason | Why unsafe |
+| --- | --- | ---: | --- | --- |
+|  |  |  |  |  |
 
-### 漏判（实际应删除但未标记）
+## False Negatives
 
-| 样本 | message_index | role | 说明 |
-| --- | --- | --- | --- |
-| | | | |
+List obviously stale or low-value content trimctx failed to flag.
 
-## 结论
+| Sample | Message id | Source line | Why it should be removable |
+| --- | --- | ---: | --- |
+|  |  |  |  |
 
-- [ ] 5 个样本全部成功解析
-- [ ] 0 个 critical false deletion
-- [ ] protected recall = 100%
-- [ ] remove_candidate precision >= 70%
-- [ ] 原始文件未被修改
-- [ ] 可进入下一阶段
+## Decision
+
+- [ ] Phase 0 passes; proceed to next release/readiness step.
+- [ ] Phase 0 needs tuning before release.
+
+## Follow-up Changes
+
+-

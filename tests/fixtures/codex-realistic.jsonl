@@ -1,0 +1,12 @@
+{"timestamp":"2026-06-09T05:50:37.175Z","type":"session_meta","payload":{"id":"test-session-001","timestamp":"2026-06-09T05:50:37.175Z","cwd":"/home/user/project","originator":"codex-tui","cli_version":"0.137.0","source":"cli","model_provider":"openai","base_instructions":{"text":"You are a helpful assistant."}}}
+{"timestamp":"2026-06-09T05:50:38.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-001","started_at":1780984252,"model_context_window":258400}}
+{"timestamp":"2026-06-09T05:50:38.100Z","type":"turn_context","payload":{"turn_id":"turn-001","cwd":"/home/user/project","model":"gpt-5.5","timezone":"Asia/Shanghai","approval_policy":"on-request"}}
+{"timestamp":"2026-06-09T05:50:39.000Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"You are a coding assistant. Follow these rules:\n1. Be concise\n2. Show code examples"}]}}
+{"timestamp":"2026-06-09T05:51:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Help me write a hello world in Python"}]}}
+{"timestamp":"2026-06-09T05:51:05.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Here you go:\n\n```python\nprint('Hello, World!')\n```"}],"phase":"commentary"}}
+{"timestamp":"2026-06-09T05:51:10.000Z","type":"response_item","payload":{"type":"function_call","name":"shell_command","arguments":"{\"command\":\"python3 hello.py\"}","call_id":"call-001"}}
+{"timestamp":"2026-06-09T05:51:15.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-001","output":"Hello, World!\n"}}
+{"timestamp":"2026-06-09T05:51:20.000Z","type":"response_item","payload":{"type":"reasoning","summary":[],"encrypted_content":"abc123encrypted"}}
+{"timestamp":"2026-06-09T05:51:30.000Z","type":"response_item","payload":{"type":"custom_tool_call","status":"completed","call_id":"call-002","name":"apply_patch","input":"--- a/hello.py\n+++ b/hello.py\n@@ -1 +1 @@\n-print('Hello, World!')\n+print('Hello, Python!')"}}
+{"timestamp":"2026-06-09T05:51:35.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-002","output":"Patch applied successfully"}}
+{"timestamp":"2026-06-09T05:52:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Patch applied! The script now prints 'Hello, Python!'."}],"phase":"commentary"}}

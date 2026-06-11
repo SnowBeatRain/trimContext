@@ -34,6 +34,50 @@ describe("compressor", () => {
     expect(result.report.remove_candidates.every((candidate) => candidate.reasons.length > 0)).toBe(true);
   });
 
+  test("preserves Codex non-message records when compressing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
+    const input = join(dir, "codex.jsonl");
+    const output = join(dir, "codex.trimmed.jsonl");
+    const original = [
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:37.175Z",
+        type: "session_meta",
+        payload: {
+          id: "test-session-001",
+          base_instructions: { text: "You are a helpful assistant." }
+        }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:38.000Z",
+        type: "turn_context",
+        payload: { turn_id: "turn-001", cwd: "/home/user/project" }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:50:39.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "hello" }]
+        }
+      }),
+      JSON.stringify({
+        timestamp: "2026-06-09T05:51:20.000Z",
+        type: "response_item",
+        payload: { type: "reasoning", encrypted_content: "abc123encrypted" }
+      })
+    ].join("\n");
+    await writeFile(input, original, "utf8");
+
+    await compressFile(input, output);
+    const compressed = await readFile(output, "utf8");
+
+    expect(compressed).toContain('"type":"session_meta"');
+    expect(compressed).toContain('"type":"turn_context"');
+    expect(compressed).toContain('"type":"reasoning"');
+    expect(compressed.split("\n")).toHaveLength(4);
+  });
+
   test("rejects output paths that resolve to the input file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
     const input = join(dir, "session.jsonl");

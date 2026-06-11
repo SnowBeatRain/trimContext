@@ -20,6 +20,7 @@ v0.1 Phase 0 核心 CLI 已经实现：
 - `trimctx resume`（扫描 `~/.claude/projects/` 中最近修改的 Claude Code `.jsonl`）
 - Claude Code JSONL parser
 - OpenAI JSONL parser
+- Codex/Hermes rollout JSONL parser
 - ApproxTokenizer
 - safety rules
 - scorer
@@ -168,13 +169,13 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 - `analyze --json` 输出完整 JSON
 - `resume` 可分析最近 Claude Code session
 
-剩余重点是按 `docs/execution-plan.md` 补齐 5 个真实 Claude Code 长会话私有样本验证。
+剩余重点是按 `docs/execution-plan.md` 补齐 5 个真实长会话私有样本验证，并覆盖 Claude Code、OpenAI 和 Codex/Hermes rollout 三类输入。
 
 ## 下一步执行顺序
 
 ### Step 1：补 Phase 0 多样本验证
 
-按 `docs/execution-plan.md` 补齐 5 个真实 Claude Code 长会话的私有验证样本，并输出：
+按 `docs/execution-plan.md` 补齐 5 个真实长会话的私有验证样本，覆盖 Claude Code、OpenAI 和 Codex/Hermes rollout，并输出：
 
 ```text
 reports/phase0/validation-summary.md
@@ -203,15 +204,23 @@ npx tsx src/cli.ts analyze "C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-mu
 - reasons 可解释
 - `compress` 仍不修改原文件
 
-### Step 3：收敛当前 CLI，不新增命令
+### Step 3：评估压缩效果并收敛当前 CLI
 
-只有当 CLI 输出和多样本验证可信后，才重新评估是否需要额外 session discovery / diagnostics 命令。当前阶段继续打磨：
+先用真实样本量化 `compress` 的节省比例、误删风险和原因可解释性。只有当 CLI 输出和多样本验证可信后，才重新评估是否需要额外 session discovery / diagnostics 命令。当前阶段继续打磨：
 
 - `trimctx analyze <file>`
 - `trimctx analyze <file> --json`
 - `trimctx report <file> -o <report.json>`
 - `trimctx compress <file> -o <output.jsonl>`
 - `trimctx resume`
+
+### Step 4：规划自动定位会话文件
+
+在 Phase 0 验证完成后，规划“用户不需要手动找 `.jsonl`”的体验，优先评估现有 `resume` 能力是否足够，再决定是否扩展到 Codex/Cursor 的会话发现。
+
+### Step 5：打磨 `resume` 文档和边界
+
+明确 `resume` 当前只扫描 `~/.claude/projects/`，并把 Codex/Cursor 自动发现作为后续候选，不写成当前能力。
 
 安装器和 `/trimctx` 放到后续 Claude Code 集成阶段。
 

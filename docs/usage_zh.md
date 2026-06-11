@@ -1,13 +1,13 @@
 # 使用说明
 
-本文档说明如何安全地在本地 Claude Code 或 OpenAI JSONL 对话文件上运行 trimctx。
+本文档说明如何安全地在本地 Claude Code、OpenAI 或 Codex/Hermes rollout JSONL 对话文件上运行 trimctx。
 
 [English](usage.md)
 
 ## 环境要求
 
 - Node.js 20 或更高版本
-- 来自 Claude Code 或 OpenAI 风格聊天导出的 JSONL 对话文件
+- 来自 Claude Code、OpenAI 风格聊天导出或 Codex/Hermes rollout 导出的 JSONL 对话文件
 
 trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库。
 
@@ -102,11 +102,21 @@ sha256sum session.jsonl
 
 两次 `session.jsonl` 的 hash 应一致。
 
+## 面向共享使用的 Phase 0 验证
+
+如果计划把 trimctx 推荐给其他用户，或验证发布候选版本，先运行私有多样本验证流程：
+
+```bash
+npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
+```
+
+验证流程见 `docs/phase0/phase0-plan.md`、`docs/phase0/manual-label-guide.md` 和 `docs/phase0/validation-summary-template.md`。
+
 ## 命令
 
 ### `trimctx analyze <file>`
 
-分析 Claude Code 或 OpenAI JSONL 对话，并输出终端摘要。
+分析 Claude Code、OpenAI 或 Codex/Hermes rollout JSONL 对话，并输出终端摘要。
 
 ```bash
 trimctx analyze session.jsonl
@@ -180,6 +190,7 @@ trimctx resume --compress session.trimmed.jsonl
 |---|---|
 | Claude Code JSONL | 已支持 |
 | OpenAI Chat Completion 风格 JSONL | 已支持 |
+| Codex/Hermes rollout JSONL | 已支持 |
 | 纯文本转录 | 不支持 |
 | 远程 API 或数据库 | 不支持 |
 

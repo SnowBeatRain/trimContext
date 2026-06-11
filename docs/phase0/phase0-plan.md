@@ -1,53 +1,72 @@
-# Phase 0 多样本验证计划
+# Phase 0 Validation Plan
 
-## 目标
+Phase 0 validates whether trimctx is safe enough for other people to try on real long-running AI conversations. Unit tests prove parser contracts; Phase 0 proves the default scoring and compression behavior on realistic data.
 
-在继续开发新功能前，用 5 个真实 Claude Code JSONL 长对话验证当前 `analyze`/`report`/`compress` 的规则稳定性和安全边界。
+## Scope
 
-## 数据集要求
+Validate the full local pipeline on private JSONL exports:
 
-| 样本 | 类型 | 最低要求 |
-| --- | --- | --- |
-| session-001 | 功能开发 | 100+ messages |
-| session-002 | Bug 调试 | 100+ messages |
-| session-003 | 重构任务 | 150+ messages |
-| session-004 | 文档/规划 | 80+ messages |
-| session-005 | 长工具调用任务 | 150+ messages，含大量 tool_use/tool_result |
+1. `trimctx analyze --json`
+2. `trimctx report -o <report.json>`
+3. `trimctx compress -o <trimmed.jsonl>`
+4. input hash before/after compression
+5. manual review of `remove_candidates`
 
-最低总量：5 sessions / 600+ messages / 200k+ tokens。至少 1 个含大量 tool_result，至少 1 个发生过 compact，至少 1 个有用户后续纠正前面要求。
+Supported sources to cover:
 
-## 目录结构
+- Claude Code JSONL
+- OpenAI JSONL
+- Codex/Hermes rollout JSONL
 
-```
-datasets/
-  private/          # 已加入 .gitignore，不进仓库
-    raw/            # 原始 JSONL
-    sanitized/      # 脱敏后可分享的版本（可选）
-    labels/         # 人工标注文件
-```
+## Dataset
 
-## 验收标准
+Use at least 5 private samples before calling Phase 0 complete.
 
-| 指标 | 目标 | 说明 |
-| --- | --- | --- |
-| parser success rate | >= 95% | 成功解析 5 个真实 JSONL |
-| critical false deletion | = 0 | protected/system/developer 消息绝不被删 |
-| protected recall | = 100% | 所有应保护的消息都被保护 |
-| remove_candidate precision | >= 70% | 标记为可删除的候选中，真正可删的比例 |
-| 原始文件完整性 | hash 不变 | compress 不修改输入文件 |
+| Source | Minimum samples | Minimum shape |
+| --- | ---: | --- |
+| Claude Code JSONL | 2 | long sessions with tool calls and corrections |
+| OpenAI JSONL | 1 | multi-message conversation or batched records |
+| Codex/Hermes rollout JSONL | 2 | `{timestamp, type, payload}` rollout exports |
 
-## 执行步骤
+Place raw samples under `datasets/private/phase0/`. This path is gitignored and must not be committed.
 
-1. 收集 5 个真实 Claude Code JSONL 到 `datasets/private/raw/`。
-2. 对每个文件运行 `trimctx analyze <file> --json`，确认无崩溃。
-3. 对每个文件运行 `trimctx report <file> -o reports/phase0/<session>.report.json`。
-4. 对每个文件运行 `trimctx compress <file> -o reports/phase0/<session>.trimmed.jsonl`。
-5. 核对输入文件 hash 不变。
-6. 人工审查 remove_candidate 列表，标注误判。
-7. 汇总指标到 `docs/phase0/validation-summary.md`。
+## Outputs
 
-## 快速运行
+Write machine outputs under `reports/phase0/`. This path is gitignored.
+
+Expected files:
+
+- `reports/phase0/phase0-results.json`
+- `reports/phase0/<sample>.report.json`
+- `reports/phase0/<sample>.trimmed.jsonl`
+
+## Command
 
 ```bash
-npx tsx scripts/phase0-run.ts --dir datasets/private/raw --out reports/phase0
+npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
 ```
+
+The script prints JSON to stdout and writes the same aggregate file to `reports/phase0/phase0-results.json`.
+
+## Acceptance Criteria
+
+| Metric | Target | How to measure |
+| --- | ---: | --- |
+| Parser success rate | >= 95% | `analyze_ok / sample_count` in `phase0-results.json` |
+| Report success rate | >= 95% | `report_ok / sample_count` in `phase0-results.json` |
+| Compress success rate | >= 95% | `compress_ok / sample_count` in `phase0-results.json` |
+| Input mutation | 0 files | `input_unchanged == sample_count` |
+| Critical false deletion | 0 | manual review of every remove candidate |
+| Protected recall | 100% | manual review of recent, system, correction, and tool-result-sensitive content |
+| Remove-candidate precision | >= 70% | accepted remove candidates / reviewed remove candidates |
+
+## Completion Checklist
+
+- [ ] At least 5 samples were run.
+- [ ] All supported source families were represented.
+- [ ] No raw private JSONL files appear in `git status`.
+- [ ] `phase0-results.json` shows all input hashes unchanged.
+- [ ] Every `remove_candidate` was manually labeled.
+- [ ] Critical false deletions are zero.
+- [ ] Validation summary is filled from the template.
+- [ ] Any rule changes are backed by a new unit test.

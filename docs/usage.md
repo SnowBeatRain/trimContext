@@ -1,13 +1,13 @@
 # Usage Guide
 
-This guide explains how to run trimctx safely against local Claude Code or OpenAI JSONL conversation files.
+This guide explains how to run trimctx safely against local Claude Code, OpenAI, or Codex/Hermes rollout JSONL conversation files.
 
 [中文版](usage_zh.md)
 
 ## Requirements
 
 - Node.js 20 or later
-- A JSONL conversation file from Claude Code or an OpenAI-style chat export
+- A JSONL conversation file from Claude Code, an OpenAI-style chat export, or a Codex/Hermes rollout export
 
 trimctx is local-only: it does not call an LLM, upload files, or use a database.
 
@@ -102,11 +102,21 @@ sha256sum session.jsonl
 
 The two hashes for `session.jsonl` should match.
 
+## Phase 0 validation for shared use
+
+If you plan to recommend trimctx to other users or validate a release candidate, run the private multi-sample validation workflow:
+
+```bash
+npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
+```
+
+The workflow is documented in `docs/phase0/phase0-plan.md`, `docs/phase0/manual-label-guide.md`, and `docs/phase0/validation-summary-template.md`.
+
 ## Commands
 
 ### `trimctx analyze <file>`
 
-Analyze a Claude Code or OpenAI JSONL conversation and print a terminal summary.
+Analyze a Claude Code, OpenAI, or Codex/Hermes rollout JSONL conversation and print a terminal summary.
 
 ```bash
 trimctx analyze session.jsonl
@@ -180,6 +190,7 @@ trimctx resume --compress session.trimmed.jsonl
 |---|---|
 | Claude Code JSONL | Supported |
 | OpenAI Chat Completion-style JSONL | Supported |
+| Codex/Hermes rollout JSONL | Supported |
 | Plain text transcripts | Not supported |
 | Remote APIs or databases | Not supported |
 

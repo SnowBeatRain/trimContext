@@ -8,7 +8,7 @@ trimctx 的目标是提供一个本地、可审计、保守的上下文精简工
 
 ## 2. 一句话需求
 
-trimctx 读取本地 Claude Code / OpenAI JSONL 对话文件，分析每条消息的安全性和腐烂程度，输出报告，并生成不会修改原文件的安全压缩副本。
+trimctx 读取本地 Claude Code / OpenAI / Codex JSONL 对话文件，分析每条消息的安全性和腐烂程度，输出报告，并生成不会修改原文件的安全压缩副本。
 
 ## 3. 目标用户
 
@@ -44,6 +44,7 @@ trimctx 读取本地 Claude Code / OpenAI JSONL 对话文件，分析每条消�
 
 - Claude Code JSONL
 - OpenAI JSONL
+- Codex/Hermes rollout JSONL
 
 解析结果统一为 `NormalizedMessage`，包含：
 

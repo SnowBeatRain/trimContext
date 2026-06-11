@@ -14,7 +14,7 @@ const program = new Command();
 program
   .name("trimctx")
   .description("Analyze and safely trim long AI conversation context.")
-  .version("0.1.0");
+  .version("0.2.0");
 
 program
   .command("resume")
@@ -49,7 +49,7 @@ program
   .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
   .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
   .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-  .description("Analyze a Claude Code or OpenAI JSONL conversation.")
+  .description("Analyze a Claude Code, OpenAI, or Codex/Hermes JSONL conversation.")
   .action(async (file: string, options: CliAnalysisOptions & { json?: boolean; color?: boolean }) => {
     const report = await analyzeFile(file, parseAnalysisOptions(options));
     if (options.json) {
