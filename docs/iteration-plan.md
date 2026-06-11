@@ -150,32 +150,32 @@ Acceptance:
 
 Start only after v0.2 stabilization.
 
-### N1.1 Design handoff output
+### N1.1 Handoff output
 
 Goal: help users continue work safely after a long or noisy session.
 
-Candidate output:
+Current implementation:
 
-- `handoff.md`
-- `next-context.md`
-- structured JSON handoff data
+- `trimctx handoff <file> -o handoff.md`
+- optional `--next-context next-context.md`
+- deterministic Markdown output, no LLM dependency
+- source JSONL remains unchanged
 
-The handoff should include:
+The handoff includes:
 
-- current goal
-- durable user decisions
-- active constraints
-- completed work
-- remaining tasks
-- risky assumptions
-- relevant files and commands
-- warnings about stale or superseded context
+- source file and detected format
+- safety summary and score diagnostics
+- continuation rules
+- candidate review queue
+- protected high-rot signals
+- warnings
+- next commands
 
 Acceptance:
 
-- The design is documented before implementation.
 - Handoff generation does not require an LLM by default.
 - Output is clearly separate from destructive compression.
+- Targeted CLI tests cover `handoff.md` and `next-context.md` generation.
 
 ### N1.2 Evaluate current-session discovery
 

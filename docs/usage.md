@@ -63,6 +63,11 @@ remove candidates: 41
 compress candidates: 30
 estimated saving: 5,592 tokens (2.56%)
 
+trust:
+- 0 remove candidates means nothing crossed the safe deletion threshold.
+- compress candidates, if any, are report-only and kept by default.
+- max score: 0.6428; near threshold: 0
+
 top reasons:
 - recent_message: 241
 - superseded_by_later_instruction: 195
@@ -83,6 +88,12 @@ Generate a compressed copy only after reviewing the report:
 
 ```bash
 trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
+```
+
+Generate handoff artifacts for continuing work in a later session:
+
+```bash
+trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
 ## Recommended Workflow
@@ -175,6 +186,16 @@ If a report contains `compress_candidate` messages but no `remove_candidate` mes
 | `keep` | Kept |
 | `compress_candidate` | Kept; report-only candidate |
 | `remove_candidate` | Removed only if not protected |
+
+### `trimctx handoff <file> -o <handoff.md>`
+
+Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
+
+```bash
+trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+```
+
+The primary handoff includes source metadata, safety diagnostics, continuation rules, candidate review queue, warnings, and next commands. The optional `--next-context` file writes a shorter context packet for another agent or session.
 
 ### `trimctx resume`
 

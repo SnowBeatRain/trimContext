@@ -12,6 +12,16 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
   lines.push("");
   lines.push(`  ${s.total_messages} messages / ${formatTokens(s.total_tokens)}`);
   lines.push(`  health: ${healthLabel(health, color)}  rot: ${formatRatio(rotRate)} (${rotCount} candidates)`);
+  lines.push("");
+  lines.push("  trust:");
+  if (s.remove_candidates === 0) {
+    lines.push("    0 remove candidates means nothing crossed the safe deletion threshold.");
+    lines.push("    compress candidates, if any, are report-only and kept by default.");
+  } else {
+    lines.push(`    ${s.remove_candidates} remove candidates crossed the safe deletion threshold.`);
+    lines.push("    review the JSON report before applying destructive workflows.");
+  }
+  lines.push(`    max score: ${s.score_diagnostics.max_rot_score.toFixed(4)}; near threshold: ${s.score_diagnostics.near_remove_threshold_count}`);
 
   if (report.warnings.length > 0) {
     for (const w of report.warnings) {
@@ -50,6 +60,7 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
   if (rotCount > 0) {
     lines.push(`    trimctx compress ${quotePath(report.input.file)} -o trimmed.jsonl`);
   }
+  lines.push(`    trimctx report ${quotePath(report.input.file)} -o report.json`);
   lines.push(`    trimctx analyze ${quotePath(report.input.file)} --json`);
 
   return `${lines.join("\n")}\n`;

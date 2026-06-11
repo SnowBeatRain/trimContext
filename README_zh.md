@@ -20,6 +20,11 @@ trimctx analysis
   633 messages / 218K tokens
   health: MODERATE  rot: 10.8% (68 candidates)
 
+  trust:
+    0 remove candidates means nothing crossed the safe deletion threshold.
+    compress candidates, if any, are report-only and kept by default.
+    max score: 0.6428; near threshold: 0
+
   breakdown:
     remove:       41 messages (5.6K tokens)
     compress:     27 messages
@@ -35,6 +40,7 @@ trimctx analysis
 
   next:
     trimctx compress "~/.claude/projects/my-project/abc123.jsonl" -o trimmed.jsonl
+    trimctx report "~/.claude/projects/my-project/abc123.jsonl" -o report.json
     trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
 ```
 
@@ -65,6 +71,12 @@ npx tsx src/cli.ts report path/to/session.jsonl -o report.json
 
 ```bash
 npx tsx src/cli.ts compress path/to/session.jsonl -o session.trimmed.jsonl
+```
+
+生成继续交接文档：
+
+```bash
+npx tsx src/cli.ts handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
 自动分析最新的 Claude Code 会话：
@@ -132,6 +144,14 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `remove_candidate` | 仅在非 protected 时移除 |
 
 `compress_candidate` 是有意保守的信号：它表示 trimctx 发现了过期或低价值迹象，但还没有足够证据安全删除该消息。某些格式，尤其是 Codex/Hermes rollout 文件，在默认阈值下可能产生 0 条 `remove_candidate`；这应视为安全优先的结果，而不是 parser 失败。
+
+### `trimctx handoff <file> -o <handoff.md>`
+
+写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
+
+```bash
+trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+```
 
 ### `trimctx resume`
 

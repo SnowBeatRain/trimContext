@@ -63,6 +63,11 @@ remove candidates: 41
 compress candidates: 30
 estimated saving: 5,592 tokens (2.56%)
 
+trust:
+- 0 remove candidates means nothing crossed the safe deletion threshold.
+- compress candidates, if any, are report-only and kept by default.
+- max score: 0.6428; near threshold: 0
+
 top reasons:
 - recent_message: 241
 - superseded_by_later_instruction: 195
@@ -83,6 +88,12 @@ trimctx report path/to/session.jsonl -o report.json
 
 ```bash
 trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
+```
+
+生成后续会话使用的交接文档：
+
+```bash
+trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
 ## 推荐流程
@@ -175,6 +186,16 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `keep` | 保留 |
 | `compress_candidate` | 保留；仅报告候选 |
 | `remove_candidate` | 仅在非 protected 时移除 |
+
+### `trimctx handoff <file> -o <handoff.md>`
+
+写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
+
+```bash
+trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+```
+
+主交接文档包含输入元信息、安全诊断、继续执行规则、候选审查队列、警告和下一步命令。可选的 `--next-context` 会写出更短的上下文包，供另一个 Agent 或会话使用。
 
 ### `trimctx resume`
 

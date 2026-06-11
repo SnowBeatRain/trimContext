@@ -101,6 +101,32 @@ describe("CLI commands", () => {
     expect(() => JSON.parse(result.stdout)).toThrow();
   });
 
+  test("analyze prints conservative trust signals for zero remove candidates", async () => {
+    const { file } = await writeSessionFixture();
+
+    const result = await runCli(["analyze", file, "--remove-threshold", "1"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("trust:");
+    expect(result.stdout).toContain("0 remove candidates means nothing crossed the safe deletion threshold");
+    expect(result.stdout).toContain("trimctx report");
+  });
+
+  test("handoff writes markdown and next-context files from an analysis report", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const output = join(dir, "handoff.md");
+    const nextContext = join(dir, "next-context.md");
+
+    const result = await runCli(["handoff", file, "-o", output, "--next-context", nextContext]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("handoff:");
+    expect(await readFile(output, "utf8")).toContain("# trimctx Handoff");
+    expect(await readFile(output, "utf8")).toContain("## Continue From Here");
+    expect(await readFile(nextContext, "utf8")).toContain("# Next Context");
+    expect(await readFile(nextContext, "utf8")).toContain("trimctx analyze");
+  });
+
   test("analyze --json matches the report command output", async () => {
     const { file, dir } = await writeSessionFixture();
     const output = join(dir, "report.json");

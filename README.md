@@ -20,6 +20,11 @@ trimctx analysis
   633 messages / 218K tokens
   health: MODERATE  rot: 10.8% (68 candidates)
 
+  trust:
+    0 remove candidates means nothing crossed the safe deletion threshold.
+    compress candidates, if any, are report-only and kept by default.
+    max score: 0.6428; near threshold: 0
+
   breakdown:
     remove:       41 messages (5.6K tokens)
     compress:     27 messages
@@ -35,6 +40,7 @@ trimctx analysis
 
   next:
     trimctx compress "~/.claude/projects/my-project/abc123.jsonl" -o trimmed.jsonl
+    trimctx report "~/.claude/projects/my-project/abc123.jsonl" -o report.json
     trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
 ```
 
@@ -65,6 +71,12 @@ Generate a compressed copy (original untouched):
 
 ```bash
 npx tsx src/cli.ts compress path/to/session.jsonl -o session.trimmed.jsonl
+```
+
+Generate handoff artifacts for continuing the work:
+
+```bash
+npx tsx src/cli.ts handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
 Analyze the most recent Claude Code session automatically:
@@ -132,6 +144,14 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `remove_candidate` | Removed only if not protected |
 
 `compress_candidate` is intentionally conservative: it means trimctx found a stale or low-value signal, but not enough evidence to remove the message safely. Some formats, especially Codex/Hermes rollout files, may produce zero `remove_candidate` messages under default thresholds; treat that as a safety-first result rather than a parser failure.
+
+### `trimctx handoff <file> -o <handoff.md>`
+
+Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
+
+```bash
+trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+```
 
 ### `trimctx resume`
 

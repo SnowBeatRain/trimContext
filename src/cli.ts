@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { analyzeMessages, parseJsonl } from "./core/analyzer.js";
 import { compressFile } from "./core/compressor.js";
 import { createReport } from "./core/reporter.js";
+import { formatHandoff, formatNextContext } from "./core/handoff.js";
 import { formatAnalysisSummary } from "./cli/format-summary.js";
 import type { AnalysisOptions } from "./core/options.js";
 
@@ -83,6 +84,27 @@ program
   .action(async (file: string, options: CliAnalysisOptions & { output: string }) => {
     const result = await compressFile(file, options.output, parseAnalysisOptions(options));
     process.stdout.write(`${JSON.stringify(result.report.summary, null, 2)}\n`);
+  });
+
+program
+  .command("handoff")
+  .argument("<file>")
+  .requiredOption("-o, --output <handoff.md>")
+  .option("--next-context <next-context.md>", "Also write a compact next-context markdown file.")
+  .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
+  .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
+  .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
+  .description("Write markdown handoff artifacts for continuing a long conversation safely.")
+  .action(async (file: string, options: CliAnalysisOptions & { output: string; nextContext?: string }) => {
+    const report = await analyzeFile(file, parseAnalysisOptions(options));
+    await writeFile(options.output, formatHandoff(report), "utf8");
+    if (options.nextContext) {
+      await writeFile(options.nextContext, formatNextContext(report), "utf8");
+    }
+    process.stdout.write(`handoff: ${options.output}\n`);
+    if (options.nextContext) {
+      process.stdout.write(`next-context: ${options.nextContext}\n`);
+    }
   });
 
 program.parseAsync().catch((error: unknown) => {
