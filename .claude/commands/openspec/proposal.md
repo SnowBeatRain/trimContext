@@ -46,7 +46,7 @@ Proposal 阶段只做探索、范围确认、proposal 和 specs：
 
 优先读取项目 OpenSpec 和现有文档：
 
-1. 如果存在 `AGENTS.md`、`PLAN.md`、`docs/requirements.md`、`docs/usage.md`、`docs/roadmap.md`、`docs/execution-plan.md`、`docs/status-and-next-steps.md`，按需读取相关部分。
+1. 如果存在 `AGENTS.md`、`docs/iteration-plan.md`、`docs/requirements.md`、`docs/usage.md`、`docs/roadmap.md`、`docs/execution-plan.md`、`docs/status-and-next-steps.md`，按需读取相关部分。
 2. 如果存在 `spec-docs/product-rule.md`，先读取产品规则。
 3. 运行或参考 `openspec list --json`，确认是否已有相关 active changes。
 4. 调查当前代码实现，优先使用 CodeGraph 处理结构性问题，使用 `rg` 处理文本搜索。

@@ -14,7 +14,7 @@ trimctx 是一个本地 AI 长对话上下文精简工具。目标是读取 Clau
 
 先阅读：
 
-- `PLAN.md`
+- `docs/iteration-plan.md`
 - `docs/requirements.md`
 - `docs/usage.md`
 - `docs/roadmap.md`

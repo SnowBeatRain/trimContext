@@ -7,7 +7,7 @@
 - `docs/usage.md`：用户使用说明。
 - `docs/roadmap.md`：阶段路线和开源门槛。
 - `docs/execution-plan.md`：执行任务、数据集和 Phase 0 验收。
-- `PLAN.md`：长期愿景和最终体验。
+- `docs/iteration-plan.md`：团队评审后的当前迭代计划、优先级和质量门。
 
 ## 当前已经完成
 

@@ -272,10 +272,10 @@ export async function runAnalyze(filePath: string, opts: { json?: boolean; outpu
 
   // 3. 输出
   if (opts.json) {
-    // analyze --json → 完整 JSON（你的 PLAN.md 要求的 analyze --json）
+    // analyze --json → 完整 JSON（迭代计划要求的 analyze --json）
     console.log(JSON.stringify(report, null, 2));
   } else {
-    // analyze → 短摘要（你的 PLAN.md 要求的默认短摘要）
+    // analyze → 短摘要（迭代计划要求的默认短摘要）
     printReport(report);
   }
 
@@ -360,7 +360,7 @@ skill 文档内容很长，`content.length / 4` 会严重低估。
 
 ---
 
-## 八、下一步优先级（对应你的 PLAN.md v0.2 目标）
+## 八、下一步优先级（对应 v0.2 迭代计划目标）
 
 按你当前主线排序：
 

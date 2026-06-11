@@ -9,6 +9,7 @@ The open-source goal is to make trimctx useful to other developers who run long 
 For product requirements and boundaries, see `docs/requirements.md`.
 For CLI usage, see `docs/usage.md`.
 For the task-level execution plan, dataset requirements, validation criteria, and current task breakdown, see `docs/execution-plan.md`.
+For the team-reviewed iteration priorities and quality gates, see `docs/iteration-plan.md`.
 
 ## Non-goals
 
@@ -157,6 +158,8 @@ next:
 
 ## v0.3: Claude Code Integration
 
+Current status: deferred. Per `docs/iteration-plan.md`, do not start installation, hooks, status line, MCP, Web UI, or LLM summarization work until v0.2 validation and trust signals are stable.
+
 ### Goal
 
 Let users use trimctx from inside Claude Code without manually finding JSONL files.
@@ -256,6 +259,8 @@ Prepare the repository for public release and npm publication.
 - Hosted service.
 
 ## v0.5: Enhanced Detection / Multi-platform
+
+Current status: later candidate only. Do not treat these items as active work until the core CLI validation loop proves the current safety model is trustworthy.
 
 ### Goal
 

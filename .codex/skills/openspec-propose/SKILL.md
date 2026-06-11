@@ -31,7 +31,7 @@ Proposal 阶段只做探索、范围确认、proposal 和 specs。不要写实�
 按需读取：
 
 - `AGENTS.md`
-- `PLAN.md`
+- `docs/iteration-plan.md`
 - `docs/requirements.md`
 - `docs/usage.md`
 - `docs/roadmap.md`

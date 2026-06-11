@@ -1,6 +1,6 @@
 # trimctx Execution Plan
 
-本文档是 trimctx 的可执行项目任务书。`PLAN.md` 说明长期愿景，`docs/requirements.md` 说明项目需求，`docs/usage.md` 说明使用方式，`docs/roadmap.md` 说明版本路线；本文档说明每个阶段怎么落地、怎么验收、需要哪些数据和任务。
+本文档是 trimctx 的可执行项目任务书。`docs/iteration-plan.md` 记录团队评审后的当前迭代计划，`docs/requirements.md` 说明项目需求，`docs/usage.md` 说明使用方式，`docs/roadmap.md` 说明版本路线；本文档说明每个阶段怎么落地、怎么验收、需要哪些数据和任务。
 
 ## 0. 一句话定义
 
@@ -628,7 +628,7 @@ trimctx resume
 - 统计每个样本的 protected / remove_candidate / compress_candidate 数量和比例。
 - 记录 top reasons，避免结果被单一保护原因淹没。
 - 人工抽查 remove_candidate，确认 critical false deletion = 0。
-- 基于验证结果调整默认阈值或保护规则。
+- 基于验证结果提出 safety/scorer 候选调整，先人工复核，不直接修改默认阈值或删除行为。
 - 不提交真实样本、真实报告或压缩输出。
 
 ### Task 5: Phase 0 Validation Report
@@ -659,7 +659,7 @@ reports/phase0/validation-summary.md
 2. 补 report top reasons 和 warnings。
 3. 补齐 5 个真实长对话的私有验证样本。
 4. 做 Phase 0 validation summary。
-5. 基于真实样本验证调整 safety/scorer 默认值。
+5. 基于真实样本验证提出 safety/scorer 调整候选；默认权重、阈值和删除行为必须经过单独评审后再改。
 6. 稳定当前 `resume` / `analyze` / `report` / `compress` 的错误处理和用户说明。
 7. 再决定是否需要新增 session discovery / diagnostics 命令或进入 Claude Code hooks/statusline。
 
