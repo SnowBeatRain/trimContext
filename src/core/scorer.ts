@@ -31,6 +31,7 @@ export function scoreMessages(messages: NormalizedMessage[], options: Pick<Resol
     const scores = computeScores(message, index, messages, toolUses);
     const reasons = new Set<Reason>(message.reasons ?? []);
 
+    // Reasons explain score decisions and keep report/remove behavior auditable.
     if (scores.superseded_score > 0) reasons.add("superseded_by_later_instruction");
     if (scores.low_reference_score >= 0.75) reasons.add("low_reference_in_later_context");
     if (scores.age_score >= 0.7) reasons.add("old_message");
@@ -80,6 +81,7 @@ function computeScores(
       0.1 * orphan_tool_score
   );
   const importance_discount = computeImportanceDiscount(message);
+  // Important artifacts can still look old or low-reference, so discounts bias toward false-negative safety.
   const rot_score = clamp(Math.max(base_rot_score, low_value_score) - importance_discount);
 
   return {

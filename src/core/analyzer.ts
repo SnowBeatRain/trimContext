@@ -11,6 +11,7 @@ import type { NormalizedMessage } from "../types/message.js";
 export function analyzeMessages(messages: NormalizedMessage[], options: AnalysisOptions = {}): NormalizedMessage[] {
   const resolved = resolveAnalysisOptions(options);
   const tokenizer = new ApproxTokenizer();
+  // Analysis is staged: estimate local token cost first, then mark safety constraints before scoring rot.
   const withTokens = messages.map((message) => ({
     ...message,
     tokens: tokenizer.countMessage(message.content)
@@ -19,6 +20,7 @@ export function analyzeMessages(messages: NormalizedMessage[], options: Analysis
 }
 
 export function parseJsonl(input: string, file = "<input>"): NormalizedMessage[] {
+  // Sample the first records only; format detection should be cheap and must not consume the full transcript twice.
   const records = parseJsonlRecords(input, file).slice(0, 25).map((record) => record.raw);
 
   if (records.length === 0) return [];

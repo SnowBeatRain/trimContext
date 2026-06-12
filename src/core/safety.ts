@@ -73,6 +73,7 @@ export function applySafetyRules(messages: NormalizedMessage[], options: Pick<Re
     }
 
     const next = { ...message, reasons: [...reasons] };
+    // Hard-protected reasons are final guards: scoring may flag them, but compression must preserve them.
     next.protected = next.reasons.some((reason) =>
       HARD_PROTECT_REASONS.includes(reason)
     );
@@ -101,6 +102,7 @@ function findReferencedToolResults(messages: NormalizedMessage[]): Set<string> {
   );
   const referenced = new Set<string>();
 
+  // A tool result is protected only when later narrative text references its tool call id.
   for (const id of resultIds) {
     const escaped = escapeRegExp(id);
     const pattern = new RegExp(`\\b${escaped}\\b`);

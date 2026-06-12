@@ -19,6 +19,7 @@ export async function compressFile(inputFile: string, outputFile: string, option
   const parsed = parseJsonl(input, inputFile);
   const analyzed = analyzeMessages(parsed, options);
   const report = createReport(analyzed, inputFile);
+  // Only non-protected remove candidates are eligible for physical deletion in the output copy.
   const removeIds = new Set(
     analyzed
       .filter((message) => message.decision === "remove_candidate" && !message.protected)
@@ -35,6 +36,7 @@ export async function compressFile(inputFile: string, outputFile: string, option
 
 function compressJsonlLines(input: string, analyzed: NormalizedMessage[], removeIds: Set<string>): string {
   const byLine = messagesBySourceLine(analyzed);
+  // Claude/Codex records map one normalized message to a line, so dropping a candidate drops that line.
   return input
     .split(/\r?\n/)
     .map((line, index) => ({ line, sourceLine: index + 1 }))
@@ -59,6 +61,7 @@ function compressOpenAiLines(input: string, analyzed: NormalizedMessage[], remov
       if (messages.length === 0) return [line];
       const raw = JSON.parse(line) as Record<string, unknown>;
       if (Array.isArray(raw.messages)) {
+        // OpenAI batch rows may contain many messages; remove array entries without rewriting unrelated rows.
         const bySourceIndex = new Map(messages.map((message) => [message.sourceIndex, message]));
         const kept = raw.messages.filter((_, index) => !removeIds.has(bySourceIndex.get(index)?.id ?? ""));
         if (kept.length === 0) return [];

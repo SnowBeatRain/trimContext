@@ -20,6 +20,7 @@ export function flattenContent(content: unknown): { text: string; tool?: Message
     const parts: string[] = [];
     const tool: MessageToolInfo = {};
 
+    // Mixed content blocks become searchable text while preserving tool linkage for safety rules.
     for (const block of content) {
       if (typeof block === "string") {
         parts.push(block);

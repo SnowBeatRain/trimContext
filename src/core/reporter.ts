@@ -4,6 +4,7 @@ import type { NormalizedMessage } from "../types/message.js";
 
 export function createReport(messages: NormalizedMessage[], file: string): AnalysisReport {
   const analyzedMessages = messages.map(toAnalyzedMessage);
+  // Report candidates are derived from analyzed decisions, matching the compressor's source of truth.
   const removeCandidates = analyzedMessages.filter((message) => message.decision === "remove_candidate");
   const totalTokens = analyzedMessages.reduce((sum, message) => sum + message.tokens, 0);
   const savingTokens = removeCandidates.reduce((sum, message) => sum + message.tokens, 0);
@@ -35,6 +36,7 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
 function createScoreDiagnostics(messages: AnalyzedMessage[]): AnalysisReport["summary"]["score_diagnostics"] {
   const rotScores = messages.map((message) => message.rot_score).sort((left, right) => left - right);
 
+  // Diagnostics expose threshold pressure without changing the conservative default thresholds.
   return {
     max_rot_score: roundScore(rotScores.at(-1) ?? 0),
     p90_rot_score: percentile(rotScores, 0.9),
