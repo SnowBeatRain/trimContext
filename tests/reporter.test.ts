@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { createReport } from "../src/core/reporter.js";
+import { LocalHeuristicTokenizer } from "../src/core/tokenizer.js";
 import type { NormalizedMessage, Reason } from "../src/types/message.js";
 
 function analyzedMessage(id: string, reasons: Reason[]): NormalizedMessage {
+  const tokenizer = new LocalHeuristicTokenizer();
+  const tokenMetadata = tokenizer.analyzeMessage(id);
   return {
     id,
     role: "assistant",
@@ -11,7 +14,8 @@ function analyzedMessage(id: string, reasons: Reason[]): NormalizedMessage {
     sourceLine: Number(id.replace(/\D/g, "")) || 1,
     rawLine: "{}",
     raw: {},
-    tokens: 10,
+    tokens: tokenMetadata.estimated_tokens,
+    token_metadata: tokenMetadata,
     protected: false,
     decision: "remove_candidate",
     rot_score: 0.9,
@@ -136,5 +140,36 @@ describe("createReport", () => {
   test("returns no compact-signal warnings when input has no compact signals", () => {
     const report = createReport([analyzedMessage("m1", ["old_message"])], "session.jsonl");
     expect(report.warnings.join("\n")).not.toContain("session_compacted");
+  });
+
+  test("includes tokenizer metadata, token breakdown, and context pressure", () => {
+    const candidate = analyzedMessage("m1", ["old_message"]);
+    candidate.content = "const answer = {\"ok\": true}\n路径 /tmp/session.jsonl";
+    const tokenizer = new LocalHeuristicTokenizer();
+    const tokenMetadata = tokenizer.analyzeMessage(candidate.content);
+    candidate.tokens = tokenMetadata.estimated_tokens;
+    candidate.token_metadata = tokenMetadata;
+
+    const report = createReport([candidate], "session.jsonl");
+
+    expect(report.messages[0].token_metadata).toMatchObject({
+      estimator: "local_heuristic",
+      estimator_version: "approx-v1",
+      estimated: true,
+      confidence: "medium",
+      message_overhead_tokens: 4
+    });
+    expect(report.summary.token_estimation).toMatchObject({
+      estimator: "local_heuristic",
+      estimated: true
+    });
+    expect(report.summary.token_breakdown.code_like_segments).toBeGreaterThan(0);
+    expect(report.summary.token_breakdown.json_like_segments).toBeGreaterThan(0);
+    expect(report.summary.token_breakdown.path_like_segments).toBeGreaterThan(0);
+    expect(report.summary.context_pressure).toMatchObject({
+      estimated_total_tokens: candidate.tokens,
+      estimated_removable_tokens: candidate.tokens,
+      pressure_level: "medium"
+    });
   });
 });

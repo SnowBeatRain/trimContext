@@ -1,4 +1,4 @@
-import type { Decision, NormalizedMessage, Reason, RotScores } from "./message.js";
+import type { Decision, NormalizedMessage, Reason, RotScores, TokenBreakdown, TokenMetadata } from "./message.js";
 
 export interface AnalyzedMessage {
   id: string;
@@ -7,6 +7,7 @@ export interface AnalyzedMessage {
   source: NormalizedMessage["source"];
   sourceLine: number;
   tokens: number;
+  token_metadata?: TokenMetadata;
   protected: boolean;
   rot_score: number;
   scores: RotScores;
@@ -24,8 +25,28 @@ export interface AnalysisSummary {
   estimated_saving_tokens: number;
   protected_messages: number;
   compress_candidates: number;
+  token_estimation: TokenEstimationSummary;
+  token_breakdown: TokenBreakdown;
+  context_pressure: ContextPressure;
   top_reasons: ReasonCount[];
   score_diagnostics: ScoreDiagnostics;
+}
+
+export interface TokenEstimationSummary {
+  estimator: "local_heuristic";
+  estimator_version: "approx-v1";
+  estimated: true;
+  confidence: "medium";
+  note: string;
+}
+
+export interface ContextPressure {
+  estimated_total_tokens: number;
+  estimated_removable_tokens: number;
+  estimated_protected_tokens: number;
+  remove_candidate_ratio: number;
+  protected_token_ratio: number;
+  pressure_level: "low" | "medium" | "high";
 }
 
 export interface ScoreRange {

@@ -1,6 +1,6 @@
 import { createAnalysisWarnings } from "./diagnostics.js";
 import type { AnalysisReport, AnalyzedMessage } from "../types/report.js";
-import type { NormalizedMessage } from "../types/message.js";
+import type { NormalizedMessage, TokenBreakdown } from "../types/message.js";
 
 export function createReport(messages: NormalizedMessage[], file: string): AnalysisReport {
   const analyzedMessages = messages.map(toAnalyzedMessage);
@@ -24,6 +24,15 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
       estimated_saving_tokens: savingTokens,
       protected_messages: analyzedMessages.filter((message) => message.protected).length,
       compress_candidates: analyzedMessages.filter((message) => message.decision === "compress_candidate").length,
+      token_estimation: {
+        estimator: "local_heuristic",
+        estimator_version: "approx-v1",
+        estimated: true,
+        confidence: "medium",
+        note: "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
+      },
+      token_breakdown: sumTokenBreakdown(analyzedMessages),
+      context_pressure: createContextPressure(analyzedMessages, removeCandidates, totalTokens, savingTokens),
       top_reasons: countTopReasons(analyzedMessages),
       score_diagnostics: createScoreDiagnostics(analyzedMessages)
     },
@@ -31,6 +40,71 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
     remove_candidates: removeCandidates,
     warnings: [...warnings, ...createAnalysisWarnings(messages)]
   };
+}
+
+function emptyTokenBreakdown(): TokenBreakdown {
+  return {
+    cjk_chars: 0,
+    ascii_tokens: 0,
+    latin_words: 0,
+    numbers: 0,
+    symbols: 0,
+    whitespace_runs: 0,
+    code_like_segments: 0,
+    path_like_segments: 0,
+    json_like_segments: 0,
+    line_count: 0,
+    char_count: 0
+  };
+}
+
+function sumTokenBreakdown(messages: AnalyzedMessage[]): TokenBreakdown {
+  return messages.reduce((sum, message) => {
+    const breakdown = message.token_metadata?.breakdown;
+    if (!breakdown) return sum;
+    return {
+      cjk_chars: sum.cjk_chars + breakdown.cjk_chars,
+      ascii_tokens: sum.ascii_tokens + breakdown.ascii_tokens,
+      latin_words: sum.latin_words + breakdown.latin_words,
+      numbers: sum.numbers + breakdown.numbers,
+      symbols: sum.symbols + breakdown.symbols,
+      whitespace_runs: sum.whitespace_runs + breakdown.whitespace_runs,
+      code_like_segments: sum.code_like_segments + breakdown.code_like_segments,
+      path_like_segments: sum.path_like_segments + breakdown.path_like_segments,
+      json_like_segments: sum.json_like_segments + breakdown.json_like_segments,
+      line_count: sum.line_count + breakdown.line_count,
+      char_count: sum.char_count + breakdown.char_count
+    };
+  }, emptyTokenBreakdown());
+}
+
+function createContextPressure(
+  messages: AnalyzedMessage[],
+  removeCandidates: AnalyzedMessage[],
+  totalTokens: number,
+  savingTokens: number
+): AnalysisReport["summary"]["context_pressure"] {
+  const protectedTokens = messages
+    .filter((message) => message.protected)
+    .reduce((sum, message) => sum + message.tokens, 0);
+  return {
+    estimated_total_tokens: totalTokens,
+    estimated_removable_tokens: savingTokens,
+    estimated_protected_tokens: protectedTokens,
+    remove_candidate_ratio: ratio(savingTokens, totalTokens),
+    protected_token_ratio: ratio(protectedTokens, totalTokens),
+    pressure_level: pressureLevel(totalTokens, removeCandidates.length)
+  };
+}
+
+function ratio(value: number, total: number): number {
+  return total === 0 ? 0 : Number((value / total).toFixed(4));
+}
+
+function pressureLevel(totalTokens: number, removeCandidateCount: number): AnalysisReport["summary"]["context_pressure"]["pressure_level"] {
+  if (totalTokens >= 150_000 || removeCandidateCount >= 20) return "high";
+  if (totalTokens >= 50_000 || removeCandidateCount > 0) return "medium";
+  return "low";
 }
 
 function createScoreDiagnostics(messages: AnalyzedMessage[]): AnalysisReport["summary"]["score_diagnostics"] {
@@ -119,6 +193,7 @@ function toAnalyzedMessage(message: NormalizedMessage): AnalyzedMessage {
     source: message.source,
     sourceLine: message.sourceLine,
     tokens: message.tokens ?? 0,
+    token_metadata: message.token_metadata,
     protected: Boolean(message.protected),
     rot_score: message.rot_score ?? message.scores?.rot_score ?? 0,
     scores:

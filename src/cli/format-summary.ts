@@ -10,7 +10,13 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
 
   lines.push(heading("trimctx analysis", color));
   lines.push("");
-  lines.push(`  ${s.total_messages} messages / ${formatTokens(s.total_tokens)}`);
+  lines.push(`  ${s.total_messages} messages / ~${formatTokens(s.total_tokens)}`);
+  lines.push(
+    `  token estimate: ${s.token_estimation.estimator_version} (${s.token_estimation.estimator}, ${s.token_estimation.confidence} confidence)`
+  );
+  lines.push(
+    `  context pressure: ${s.context_pressure.pressure_level.toUpperCase()}  removable: ${formatTokens(s.context_pressure.estimated_removable_tokens)} (${formatRatio(s.context_pressure.remove_candidate_ratio)})`
+  );
   lines.push(`  health: ${healthLabel(health, color)}  rot: ${formatRatio(rotRate)} (${rotCount} candidates)`);
   lines.push("");
   lines.push("  trust:");
@@ -41,6 +47,9 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
     }
     lines.push(`    protected:    ${s.protected_messages} messages`);
     lines.push(`    saving:       ${formatTokens(s.estimated_saving_tokens)} (${formatRatio(s.estimated_saving_ratio)})`);
+    lines.push(
+      `    token mix:    cjk ${s.token_breakdown.cjk_chars}, ascii ${s.token_breakdown.ascii_tokens}, code ${s.token_breakdown.code_like_segments}, json ${s.token_breakdown.json_like_segments}`
+    );
     lines.push("");
 
     const categories = categorizeReasons(report);

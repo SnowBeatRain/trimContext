@@ -55,6 +55,30 @@ export interface RotScores {
   rot_score: number;
 }
 
+export interface TokenBreakdown {
+  cjk_chars: number;
+  ascii_tokens: number;
+  latin_words: number;
+  numbers: number;
+  symbols: number;
+  whitespace_runs: number;
+  code_like_segments: number;
+  path_like_segments: number;
+  json_like_segments: number;
+  line_count: number;
+  char_count: number;
+}
+
+export interface TokenMetadata {
+  estimator: "local_heuristic";
+  estimator_version: "approx-v1";
+  estimated: true;
+  confidence: "medium";
+  estimated_tokens: number;
+  message_overhead_tokens: number;
+  breakdown: TokenBreakdown;
+}
+
 export interface NormalizedMessage {
   id: string;
   role: MessageRole;
@@ -69,6 +93,7 @@ export interface NormalizedMessage {
   tool?: MessageToolInfo;
   sourceIndex?: number;
   tokens?: number;
+  token_metadata?: TokenMetadata;
   protected?: boolean;
   scores?: RotScores;
   rot_score?: number;

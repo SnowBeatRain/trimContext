@@ -135,6 +135,8 @@ describe("CLI commands", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("trimctx analysis");
     expect(result.stdout).toContain("messages / ");
+    expect(result.stdout).toContain("token estimate:");
+    expect(result.stdout).toContain("context pressure:");
     expect(result.stdout).toContain("next:");
     expect(() => JSON.parse(result.stdout)).toThrow();
   });

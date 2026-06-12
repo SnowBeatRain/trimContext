@@ -36,6 +36,9 @@ describe("compressor", () => {
     const after = await readFile(input, "utf8");
     const compressed = await readFile(output, "utf8");
 
+    const originalLineCount = original.split("\n").length;
+    const compressedLineCount = compressed.split("\n").filter((line) => line.length > 0).length;
+
     expect(after).toBe(original);
     expect(compressed).not.toContain("old-1");
     expect(compressed).toContain("sys-1");
@@ -43,6 +46,7 @@ describe("compressor", () => {
     expect(result.removedMessages).toBeGreaterThanOrEqual(1);
     expect(result.removedMessages).toBe(result.report.remove_candidates.length);
     expect(result.report.summary.remove_candidates).toBe(result.report.remove_candidates.length);
+    expect(originalLineCount - compressedLineCount).toBe(result.removedMessages);
     expect(result.report.remove_candidates.every((candidate) => candidate.reasons.length > 0)).toBe(true);
   });
 
