@@ -16,8 +16,8 @@ trimctx is local-only: it does not call an LLM, upload files, or use a database.
 ### From source
 
 ```bash
-git clone https://github.com/trimctx/trimctx.git
-cd trimctx
+git clone https://github.com/SnowBeatRain/trimContext.git
+cd trimContext
 npm install
 npm run build
 ```
@@ -36,7 +36,7 @@ node dist/cli.js analyze path/to/session.jsonl
 
 ### Global npm install
 
-Use this only after the package has been published to npm:
+Install the published CLI globally for regular use:
 
 ```bash
 npm install -g trimctx
@@ -199,6 +199,21 @@ trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
 
 The primary handoff includes source metadata, safety diagnostics, continuation rules, candidate review queue, warnings, and next commands. The optional `--next-context` file writes a shorter context packet for another agent or session.
 
+### `trimctx current`
+
+Analyze the most recently modified Claude Code or Codex `.jsonl` session under local client session directories.
+
+```bash
+trimctx current
+trimctx current --source auto
+trimctx current --source claude
+trimctx current --source codex
+trimctx current --json
+trimctx current --compress session.trimmed.jsonl
+```
+
+`--source auto` scans the Claude Code project session root and the Codex session root, then chooses the newest JSONL file. `--source claude` scans only `~/.claude/projects/`; `--source codex` scans only `~/.codex/sessions/`.
+
 ### `trimctx resume`
 
 Analyze the most recently modified Claude Code `.jsonl` session under `~/.claude/projects/`.
@@ -210,6 +225,25 @@ trimctx resume --compress session.trimmed.jsonl
 ```
 
 `resume` uses Claude Code's local session directory. If no session exists there, it exits with an error. It does not scan arbitrary directories.
+
+## Client Integrations
+
+### Claude Code
+
+This repository includes project-level command files under `.claude/commands/`:
+
+- `.claude/commands/trimctx.md` exposes `/trimctx` for analyzing the latest Claude Code or Codex session.
+- `.claude/commands/trimctx/analyze.md` exposes `/trimctx:analyze <file>`.
+- `.claude/commands/trimctx/resume.md` exposes `/trimctx:resume`.
+- `.claude/commands/trimctx/compress.md` exposes `/trimctx:compress`.
+
+The npm package also includes `plugins/trimctx/`, a Claude Code plugin wrapper with the same command files. These commands call the `trimctx` executable, so install the CLI globally or run `npm link` during local development.
+
+Safety boundary: these commands analyze exported/local JSONL files. They do not install hooks, do not write back into Claude Code sessions, and do not compress unless the user chooses `/trimctx:compress` or a CLI command with `--compress`.
+
+### Codex
+
+The package includes `codex/skills/trimctx/SKILL.md`, which provides a Codex-supported skill entry point for the CLI workflow. This is not documented as a verified Codex `/trimctx` slash command; use the skill or run `trimctx current --source codex` directly. Codex discovery currently scans `~/.codex/sessions/` only.
 
 ## Supported Input Formats
 
@@ -260,5 +294,5 @@ Use `summary.score_diagnostics` before changing thresholds or scoring weights. I
 
 - `compress_candidate` does not rewrite messages into summaries.
 - Token counts are local estimates, not exact model-tokenizer counts.
-- No Web UI, MCP server, installer, or slash-command integration is included in the current CLI.
+- No Web UI, MCP server, or standalone installer is included. Claude Code command/plugin wrappers are included; Codex support is skill/CLI based rather than a verified slash command.
 - Real long-session validation is still ongoing, so review reports before using compressed output as a replacement context.

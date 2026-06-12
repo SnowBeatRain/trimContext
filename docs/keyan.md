@@ -163,7 +163,7 @@ TrimContext 是一个本地 CLI 工具，用于分析 AI Agent 对话历史，�
 **最终推荐**：`trimctx`（短命名，CLI 友好）  
 **备选**：`ctxrot`、`rotprune`
 
-**GitHub 仓库**：`github.com/trimctx/trimctx`（建议新建独立仓库）  
+**GitHub 仓库**：`github.com/SnowBeatRain/trimContext`
 **包名**：npm 上 `trimctx`，PyPI 上 `trimctx`（待发布前检查可用性）
 
 ---

@@ -87,11 +87,33 @@ trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
-自动分析最新的 Claude Code 会话：
+自动分析最新的 Claude Code 或 Codex 会话：
+
+```bash
+trimctx current
+trimctx current --source claude
+trimctx current --source codex
+```
+
+使用旧兼容别名分析最新 Claude Code 会话：
 
 ```bash
 trimctx resume
 ```
+
+在 Claude Code 中使用：
+
+- 先安装 CLI：`npm install -g trimctx`；源码开发时可用 `npm link`。
+- 项目级 fallback：本仓库包含 `.claude/commands/trimctx.md`，因此在本仓库内 Claude Code 可以暴露 `/trimctx`。
+- 插件包：`plugins/trimctx/` 包含 Claude Code 插件包装，提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令文件。
+- 安全边界：`/trimctx` 按文件修改时间分析最新本地 JSONL；不会写回 Claude Code，不会修改原始会话，只在用户明确触发时压缩。
+
+在 Codex 中使用：
+
+- 先安装 CLI：`npm install -g trimctx`；源码开发时可用 `npm link`。
+- `codex/skills/trimctx/SKILL.md` 提供 Codex skill 入口，复用同一套 CLI 工作流。
+- 运行 `trimctx current --source codex` 可分析 `~/.codex/sessions/` 下最新本地 Codex JSONL。
+- 这里明确是 skill/CLI 集成，不宣传为已验证的 Codex `/trimctx` slash command。
 
 如果要从源码开发，请克隆仓库并运行本地 TypeScript 入口：
 
@@ -220,7 +242,7 @@ sha256sum session.jsonl
 - token 数是本地估算，不等同于特定模型 tokenizer 的精确计数。
 - Claude Code 和 Codex/Hermes rollout 路径已用本地样本验证；真实多样本验证仍在进行中，OpenAI 还需要用户提供真实导出样本后，Phase 0 才能覆盖所有已支持来源。建议先审查报告，再使用压缩输出。
 - 默认阈值优先避免误删，而不是最大化 token 节省；只有在用私有验证样本审查报告后，才建议下调阈值。
-- 暂无 Web UI、MCP server、安装器或 Claude Code slash command。
+- 暂无 Web UI、MCP server 或独立安装器。Claude Code 已通过项目命令文件和插件包装支持；Codex 已通过 skill/CLI 工作流支持，不宣传为已验证的 slash command。
 
 ## 文档
 

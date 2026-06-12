@@ -1,0 +1,10 @@
+# trimctx Claude Code Plugin Safety Boundary
+
+This plugin is a thin wrapper around the local `trimctx` CLI.
+
+- Default commands analyze local JSONL session files only; they do not modify original session files.
+- Compression is only allowed through an explicit command that writes a separate output artifact.
+- Never overwrite the active or original session file.
+- Do not claim secrets are redacted automatically; local reports and compressed artifacts may contain original conversation content.
+- Do not upload, paste, or transmit generated artifacts unless the user explicitly asks after reviewing them.
+- `trimctx current --source auto` selects the latest local JSONL file by modification time; it is not a live-client current-session API.

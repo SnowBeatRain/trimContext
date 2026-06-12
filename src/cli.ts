@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { analyzeMessages, parseJsonl } from "./core/analyzer.js";
 import { compressFile } from "./core/compressor.js";
 import { createReport } from "./core/reporter.js";
@@ -27,7 +27,34 @@ program
   .option("--compress <output.jsonl>", "Compress the latest session to a file.")
   .description("Analyze the most recent Claude Code session.")
   .action(async (options: CliAnalysisOptions & { json?: boolean; color?: boolean; compress?: string }) => {
-    const file = await findLatestSession();
+    const file = await findLatestSession("claude");
+    const analysisOptions = parseAnalysisOptions(options);
+    if (options.compress) {
+      const result = await compressFile(file, options.compress, analysisOptions);
+      process.stdout.write(`${JSON.stringify(result.report.summary, null, 2)}\n`);
+      return;
+    }
+    const report = await analyzeFile(file, analysisOptions);
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+      return;
+    }
+    process.stdout.write(formatAnalysisSummary(report, { color: options.color }));
+  });
+
+program
+  .command("current")
+  .option("--source <source>", "Session source to scan: auto, claude, or codex.", "auto")
+  .option("--json", "Print the full JSON analysis report.")
+  .option("--color", "Colorize output for terminal.")
+  .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
+  .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
+  .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
+  .option("--compress <output.jsonl>", "Compress the latest matching session to a file.")
+  .description("Analyze the most recent Claude Code or Codex JSONL session.")
+  .action(async (options: CliAnalysisOptions & { source?: string; json?: boolean; color?: boolean; compress?: string }) => {
+    const source = parseSessionSource(options.source);
+    const file = await findLatestSession(source);
     const analysisOptions = parseAnalysisOptions(options);
     if (options.compress) {
       const result = await compressFile(file, options.compress, analysisOptions);
@@ -119,34 +146,75 @@ program.parseAsync().catch((error: unknown) => {
   process.exitCode = 1;
 });
 
-async function findLatestSession(): Promise<string> {
-  const claudeDir = join(homedir(), ".claude", "projects");
+type SessionSource = "auto" | "claude" | "codex";
+
+async function findLatestSession(source: SessionSource): Promise<string> {
+  const roots = sessionRoots(source);
   let latestFile = "";
   let latestMtime = 0;
 
-  const projectDirs = await readdir(claudeDir);
-  for (const dir of projectDirs) {
-    const projectPath = join(claudeDir, dir);
-    try {
-      const entries = await readdir(projectPath);
-      for (const entry of entries) {
-        if (!entry.endsWith(".jsonl")) continue;
-        const fullPath = join(projectPath, entry);
-        const s = await stat(fullPath);
-        if (s.mtimeMs > latestMtime) {
-          latestMtime = s.mtimeMs;
-          latestFile = fullPath;
-        }
-      }
-    } catch {
-      // skip unreadable dirs
+  for (const root of roots) {
+    const candidate = await findLatestJsonlUnder(root);
+    if (candidate && candidate.mtimeMs > latestMtime) {
+      latestFile = candidate.file;
+      latestMtime = candidate.mtimeMs;
     }
   }
 
   if (!latestFile) {
-    throw new Error("no session files found in ~/.claude/projects/");
+    throw new Error(`no ${source} session files found under ${roots.map(prettyHomePath).join(" or ")}`);
   }
   return latestFile;
+}
+
+function sessionRoots(source: SessionSource): string[] {
+  const roots: Record<SessionSource, string[]> = {
+    auto: [join(homedir(), ".claude", "projects"), join(homedir(), ".codex", "sessions")],
+    claude: [join(homedir(), ".claude", "projects")],
+    codex: [join(homedir(), ".codex", "sessions")]
+  };
+  return roots[source];
+}
+
+async function findLatestJsonlUnder(root: string): Promise<{ file: string; mtimeMs: number } | undefined> {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+
+  let latest: { file: string; mtimeMs: number } | undefined;
+  for (const entry of entries) {
+    const fullPath = join(root, entry.name);
+    if (entry.isDirectory()) {
+      const nested = await findLatestJsonlUnder(fullPath);
+      if (nested && (!latest || nested.mtimeMs > latest.mtimeMs)) {
+        latest = nested;
+      }
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+    const fileStat = await stat(fullPath);
+    if (!latest || fileStat.mtimeMs > latest.mtimeMs) {
+      latest = { file: fullPath, mtimeMs: fileStat.mtimeMs };
+    }
+  }
+  return latest;
+}
+
+function parseSessionSource(value: string | undefined): SessionSource {
+  if (value === undefined || value === "auto" || value === "claude" || value === "codex") {
+    return value ?? "auto";
+  }
+  throw new Error("source must be one of: auto, claude, codex");
+}
+
+function prettyHomePath(file: string): string {
+  const home = homedir();
+  if (file === home) return "~";
+  if (file.startsWith(`${home}/`)) return `~/${file.slice(home.length + 1)}`;
+  return file;
 }
 
 interface CliAnalysisOptions {

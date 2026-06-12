@@ -7,8 +7,8 @@ Thanks for your interest in contributing! This guide covers the basics.
 **Requirements:** Node.js 20+
 
 ```bash
-git clone https://github.com/trimctx/trimctx.git
-cd trimctx
+git clone https://github.com/SnowBeatRain/trimContext.git
+cd trimContext
 npm install
 ```
 

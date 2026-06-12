@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, readFile, mkdtemp, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -100,6 +100,53 @@ describe("CLI commands", () => {
     const report = JSON.parse(stdout) as AnalysisReport;
     expect(report.input.file).toBe(file);
     expect(report.schema_version).toBe("trimctx.report.v1");
+  });
+
+  test("current analyzes the most recent Claude Code session under HOME", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
+    const projectDir = join(home, ".claude", "projects", "project-a");
+    const { file } = await writeSessionFixture(projectDir);
+
+    const result = await runCli(["current", "--source", "claude", "--json"], { HOME: home });
+
+    expect(result.code).toBe(0);
+    const report = JSON.parse(result.stdout) as AnalysisReport;
+    expect(report.input.file).toBe(file);
+  });
+
+  test("current analyzes nested Codex sessions under HOME", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
+    const sessionDir = join(home, ".codex", "sessions", "2026", "06", "12");
+    const { file } = await writeSessionFixture(sessionDir);
+
+    const result = await runCli(["current", "--source", "codex", "--json"], { HOME: home });
+
+    expect(result.code).toBe(0);
+    const report = JSON.parse(result.stdout) as AnalysisReport;
+    expect(report.input.file).toBe(file);
+  });
+
+  test("current auto selects the newest Claude or Codex session", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
+    const claude = await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
+    const codex = await writeSessionFixture(join(home, ".codex", "sessions", "2026", "06", "12"));
+    const older = new Date("2026-01-01T00:00:00.000Z");
+    const newer = new Date("2026-01-02T00:00:00.000Z");
+    await utimes(claude.file, older, older);
+    await utimes(codex.file, newer, newer);
+
+    const result = await runCli(["current", "--json"], { HOME: home });
+
+    expect(result.code).toBe(0);
+    const report = JSON.parse(result.stdout) as AnalysisReport;
+    expect(report.input.file).toBe(codex.file);
+  });
+
+  test("current rejects unknown sources", async () => {
+    const result = await runCli(["current", "--source", "unknown"]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("source must be one of: auto, claude, codex");
   });
 
   test("applies analysis tuning flags to report output", async () => {
@@ -230,10 +277,14 @@ async function sha256(file: string): Promise<string> {
   return createHash("sha256").update(await readFile(file)).digest("hex");
 }
 
-async function runCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+async function runCli(
+  args: string[],
+  env: NodeJS.ProcessEnv = {}
+): Promise<{ code: number; stdout: string; stderr: string }> {
   try {
     const { stdout, stderr } = await execFileAsync("node", ["--import", "tsx", "src/cli.ts", ...args], {
-      cwd: process.cwd()
+      cwd: process.cwd(),
+      env: { ...process.env, ...env }
     });
     return { code: 0, stdout, stderr };
   } catch (error) {

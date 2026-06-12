@@ -87,11 +87,33 @@ Generate handoff artifacts for continuing the work:
 trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
-Analyze the most recent Claude Code session automatically:
+Analyze the most recent Claude Code or Codex session automatically:
+
+```bash
+trimctx current
+trimctx current --source claude
+trimctx current --source codex
+```
+
+Analyze the most recent Claude Code session with the legacy alias:
 
 ```bash
 trimctx resume
 ```
+
+Use it from Claude Code:
+
+- Install the CLI first: `npm install -g trimctx`, or use `npm link` while developing from source.
+- Project fallback: this repository includes `.claude/commands/trimctx.md`, so Claude Code can expose `/trimctx` while working in this repo.
+- Plugin package: `plugins/trimctx/` contains a Claude Code plugin wrapper with `/trimctx`, `/trimctx:analyze`, `/trimctx:resume`, and `/trimctx:compress` command files.
+- Safety boundary: `/trimctx` analyzes the latest local JSONL by modification time. It does not write back to Claude Code, does not modify the original session, and only compresses when explicitly requested.
+
+Use it from Codex:
+
+- Install the CLI first: `npm install -g trimctx`, or use `npm link` while developing from source.
+- `codex/skills/trimctx/SKILL.md` provides a Codex skill entry point for the same CLI workflow.
+- Run `trimctx current --source codex` to analyze the latest local Codex JSONL under `~/.codex/sessions/`.
+- This is intentionally documented as a skill/CLI integration, not a verified `/trimctx` Codex slash command.
 
 Prefer developing from source? Clone the repository and run the local TypeScript entrypoint:
 
@@ -220,7 +242,7 @@ sha256sum session.jsonl
 - Token counts are local estimates, not model-specific tokenizer counts.
 - Claude Code and Codex/Hermes rollout paths have been exercised on local samples; real multi-sample validation is still in progress, and OpenAI still needs a user-provided real export before Phase 0 is complete for every supported family. Review the report before relying on compressed output.
 - Default thresholds prefer avoiding false deletions over maximizing token savings; lower thresholds only after reviewing reports against private validation samples.
-- No Web UI, MCP server, installer, or Claude Code slash command yet.
+- No Web UI, MCP server, or standalone installer yet. Claude Code is supported through project command files and the packaged plugin wrapper; Codex is supported through the documented skill/CLI workflow, not a verified slash command.
 
 ## Documentation
 
