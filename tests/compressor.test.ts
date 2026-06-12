@@ -4,6 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compressFile } from "../src/core/compressor.js";
 
+function countOpenAiMessages(jsonl: string): number {
+  return jsonl
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .reduce((count, line) => {
+      const raw = JSON.parse(line) as { messages?: unknown[] };
+      return count + (Array.isArray(raw.messages) ? raw.messages.length : 1);
+    }, 0);
+}
+
 describe("compressor", () => {
   test("writes a new file, preserves original input, removes only unprotected remove candidates", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
@@ -31,6 +41,8 @@ describe("compressor", () => {
     expect(compressed).toContain("sys-1");
     expect(compressed).toContain("pad-34");
     expect(result.removedMessages).toBeGreaterThanOrEqual(1);
+    expect(result.removedMessages).toBe(result.report.remove_candidates.length);
+    expect(result.report.summary.remove_candidates).toBe(result.report.remove_candidates.length);
     expect(result.report.remove_candidates.every((candidate) => candidate.reasons.length > 0)).toBe(true);
   });
 
@@ -195,9 +207,13 @@ describe("compressor", () => {
     ].join("\n");
     await writeFile(input, original, "utf8");
 
-    await compressFile(input, output);
+    const result = await compressFile(input, output);
     const compressed = await readFile(output, "utf8");
 
+    expect(result.removedMessages).toBe(result.report.remove_candidates.length);
+    expect(result.report.summary.remove_candidates).toBe(result.report.remove_candidates.length);
+    expect(compressed.split("\n")).toHaveLength(original.split("\n").length);
+    expect(countOpenAiMessages(original) - countOpenAiMessages(compressed)).toBe(result.removedMessages);
     expect(compressed).toContain("System stays");
     expect(compressed).toContain("new billing endpoint");
     expect(compressed).not.toContain("legacy charge api");
