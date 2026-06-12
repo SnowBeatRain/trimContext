@@ -7,11 +7,11 @@
   "author": "trimctx contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/trimctx/trimctx.git"
+    "url": "git+https://github.com/SnowBeatRain/trimContext.git"
   },
-  "homepage": "https://github.com/trimctx/trimctx#readme",
+  "homepage": "https://github.com/SnowBeatRain/trimContext#readme",
   "bugs": {
-    "url": "https://github.com/trimctx/trimctx/issues"
+    "url": "https://github.com/SnowBeatRain/trimContext/issues"
   },
   "keywords": [
     "claude-code",
@@ -41,7 +41,9 @@
     "README.md",
     "README_zh.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/requirements.md",
+    "CONTRIBUTING.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -48,41 +48,59 @@ trimctx analysis
 
 **需要 Node.js 20+。**
 
+免安装试用：
+
 ```bash
-git clone https://github.com/trimctx/trimctx.git
-cd trimctx
-npm install
-npm run build
+npx trimctx analyze path/to/session.jsonl
 ```
 
-分析一个对话：
+长期使用建议全局安装：
 
 ```bash
-npx tsx src/cli.ts analyze path/to/session.jsonl
+npm install -g trimctx
+trimctx --help
+```
+
+后续更新或卸载：
+
+```bash
+npm update -g trimctx
+npm install -g trimctx@latest
+npm uninstall -g trimctx
 ```
 
 写出完整 JSON 报告用于审查：
 
 ```bash
-npx tsx src/cli.ts report path/to/session.jsonl -o report.json
+trimctx report path/to/session.jsonl -o report.json
 ```
 
 生成压缩副本（原文件不动）：
 
 ```bash
-npx tsx src/cli.ts compress path/to/session.jsonl -o session.trimmed.jsonl
+trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
 
 生成继续交接文档：
 
 ```bash
-npx tsx src/cli.ts handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
 自动分析最新的 Claude Code 会话：
 
 ```bash
-npx tsx src/cli.ts resume
+trimctx resume
+```
+
+如果要从源码开发，请克隆仓库并运行本地 TypeScript 入口：
+
+```bash
+git clone https://github.com/SnowBeatRain/trimContext.git
+cd trimContext
+npm install
+npm run build
+npm run dev -- analyze path/to/session.jsonl
 ```
 
 ## 谁适合用

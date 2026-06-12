@@ -48,41 +48,59 @@ trimctx analysis
 
 **Requires Node.js 20+.**
 
+Try it without installing:
+
 ```bash
-git clone https://github.com/trimctx/trimctx.git
-cd trimctx
-npm install
-npm run build
+npx trimctx analyze path/to/session.jsonl
 ```
 
-Analyze a conversation:
+Install it globally for regular use:
 
 ```bash
-npx tsx src/cli.ts analyze path/to/session.jsonl
+npm install -g trimctx
+trimctx --help
+```
+
+Update or uninstall later:
+
+```bash
+npm update -g trimctx
+npm install -g trimctx@latest
+npm uninstall -g trimctx
 ```
 
 Write a full JSON report for review:
 
 ```bash
-npx tsx src/cli.ts report path/to/session.jsonl -o report.json
+trimctx report path/to/session.jsonl -o report.json
 ```
 
 Generate a compressed copy (original untouched):
 
 ```bash
-npx tsx src/cli.ts compress path/to/session.jsonl -o session.trimmed.jsonl
+trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
 
 Generate handoff artifacts for continuing the work:
 
 ```bash
-npx tsx src/cli.ts handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
 Analyze the most recent Claude Code session automatically:
 
 ```bash
-npx tsx src/cli.ts resume
+trimctx resume
+```
+
+Prefer developing from source? Clone the repository and run the local TypeScript entrypoint:
+
+```bash
+git clone https://github.com/SnowBeatRain/trimContext.git
+cd trimContext
+npm install
+npm run build
+npm run dev -- analyze path/to/session.jsonl
 ```
 
 ## Who should use this
