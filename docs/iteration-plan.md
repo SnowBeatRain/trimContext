@@ -127,10 +127,9 @@ Acceptance:
 
 Goal: keep the project focused until safety evidence is stronger.
 
-Deferred until after v0.2 stabilization:
+Deferred until after Phase 0 manual review metrics and real private OpenAI export validation are recorded:
 
-- Claude Code install command
-- slash commands
+- packaged Claude Code install command
 - hooks and status line
 - MCP server
 - REST API
@@ -145,6 +144,8 @@ Acceptance:
 
 - Roadmap and docs consistently state these are later-stage candidates.
 - New work during this phase improves trust, reports, tests, validation, or documentation.
+
+Repository-local Claude Code command/plugin files and the Codex skill wrapper may exist as integration artifacts, but packaged installation, hooks, status line, MCP, Web UI, and automatic active-session compression remain deferred.
 
 ## Next: v0.3 Handoff and Integration Design
 
@@ -177,6 +178,8 @@ Acceptance:
 - Output is clearly separate from destructive compression.
 - Targeted CLI tests cover `handoff.md` and `next-context.md` generation.
 
+Current gap: this is implemented, but it should not become the next expansion focus until Phase 0 manual review metrics and real private OpenAI export validation are recorded.
+
 ### N1.2 Evaluate current-session discovery
 
 Goal: reduce the need to manually find JSONL files without broad scanning.
@@ -184,7 +187,7 @@ Goal: reduce the need to manually find JSONL files without broad scanning.
 Tasks:
 
 - Keep `resume` Claude Code focused.
-- Evaluate whether Codex/Hermes discovery has a stable local path.
+- Keep `current --source codex` discovery explicit and opt-in.
 - Prefer explicit input paths or documented environment variables over broad home-directory scans.
 - Keep discovery code outside core parser/scorer/compressor modules.
 

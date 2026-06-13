@@ -27,6 +27,13 @@ describe("phase0 validation summary", () => {
     expect(summary).toContain("claude-code-jsonl");
     expect(summary).toContain("codex-jsonl");
     expect(summary).toContain("openai-jsonl");
+    expect(summary).toContain("## Manual Review Metrics");
+    expect(summary).toContain("| Remove candidate precision | Pending manual review |");
+    expect(summary).toContain("| Critical false deletion | Pending manual review |");
+    expect(summary).toContain("| Protected recall | Pending manual review |");
+    expect(summary).toContain("## Known Gaps");
+    expect(summary).toContain("Real private OpenAI export validation is pending");
+    expect(summary).toContain("Phase 0 is not complete until manual review metrics are recorded");
     expect(summary).toContain("## Safety Notes");
     expect(summary).toContain("`phase0-results.json` is private by default");
     expect(summary).toContain("local paths, stderr, or error details");

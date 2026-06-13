@@ -30,10 +30,10 @@ For the team-reviewed iteration priorities and quality gates, see `docs/iteratio
    - Write compressed copies.
 
 2. CLI
-   - Expose stable commands for analyze, report, compress, and resume.
+   - Expose stable commands for analyze, report, compress, resume, current-session discovery, and deterministic handoff artifacts.
    - Keep default output readable for humans.
    - Keep full JSON available for automation.
-   - Treat additional session discovery or diagnostics commands as post-Phase-0 candidates, not the current mainline.
+   - Treat diagnostics, active-session mutation, hooks, Web UI, and MCP as post-Phase-0 candidates, not the current mainline.
 
 3. AI Integrations
    - Install slash commands or hooks for Claude Code.
@@ -109,6 +109,8 @@ Make the CLI comfortable for real users, not just internal validation.
 - `trimctx analyze <file> --json` for full JSON output.
 - `trimctx report <file> -o <report.json>` remains the full machine-readable report path.
 - `trimctx resume` analyzes the most recent Claude Code transcript.
+- `trimctx current --source codex` analyzes the latest Codex session from the documented local path.
+- `trimctx handoff <file> -o handoff.md --next-context next-context.md` writes deterministic continuation artifacts without LLM calls.
 - Better error messages for unsupported JSONL, unreadable files, and unsafe output paths.
 - Advanced threshold flags exist for validation/tuning, but the default path should remain conservative and simple.
 - Zero `remove_candidate` results on a real sample are acceptable when messages do not cross the stricter removal threshold; document this as conservative safety behavior rather than treating it as parser failure.
@@ -148,11 +150,12 @@ next:
 - `resume` works for the latest Claude Code session.
 - Tests cover human summary output and JSON output separately.
 - Threshold/options validation is covered for invalid values and unsafe combinations.
-- Phase 0 validation confirms the conservative defaults do not create critical false deletions.
+- Phase 0 validation records manual review metrics for critical false deletion count, protected recall, and remove candidate precision.
+- Real private OpenAI export validation is recorded before claiming Phase 0 complete.
 
 ### Not Included
 
-- Slash command installation.
+- Packaged slash command installation.
 - Background monitoring.
 - Multi-platform integrations.
 

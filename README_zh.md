@@ -48,25 +48,68 @@ trimctx analysis
 
 **需要 Node.js 20+。**
 
-免安装试用：
+不发布 npm 时，可直接从 GitHub 安装。
 
-```bash
-npx trimctx analyze path/to/session.jsonl
+Windows CMD：
+
+> 如果提示 `'irm' 不是内部或外部命令`，说明你在 CMD，不是在 PowerShell，请用下面这条 CMD 命令。
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
 ```
 
-长期使用建议全局安装：
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+```
+
+macOS / Linux / WSL：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+```
+
+然后重启 Claude Code，直接运行：
+
+```text
+/trimctx
+```
+
+Windows 上默认写入：
+
+- `trimctx.cmd` / `trimctx.ps1` 到 `%USERPROFILE%\.local\bin`
+- Claude Code 插件到 `%USERPROFILE%\.claude\plugins\trimctx`
+- 源码 checkout 到 `%LOCALAPPDATA%\trimctx`
+
+macOS / Linux 上默认写入：
+
+- `trimctx` 到 `~/.local/bin/trimctx`
+- Claude Code 插件到 `~/.claude/plugins/trimctx`
+- 源码 checkout 到 `~/.local/share/trimctx`
+
+如果 shell 找不到 `trimctx`，把下面这行加入 shell profile：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+本地开发时也可以从源码链接：
+
+```bash
+git clone https://github.com/SnowBeatRain/trimContext.git
+cd trimContext
+npm install
+npm run build
+npm link
+trimctx --help
+```
+
+未来如果发布到 npm，也可以使用全局 npm 安装：
 
 ```bash
 npm install -g trimctx
 trimctx --help
-```
-
-后续更新或卸载：
-
-```bash
-npm update -g trimctx
-npm install -g trimctx@latest
-npm uninstall -g trimctx
 ```
 
 写出完整 JSON 报告用于审查：
@@ -103,14 +146,14 @@ trimctx resume
 
 在 Claude Code 中使用：
 
-- 先安装 CLI：`npm install -g trimctx`；源码开发时可用 `npm link`。
+- 先用上面的 GitHub 安装命令安装 CLI 与插件；源码开发时可用 `npm link`。
 - 项目级 fallback：本仓库包含 `.claude/commands/trimctx.md`，因此在本仓库内 Claude Code 可以暴露 `/trimctx`。
 - 插件包：`plugins/trimctx/` 包含 Claude Code 插件包装，提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令文件。
 - 安全边界：`/trimctx` 按文件修改时间分析最新本地 JSONL；不会写回 Claude Code，不会修改原始会话，只在用户明确触发时压缩。
 
 在 Codex 中使用：
 
-- 先安装 CLI：`npm install -g trimctx`；源码开发时可用 `npm link`。
+- 先用上面的 GitHub 安装命令安装 CLI 与插件；源码开发时可用 `npm link`。
 - `codex/skills/trimctx/SKILL.md` 提供 Codex skill 入口，复用同一套 CLI 工作流。
 - 运行 `trimctx current --source codex` 可分析 `~/.codex/sessions/` 下最新本地 Codex JSONL。
 - 这里明确是 skill/CLI 集成，不宣传为已验证的 Codex `/trimctx` slash command。

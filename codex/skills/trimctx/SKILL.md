@@ -11,7 +11,27 @@ Use the `trimctx` CLI as the source of truth. Do not reimplement JSONL parsing, 
 
 ## Requirements
 
-`trimctx` must be available on `PATH`:
+`trimctx` must be available on `PATH`. Install the CLI and Claude Code plugin from GitHub without requiring an npm release:
+
+Windows CMD:
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+```
+
+macOS / Linux / WSL:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+```
+
+If trimctx is published to npm later, global npm install can also be used:
 
 ```bash
 npm install -g trimctx

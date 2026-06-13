@@ -13,6 +13,46 @@ trimctx is local-only: it does not call an LLM, upload files, or use a database.
 
 ## Installation
 
+### One-command GitHub install
+
+This path does not require publishing trimctx to npm.
+
+Windows CMD:
+
+> If CMD says `'irm' is not recognized`, you are not in PowerShell. Use this CMD command instead.
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+```
+
+macOS / Linux / WSL:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+```
+
+On Windows, it installs CLI shims at `%USERPROFILE%\.local\bin`, installs the Claude Code plugin at `%USERPROFILE%\.claude\plugins\trimctx`, and keeps the source checkout at `%LOCALAPPDATA%\trimctx`.
+
+On macOS / Linux, it installs the CLI at `~/.local/bin/trimctx`, installs the Claude Code plugin at `~/.claude/plugins/trimctx`, and keeps the source checkout at `~/.local/share/trimctx`.
+
+Restart Claude Code after installation, then run:
+
+```text
+/trimctx
+```
+
+If your shell cannot find `trimctx`, add `~/.local/bin` to `PATH`:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ### From source
 
 ```bash
@@ -34,9 +74,9 @@ Run the compiled CLI after `npm run build`:
 node dist/cli.js analyze path/to/session.jsonl
 ```
 
-### Global npm install
+### Future npm install
 
-Install the published CLI globally for regular use:
+If trimctx is published to npm later, global npm install will also work:
 
 ```bash
 npm install -g trimctx

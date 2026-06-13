@@ -11,10 +11,32 @@ This plugin adds Claude Code slash commands that call the local `trimctx` CLI.
 
 ## Requirements
 
-Install the CLI first so `trimctx` is available on `PATH`:
+Node.js 20+ is required.
+
+Install the CLI and Claude Code plugin from GitHub without publishing to npm.
+
+Windows CMD:
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+```
+
+macOS / Linux / WSL:
 
 ```bash
-npm install -g trimctx
+curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+```
+
+Then restart Claude Code and run:
+
+```text
+/trimctx
 ```
 
 For local development from this repository, run:
@@ -23,6 +45,9 @@ For local development from this repository, run:
 npm install
 npm run build
 npm link
+mkdir -p ~/.claude/plugins
+rm -rf ~/.claude/plugins/trimctx
+cp -R plugins/trimctx ~/.claude/plugins/trimctx
 ```
 
 The commands do not modify original session files by default. Compression is only triggered by `/trimctx:compress` or an explicit `trimctx current --compress <output.jsonl>` command.

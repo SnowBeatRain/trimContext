@@ -13,6 +13,46 @@ trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库�
 
 ## 安装
 
+### GitHub 一条命令安装
+
+该路径不需要把 trimctx 发布到 npm。
+
+Windows CMD：
+
+> 如果提示 `'irm' 不是内部或外部命令`，说明你在 CMD，不是在 PowerShell，请用下面这条 CMD 命令。
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+```
+
+macOS / Linux / WSL：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+```
+
+Windows 上默认把 CLI shim 安装到 `%USERPROFILE%\.local\bin`，把 Claude Code 插件安装到 `%USERPROFILE%\.claude\plugins\trimctx`，并把源码 checkout 保存在 `%LOCALAPPDATA%\trimctx`。
+
+macOS / Linux 上默认把 CLI 安装到 `~/.local/bin/trimctx`，把 Claude Code 插件安装到 `~/.claude/plugins/trimctx`，并把源码 checkout 保存在 `~/.local/share/trimctx`。
+
+安装后重启 Claude Code，然后运行：
+
+```text
+/trimctx
+```
+
+如果 shell 找不到 `trimctx`，把 `~/.local/bin` 加入 `PATH`：
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ### 从源码运行
 
 ```bash
@@ -34,9 +74,9 @@ npx tsx src/cli.ts analyze path/to/session.jsonl
 node dist/cli.js analyze path/to/session.jsonl
 ```
 
-### 全局 npm 安装
+### 未来 npm 安装
 
-长期使用时可安装已发布的全局 CLI：
+如果后续发布到 npm，也可以使用全局 npm 安装：
 
 ```bash
 npm install -g trimctx

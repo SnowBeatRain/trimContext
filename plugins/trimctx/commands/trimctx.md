@@ -10,4 +10,4 @@ After the command finishes, summarize briefly:
 Boundaries:
 - Default behavior is analysis only. Do not modify or delete original session files.
 - Compression requires an explicit user action through `/trimctx:compress` or `trimctx current --compress <output.jsonl>`.
-- If `trimctx` is not found, tell the user to install the CLI on `PATH` with `npm install -g trimctx`, or for local development run `npm link` after `npm run build`.
+- If `trimctx` is not found, tell the user to install the CLI and plugin with `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"` from Windows CMD, `irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex` from Windows PowerShell, or `curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash` on macOS/Linux/WSL. For local development, run `npm link` after `npm run build`.

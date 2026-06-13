@@ -30,6 +30,8 @@
   },
   "files": [
     "dist/",
+    "install.sh",
+    "install.ps1",
     "plugins/trimctx/",
     "codex/skills/trimctx/",
     "docs/usage.md",

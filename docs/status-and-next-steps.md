@@ -160,7 +160,7 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 
 ## 当前主要问题
 
-### 1. Phase 0 多样本验证仍未完成
+### 1. Phase 0 证据记录已扩展，但人工评审闭环仍未完成
 
 当前 CLI 输出体验已经进入 v0.2 形态：
 
@@ -168,14 +168,20 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 - `report` 输出完整 JSON
 - `analyze --json` 输出完整 JSON
 - `resume` 可分析最近 Claude Code session
+- `current --source codex` 可分析最近 Codex session
+- `handoff` 可生成 deterministic Markdown 交接材料
 
-剩余重点是按 `docs/execution-plan.md` 补齐 5 个真实长会话私有样本验证，并覆盖 Claude Code、OpenAI 和 Codex/Hermes rollout 三类输入。
+当前 `reports/phase0/validation-summary.md` 已记录 Claude Code 与 Codex/Hermes rollout 私有样本的聚合验证结果，但 Phase 0 还不能宣称完成：
+
+- 真实私有 OpenAI JSONL export 仍未提供验证
+- 删除候选 precision、protected recall、critical false deletion count 仍需要人工评审指标
+- 零 `remove_candidate` 批次只能证明默认行为保守，不能证明删除候选 precision
 
 ## 下一步执行顺序
 
-### Step 1：补 Phase 0 多样本验证
+### Step 1：完成 Phase 0 人工评审指标
 
-按 `docs/execution-plan.md` 补齐 5 个真实长会话的私有验证样本，覆盖 Claude Code、OpenAI 和 Codex/Hermes rollout，并输出：
+按 `docs/manual-review-rubric.md` 对私有验证结果进行人工评审，并只把聚合指标写入：
 
 ```text
 reports/phase0/validation-summary.md
@@ -183,51 +189,46 @@ reports/phase0/validation-summary.md
 
 目标：
 
-- 覆盖功能开发、Bug 调试、重构、文档规划、长工具调用任务
-- 人工标注 protected / keep / compress / remove
-- 验证 remove_candidate precision
+- 记录 remove candidate precision
+- 记录 protected recall
 - 确认 critical false deletion = 0
+- 标记 `questionable_remove`、`over_protected` 和 `missed_low_value_noise` 作为后续调参证据
 
-### Step 2：重新验证真实样本和压缩安全
+### Step 2：补真实私有 OpenAI export 验证
 
-用样本 2 跑：
-
-```bash
-npx tsx src/cli.ts analyze "C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-museum\5c574dba-0f62-406b-980b-a098da258ddd.jsonl"
-```
+在用户提供真实 OpenAI JSONL export 后，将其加入 Phase 0 私有验证批次。只发布聚合统计，不提交原始 transcript、私有 report 或 `phase0-results.json`。
 
 期望：
 
-- 仍能解析
-- protected 比例下降
-- 出现一批低风险候选
-- reasons 可解释
-- `compress` 仍不修改原文件
+- 能自动识别 OpenAI JSONL
+- `analyze`、`report`、`compress` 都能跑通
+- `compress` 不修改原文件
+- 人工评审指标能覆盖 OpenAI 样本
 
-### Step 3：评估压缩效果并收敛当前 CLI
+### Step 3：收敛当前 CLI 信任信号
 
-先用真实样本量化 `compress` 的节省比例、误删风险和原因可解释性。只有当 CLI 输出和多样本验证可信后，才重新评估是否需要额外 session discovery / diagnostics 命令。当前阶段继续打磨：
+先维持默认保守行为，不调整 scorer/compress 行为。当前阶段继续打磨：
 
 - `trimctx analyze <file>`
 - `trimctx analyze <file> --json`
 - `trimctx report <file> -o <report.json>`
 - `trimctx compress <file> -o <output.jsonl>`
 - `trimctx resume`
+- `trimctx current --source codex`
+- `trimctx handoff <file> -o handoff.md --next-context next-context.md`
 
-### Step 4：规划自动定位会话文件
+### Step 4：冻结高风险扩展
 
-在 Phase 0 验证完成后，规划“用户不需要手动找 `.jsonl`”的体验，优先评估现有 `resume` 能力是否足够，再决定是否扩展到 Codex/Cursor 的会话发现。
+Phase 0 人工指标闭环前，不推进 Web UI、MCP、hooks、自动压缩、LLM summarization 或更激进删除阈值。
 
-### Step 5：打磨 `resume` 文档和边界
+### Step 5：准备发布前证据检查
 
-明确 `resume` 当前只扫描 `~/.claude/projects/`，并把 Codex/Cursor 自动发现作为后续候选，不写成当前能力。
-
-安装器和 `/trimctx` 放到后续 Claude Code 集成阶段。
+在声称阶段完成前运行质量门，并检查文档不得宣称未验证能力已完成。
 
 ## 当前结论
 
-项目现在已经不是“不能跑”的阶段，而是进入“让分析结果真正有用”的阶段。
+项目现在已经不是“不能跑”的阶段，而是进入“验证信任信号是否足够”的阶段。
 
 当前最重要任务：
 
-**补齐 Phase 0 多样本验证，确认当前 CLI 的安全性和可用性，再决定是否需要新增命令。**
+**补齐 Phase 0 人工评审指标和真实私有 OpenAI export 验证，确认当前 CLI 的安全性和可用性，再决定是否调整 scorer/compress 或推进更高风险集成。**

@@ -6,8 +6,10 @@ This rubric is used to review `remove_candidate`, `compress_candidate`, and prot
 
 | Label | Meaning | Action |
 | --- | --- | --- |
-| `safe_remove` | The message is stale, duplicated, superseded, or low-value, and removing it does not break task continuity. | Can support future threshold tuning after enough agreement. |
-| `critical_false_delete` | The message contains requirements, constraints, decisions, code, commands, failures, credentials placeholders, or context needed later. | Must remain protected; treat as a blocking safety finding. |
+| `safe_remove` | The message is stale, duplicated, superseded, or low-value, and removing it does not break task continuity. | Counts toward remove-candidate precision after enough agreement. |
+| `questionable_remove` | The message may be removable, but the report metadata is not enough to prove deletion is safe. | Does not count as a safe remove; keep by default and inspect privately if needed. |
+| `critical_false_delete` | The message contains requirements, constraints, decisions, code, commands, failures, credentials placeholders, or context needed later. | Blocking safety finding; do not tune defaults until resolved. |
+| `missed_low_value_noise` | The message is low-value noise that trimctx kept or only marked as report-only. | Evidence for future scorer/safety tuning, not current deletion. |
 | `over_protected` | The message is protected by a conservative rule but appears safe to remove or summarize. | Use only as tuning evidence; do not remove automatically. |
 | `needs_summary` | The content is too valuable to delete but too large/noisy to keep verbatim. | Candidate for future summarization, not current compression deletion. |
 | `unclear` | Reviewer cannot decide from report metadata alone. | Inspect source privately or keep by default. |
@@ -25,6 +27,11 @@ For every reviewed candidate, record:
 
 ## Review Rules
 
+- `remove_candidate precision` is `safe_remove / reviewed remove_candidate`; exclude `unclear` until privately inspected.
+- Any `questionable_remove` means the current evidence is insufficient for automatic deletion and should not count as precision success.
+- Any `critical_false_delete` is a release-blocking safety finding for the reviewed default behavior.
+- `protected_recall` requires checking that messages labeled as critical context are protected or kept, not removed.
+- `missed_low_value_noise` and `over_protected` are tuning evidence only; they do not justify changing compression behavior without a separate review.
 - Prefer `unclear` or `critical_false_delete` over optimistic deletion when evidence is incomplete.
 - Never paste raw credentials, tokens, passwords, private keys, or connection strings into review notes; write `[REDACTED]`.
 - Treat system/developer instructions, user decisions, architecture/API decisions, shell commands, git diffs, stack traces, and test failures as high-risk by default.

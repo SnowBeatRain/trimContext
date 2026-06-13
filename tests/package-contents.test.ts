@@ -12,6 +12,8 @@ describe("package contents", () => {
     const [pack] = JSON.parse(stdout) as Array<{ files: Array<{ path: string }> }>;
     const files = pack.files.map((file) => file.path);
 
+    expect(files).toContain("install.sh");
+    expect(files).toContain("install.ps1");
     expect(files).toContain("plugins/trimctx/.claude-plugin/plugin.json");
     expect(files).toContain("plugins/trimctx/.system");
     expect(files).toContain("plugins/trimctx/commands/trimctx.md");

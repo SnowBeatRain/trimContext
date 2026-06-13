@@ -48,25 +48,68 @@ trimctx analysis
 
 **Requires Node.js 20+.**
 
-Try it without installing:
+Install from GitHub without publishing to npm.
 
-```bash
-npx trimctx analyze path/to/session.jsonl
+Windows CMD:
+
+> If CMD says `'irm' is not recognized`, you are not in PowerShell. Use this CMD command instead.
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
 ```
 
-Install it globally for regular use:
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+```
+
+macOS / Linux / WSL:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+```
+
+Then restart Claude Code and run:
+
+```text
+/trimctx
+```
+
+On Windows, this installs:
+
+- `trimctx.cmd` / `trimctx.ps1` into `%USERPROFILE%\.local\bin`
+- the Claude Code plugin into `%USERPROFILE%\.claude\plugins\trimctx`
+- the source checkout into `%LOCALAPPDATA%\trimctx`
+
+On macOS / Linux, this installs:
+
+- `trimctx` into `~/.local/bin/trimctx`
+- the Claude Code plugin into `~/.claude/plugins/trimctx`
+- the source checkout into `~/.local/share/trimctx`
+
+If your shell cannot find `trimctx`, add this to your shell profile:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+For local development from a checkout:
+
+```bash
+git clone https://github.com/SnowBeatRain/trimContext.git
+cd trimContext
+npm install
+npm run build
+npm link
+trimctx --help
+```
+
+If trimctx is published to npm later, global npm install will also work:
 
 ```bash
 npm install -g trimctx
 trimctx --help
-```
-
-Update or uninstall later:
-
-```bash
-npm update -g trimctx
-npm install -g trimctx@latest
-npm uninstall -g trimctx
 ```
 
 Write a full JSON report for review:
@@ -103,14 +146,14 @@ trimctx resume
 
 Use it from Claude Code:
 
-- Install the CLI first: `npm install -g trimctx`, or use `npm link` while developing from source.
+- Install the CLI and plugin with the GitHub install command above, or use `npm link` while developing from source.
 - Project fallback: this repository includes `.claude/commands/trimctx.md`, so Claude Code can expose `/trimctx` while working in this repo.
 - Plugin package: `plugins/trimctx/` contains a Claude Code plugin wrapper with `/trimctx`, `/trimctx:analyze`, `/trimctx:resume`, and `/trimctx:compress` command files.
 - Safety boundary: `/trimctx` analyzes the latest local JSONL by modification time. It does not write back to Claude Code, does not modify the original session, and only compresses when explicitly requested.
 
 Use it from Codex:
 
-- Install the CLI first: `npm install -g trimctx`, or use `npm link` while developing from source.
+- Install the CLI and plugin with the GitHub install command above, or use `npm link` while developing from source.
 - `codex/skills/trimctx/SKILL.md` provides a Codex skill entry point for the same CLI workflow.
 - Run `trimctx current --source codex` to analyze the latest local Codex JSONL under `~/.codex/sessions/`.
 - This is intentionally documented as a skill/CLI integration, not a verified `/trimctx` Codex slash command.
