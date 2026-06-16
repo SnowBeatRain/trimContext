@@ -26,7 +26,7 @@
     "hermes-agent"
   ],
   "bin": {
-    "trimctx": "./dist/cli.js"
+    "trimctx": "dist/cli.js"
   },
   "files": [
     "dist/",
