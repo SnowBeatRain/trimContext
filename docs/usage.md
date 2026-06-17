@@ -74,14 +74,17 @@ Run the compiled CLI after `npm run build`:
 node dist/cli.js analyze path/to/session.jsonl
 ```
 
-### Future npm install
+### npm install
 
-If trimctx is published to npm later, global npm install will also work:
+Install the CLI and then install AI-client command files:
 
 ```bash
 npm install -g trimctx
+trimctx init
 trimctx analyze path/to/session.jsonl
 ```
+
+`trimctx init` installs Claude Code command files and the Codex skill from the npm package. Use `trimctx init --dry-run` to inspect paths before writing.
 
 ## Quick Start
 
@@ -166,6 +169,19 @@ The workflow is documented in `docs/phase0/phase0-plan.md`, `docs/phase0/manual-
 `reports/phase0/phase0-results.json` is private by default. It can include local paths plus captured `stderr` or `error` details, so publish only a sanitized summary or manually redacted excerpt.
 
 ## Commands
+
+### `trimctx init`
+
+Install AI-client command files and skills from the installed package.
+
+```bash
+trimctx init
+trimctx init --client claude
+trimctx init --client codex --target project --dir .
+trimctx init --dry-run
+```
+
+By default, Claude Code assets go to `~/.claude/plugins/trimctx` and Codex skill assets go to `~/.codex/skills/trimctx`. Existing assets are not overwritten unless `--force` is provided.
 
 ### `trimctx analyze <file>`
 

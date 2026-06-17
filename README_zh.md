@@ -48,7 +48,16 @@ trimctx analysis
 
 **需要 Node.js 20+。**
 
-不发布 npm 时，可直接从 GitHub 安装。
+从 npm 安装，然后安装 AI 客户端可识别的命令文件：
+
+```bash
+npm install -g trimctx
+trimctx init
+```
+
+`trimctx init` 会把 Claude Code slash commands 安装到 `~/.claude/plugins/trimctx`，把 Codex skill 安装到 `~/.codex/skills/trimctx`。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
+
+也可以继续使用 GitHub 一条命令安装：
 
 Windows CMD：
 
@@ -105,10 +114,11 @@ npm link
 trimctx --help
 ```
 
-未来如果发布到 npm，也可以使用全局 npm 安装：
+仅通过 npm 安装时：
 
 ```bash
 npm install -g trimctx
+trimctx init --client all
 trimctx --help
 ```
 
@@ -144,17 +154,24 @@ trimctx current --source codex
 trimctx resume
 ```
 
+安装 AI 客户端命令文件：
+
+```bash
+trimctx init                 # 安装 Claude + Codex 用户级资产
+trimctx init --client claude # 只安装 Claude Code commands
+trimctx init --client codex  # 只安装 Codex skill
+trimctx init --target project --dir .
+```
+
 在 Claude Code 中使用：
 
-- 先用上面的 GitHub 安装命令安装 CLI 与插件；源码开发时可用 `npm link`。
-- 项目级 fallback：本仓库包含 `.claude/commands/trimctx.md`，因此在本仓库内 Claude Code 可以暴露 `/trimctx`。
-- 插件包：`plugins/trimctx/` 包含 Claude Code 插件包装，提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令文件。
+- `trimctx init` 默认把 `plugins/trimctx/` 安装到 `~/.claude/plugins/trimctx`。
+- 插件提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令文件。
 - 安全边界：`/trimctx` 按文件修改时间分析最新本地 JSONL；不会写回 Claude Code，不会修改原始会话，只在用户明确触发时压缩。
 
 在 Codex 中使用：
 
-- 先用上面的 GitHub 安装命令安装 CLI 与插件；源码开发时可用 `npm link`。
-- `codex/skills/trimctx/SKILL.md` 提供 Codex skill 入口，复用同一套 CLI 工作流。
+- `trimctx init` 默认把 `codex/skills/trimctx/SKILL.md` 安装到 `~/.codex/skills/trimctx`。
 - 运行 `trimctx current --source codex` 可分析 `~/.codex/sessions/` 下最新本地 Codex JSONL。
 - 这里明确是 skill/CLI 集成，不宣传为已验证的 Codex `/trimctx` slash command。
 
@@ -184,6 +201,25 @@ npm run dev -- analyze path/to/session.jsonl
 6. **压缩** — 写出新 JSONL，只排除非 protected 的 `remove_candidate` 消息。
 
 ## 命令
+
+### `trimctx init`
+
+从 npm 包安装 AI 客户端命令文件与 skill。
+
+```bash
+trimctx init
+trimctx init --client claude --force
+trimctx init --client codex --target project --dir .
+trimctx init --dry-run
+```
+
+| 参数 | 默认值 | 说明 |
+|---|---:|---|
+| `--client <client>` | `all` | `claude`、`codex` 或 `all` |
+| `--target <target>` | `user` | `user` 安装到 home 目录下；`project` 安装到 `--dir` 或当前目录下 |
+| `--dir <directory>` | home/当前目录 | 覆盖基础目录 |
+| `--force` | `false` | 覆盖已有 trimctx 资产 |
+| `--dry-run` | `false` | 只打印计划路径，不写文件 |
 
 ### `trimctx analyze <file>`
 

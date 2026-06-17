@@ -74,14 +74,17 @@ npx tsx src/cli.ts analyze path/to/session.jsonl
 node dist/cli.js analyze path/to/session.jsonl
 ```
 
-### 未来 npm 安装
+### npm 安装
 
-如果后续发布到 npm，也可以使用全局 npm 安装：
+安装 CLI 后，再安装 AI 客户端命令文件：
 
 ```bash
 npm install -g trimctx
+trimctx init
 trimctx analyze path/to/session.jsonl
 ```
+
+`trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。写入前可先用 `trimctx init --dry-run` 查看路径。
 
 ## 快速开始
 
@@ -166,6 +169,19 @@ npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase
 `reports/phase0/phase0-results.json` 默认视为私有产物。它可能包含本机路径以及捕获到的 `stderr` 或 `error` 细节；对外只发布脱敏摘要或人工删改后的片段。
 
 ## 命令
+
+### `trimctx init`
+
+从已安装包中安装 AI 客户端命令文件与 skill。
+
+```bash
+trimctx init
+trimctx init --client claude
+trimctx init --client codex --target project --dir .
+trimctx init --dry-run
+```
+
+默认情况下，Claude Code 资产写入 `~/.claude/plugins/trimctx`，Codex skill 写入 `~/.codex/skills/trimctx`。已有资产不会被覆盖，除非传入 `--force`。
 
 ### `trimctx analyze <file>`
 

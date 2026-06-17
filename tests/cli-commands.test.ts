@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, mkdtemp, utimes, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, mkdtemp, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -11,6 +11,66 @@ const execFileAsync = promisify(execFile);
 
 
 describe("CLI commands", () => {
+  test("init installs Claude plugin and Codex skill into a user base directory", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-home-"));
+
+    const result = await runCli(["init", "--dir", home]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("installed all assets for user");
+    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
+    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx", "compress.md"))).toBe(true);
+    expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
+  });
+
+  test("init installs project-scoped assets without touching HOME", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-real-home-"));
+    const project = await mkdtemp(join(tmpdir(), "trimctx-init-project-"));
+
+    const result = await runCli(["init", "--client", "claude", "--target", "project", "--dir", project], { HOME: home });
+
+    expect(result.code).toBe(0);
+    expect(await fileExists(join(project, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
+    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(false);
+  });
+
+  test("init refuses to overwrite installed assets unless forced", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-conflict-"));
+    const staleFile = join(home, ".codex", "skills", "trimctx", "stale.md");
+
+    const first = await runCli(["init", "--client", "codex", "--dir", home]);
+    await writeFile(staleFile, "old command", "utf8");
+    const second = await runCli(["init", "--client", "codex", "--dir", home]);
+    const forced = await runCli(["init", "--client", "codex", "--dir", home, "--force"]);
+
+    expect(first.code).toBe(0);
+    expect(second.code).not.toBe(0);
+    expect(second.stderr).toContain("already exists");
+    expect(forced.code).toBe(0);
+    expect(await fileExists(staleFile)).toBe(false);
+  });
+
+  test("init dry-run prints paths without writing files", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-dry-run-"));
+
+    const result = await runCli(["init", "--client", "codex", "--dir", home, "--dry-run"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("planned codex assets for user");
+    expect(result.stdout).toContain(join(home, ".codex", "skills", "trimctx"));
+    expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(false);
+  });
+
+  test("init rejects unknown clients and targets", async () => {
+    const badClient = await runCli(["init", "--client", "vim"]);
+    const badTarget = await runCli(["init", "--target", "global"]);
+
+    expect(badClient.code).not.toBe(0);
+    expect(badClient.stderr).toContain("client must be one of: all, claude, codex");
+    expect(badTarget.code).not.toBe(0);
+    expect(badTarget.stderr).toContain("target must be one of: user, project");
+  });
+
   test("report writes a full JSON report to the requested output file", async () => {
     const { file, dir } = await writeSessionFixture();
     const output = join(dir, "report.json");
@@ -275,6 +335,15 @@ async function writeSessionFixture(dir = ""): Promise<{ dir: string; file: strin
 
 async function sha256(file: string): Promise<string> {
   return createHash("sha256").update(await readFile(file)).digest("hex");
+}
+
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function runCli(

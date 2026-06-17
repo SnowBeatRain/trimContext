@@ -48,7 +48,16 @@ trimctx analysis
 
 **Requires Node.js 20+.**
 
-Install from GitHub without publishing to npm.
+Install from npm, then install AI-client command files:
+
+```bash
+npm install -g trimctx
+trimctx init
+```
+
+`trimctx init` installs Claude Code slash commands under `~/.claude/plugins/trimctx` and a Codex skill under `~/.codex/skills/trimctx`. Restart the AI client afterwards, then run `/trimctx` in Claude Code or ask Codex to use the trimctx skill.
+
+Alternative GitHub install path:
 
 Windows CMD:
 
@@ -105,10 +114,11 @@ npm link
 trimctx --help
 ```
 
-If trimctx is published to npm later, global npm install will also work:
+npm install only, without command files:
 
 ```bash
 npm install -g trimctx
+trimctx init --client all
 trimctx --help
 ```
 
@@ -144,17 +154,24 @@ Analyze the most recent Claude Code session with the legacy alias:
 trimctx resume
 ```
 
+Install AI-client commands:
+
+```bash
+trimctx init                 # install Claude + Codex user-level assets
+trimctx init --client claude # install only Claude Code commands
+trimctx init --client codex  # install only the Codex skill
+trimctx init --target project --dir .
+```
+
 Use it from Claude Code:
 
-- Install the CLI and plugin with the GitHub install command above, or use `npm link` while developing from source.
-- Project fallback: this repository includes `.claude/commands/trimctx.md`, so Claude Code can expose `/trimctx` while working in this repo.
-- Plugin package: `plugins/trimctx/` contains a Claude Code plugin wrapper with `/trimctx`, `/trimctx:analyze`, `/trimctx:resume`, and `/trimctx:compress` command files.
+- `trimctx init` installs `plugins/trimctx/` to `~/.claude/plugins/trimctx` by default.
+- The plugin exposes `/trimctx`, `/trimctx:analyze`, `/trimctx:resume`, and `/trimctx:compress` command files.
 - Safety boundary: `/trimctx` analyzes the latest local JSONL by modification time. It does not write back to Claude Code, does not modify the original session, and only compresses when explicitly requested.
 
 Use it from Codex:
 
-- Install the CLI and plugin with the GitHub install command above, or use `npm link` while developing from source.
-- `codex/skills/trimctx/SKILL.md` provides a Codex skill entry point for the same CLI workflow.
+- `trimctx init` installs `codex/skills/trimctx/SKILL.md` to `~/.codex/skills/trimctx` by default.
 - Run `trimctx current --source codex` to analyze the latest local Codex JSONL under `~/.codex/sessions/`.
 - This is intentionally documented as a skill/CLI integration, not a verified `/trimctx` Codex slash command.
 
@@ -184,6 +201,25 @@ npm run dev -- analyze path/to/session.jsonl
 6. **Compress** — Writes a new JSONL excluding only non-protected `remove_candidate` messages.
 
 ## Commands
+
+### `trimctx init`
+
+Install AI-client command files and skills from the npm package.
+
+```bash
+trimctx init
+trimctx init --client claude --force
+trimctx init --client codex --target project --dir .
+trimctx init --dry-run
+```
+
+| Flag | Default | Description |
+|---|---:|---|
+| `--client <client>` | `all` | `claude`, `codex`, or `all` |
+| `--target <target>` | `user` | `user` installs under the home directory; `project` installs under `--dir` or the current directory |
+| `--dir <directory>` | home/current | Override the base directory |
+| `--force` | `false` | Overwrite existing trimctx assets |
+| `--dry-run` | `false` | Print planned paths without writing files |
 
 ### `trimctx analyze <file>`
 

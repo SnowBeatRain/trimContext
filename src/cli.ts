@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { analyzeMessages, parseJsonl } from "./core/analyzer.js";
@@ -11,11 +13,27 @@ import { formatAnalysisSummary } from "./cli/format-summary.js";
 import type { AnalysisOptions } from "./core/options.js";
 
 const program = new Command();
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 program
   .name("trimctx")
   .description("Analyze and safely trim long AI conversation context.")
   .version("0.2.0");
+
+program
+  .command("init")
+  .option("--client <client>", "Client assets to install: claude, codex, or all.", "all")
+  .option("--target <target>", "Install target: user or project.", "user")
+  .option("--dir <directory>", "Project directory for --target project, or base home directory for --target user.")
+  .option("--force", "Overwrite existing installed trimctx assets.")
+  .option("--dry-run", "Print planned installation paths without writing files.")
+  .description("Install AI-client command files and skills for Claude Code and Codex.")
+  .action(async (options: InitOptions) => {
+    const result = await initClientAssets(options);
+    for (const line of result.lines) {
+      process.stdout.write(`${line}\n`);
+    }
+  });
 
 program
   .command("resume")
@@ -147,6 +165,124 @@ program.parseAsync().catch((error: unknown) => {
 });
 
 type SessionSource = "auto" | "claude" | "codex";
+type InitClient = "all" | "claude" | "codex";
+type InitTarget = "user" | "project";
+
+interface InitOptions {
+  client?: string;
+  target?: string;
+  dir?: string;
+  force?: boolean;
+  dryRun?: boolean;
+}
+
+interface InitAsset {
+  client: "claude" | "codex";
+  source: string;
+  destination: string;
+  label: string;
+}
+
+interface InitResult {
+  lines: string[];
+}
+
+async function initClientAssets(options: InitOptions): Promise<InitResult> {
+  const client = parseInitClient(options.client);
+  const target = parseInitTarget(options.target);
+  const baseDir = resolve(options.dir ?? (target === "user" ? homedir() : process.cwd()));
+  const assets = initAssetsFor(client, target, baseDir);
+  const lines = [`trimctx init: ${options.dryRun ? "planned" : "installed"} ${client} assets for ${target}`];
+
+  for (const asset of assets) {
+    await assertTemplateExists(asset.source, asset.label);
+    if (options.dryRun) {
+      lines.push(`- ${asset.label}: ${asset.destination}`);
+      continue;
+    }
+    if (await pathExists(asset.destination)) {
+      if (!options.force) {
+        throw new Error(`${asset.destination} already exists; rerun with --force to overwrite trimctx ${asset.client} assets`);
+      }
+      await replaceInstalledAsset(asset);
+    } else {
+      await mkdir(dirname(asset.destination), { recursive: true });
+      await cp(asset.source, asset.destination, { recursive: true });
+    }
+    lines.push(`- ${asset.label}: ${asset.destination}`);
+  }
+
+  lines.push("Restart the AI client, then run /trimctx in Claude Code or use the trimctx Codex skill.");
+  return { lines };
+}
+
+function initAssetsFor(client: InitClient, target: InitTarget, baseDir: string): InitAsset[] {
+  const assets: InitAsset[] = [];
+  if (client === "all" || client === "claude") {
+    assets.push({
+      client: "claude",
+      source: join(PACKAGE_ROOT, "plugins", "trimctx"),
+      destination: target === "user"
+        ? join(baseDir, ".claude", "plugins", "trimctx")
+        : join(baseDir, ".claude", "plugins", "trimctx"),
+      label: "Claude Code plugin commands"
+    });
+  }
+  if (client === "all" || client === "codex") {
+    assets.push({
+      client: "codex",
+      source: join(PACKAGE_ROOT, "codex", "skills", "trimctx"),
+      destination: target === "user"
+        ? join(baseDir, ".codex", "skills", "trimctx")
+        : join(baseDir, ".codex", "skills", "trimctx"),
+      label: "Codex skill"
+    });
+  }
+  return assets;
+}
+
+function parseInitClient(value: string | undefined): InitClient {
+  if (value === undefined || value === "all" || value === "claude" || value === "codex") {
+    return value ?? "all";
+  }
+  throw new Error("client must be one of: all, claude, codex");
+}
+
+function parseInitTarget(value: string | undefined): InitTarget {
+  if (value === undefined || value === "user" || value === "project") {
+    return value ?? "user";
+  }
+  throw new Error("target must be one of: user, project");
+}
+
+async function assertTemplateExists(path: string, label: string): Promise<void> {
+  try {
+    await access(path, fsConstants.R_OK);
+  } catch {
+    throw new Error(`${label} template is missing from the installed package: ${path}`);
+  }
+}
+
+async function replaceInstalledAsset(asset: InitAsset): Promise<void> {
+  if (asset.destination === dirname(asset.destination) || asset.destination.endsWith("..")) {
+    throw new Error(`refusing to overwrite unsafe ${asset.client} destination: ${asset.destination}`);
+  }
+  if (asset.destination.split(/[\\/]+/).at(-1) !== "trimctx") {
+    throw new Error(`refusing to overwrite non-trimctx ${asset.client} destination: ${asset.destination}`);
+  }
+  await rm(asset.destination, { recursive: true, force: true });
+  await mkdir(dirname(asset.destination), { recursive: true });
+  await cp(asset.source, asset.destination, { recursive: true });
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function findLatestSession(source: SessionSource): Promise<string> {
   const roots = sessionRoots(source);
@@ -237,6 +373,9 @@ function parseOptionalInteger(value: string | undefined, flag: string): number |
   if (!Number.isInteger(parsed)) {
     throw new Error(`${flag} must be an integer`);
   }
+  if (parsed < 0) {
+    throw new Error(`${flag} must be a non-negative integer`);
+  }
   return parsed;
 }
 
@@ -245,6 +384,9 @@ function parseOptionalNumber(value: string | undefined, flag: string): number | 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     throw new Error(`${flag} must be a number`);
+  }
+  if (parsed < 0 || parsed > 1) {
+    throw new Error(`${flag} must be between 0 and 1`);
   }
   return parsed;
 }
