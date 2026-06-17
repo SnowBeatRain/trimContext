@@ -8,3 +8,7 @@ coverage/
 .env.*
 *.test.json
 *.test.jsonl
+.claude/CLAUDE.md
+handoff.md
+next-context.md
+trimmed.jsonl
