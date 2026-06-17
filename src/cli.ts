@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { constants as fsConstants, readFileSync } from "node:fs";
-import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { analyzeMessages, parseJsonl } from "./core/analyzer.js";
 import { compressFile } from "./core/compressor.js";
-import { createReport } from "./core/reporter.js";
 import { formatHandoff, formatNextContext } from "./core/handoff.js";
 import { formatAnalysisSummary } from "./cli/format-summary.js";
+import { runHook } from "./core/hook.js";
+import {
+  findLatestSession,
+  parseSessionSource,
+  prettyHomePath,
+  analyzeFile
+} from "./core/session.js";
 import type { AnalysisOptions } from "./core/options.js";
+import type { SessionSource } from "./core/session.js";
 
 const program = new Command();
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -160,13 +166,38 @@ program
     }
   });
 
+program
+  .command("hook")
+  .option("--dry-run", "Print analysis result without modifying CLAUDE.md.")
+  .description("Run as a Claude Code Stop hook: analyze session and update CLAUDE.md context state.")
+  .action(async (options: { dryRun?: boolean }) => {
+    const result = await runHook({ dryRun: options.dryRun });
+    process.stdout.write(`${result.message}\n`);
+  });
+
+program
+  .command("install-hooks")
+  .option("--target <target>", "Install target: user or project.", "user")
+  .option("--dir <directory>", "Override the base directory.")
+  .option("--force", "Overwrite existing trimctx hook configuration.")
+  .option("--dry-run", "Print planned configuration without writing.")
+  .description("Install Claude Code Stop hook into settings.json.")
+  .action(async (options: { target?: string; dir?: string; force?: boolean; dryRun?: boolean }) => {
+    const target = parseInitTarget(options.target);
+    const baseDir = options.dir ? resolve(options.dir) : (target === "user" ? homedir() : process.cwd());
+    const settingsPath = join(baseDir, ".claude", "settings.json");
+    const lines = await installHooks(settingsPath, { force: options.force, dryRun: options.dryRun });
+    for (const line of lines) {
+      process.stdout.write(`${line}\n`);
+    }
+  });
+
 program.parseAsync().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`trimctx: ${message}\n`);
   process.exitCode = 1;
 });
 
-type SessionSource = "auto" | "claude" | "codex";
 type InitClient = "all" | "claude" | "codex";
 type InitTarget = "user" | "project";
 
@@ -212,6 +243,12 @@ async function initClientAssets(options: InitOptions): Promise<InitResult> {
       await cp(asset.source, asset.destination, { recursive: true });
     }
     lines.push(`- ${asset.label}: ${asset.destination}`);
+  }
+
+  if (client === "all" || client === "claude") {
+    const settingsPath = join(baseDir, ".claude", "settings.json");
+    const hookLines = await installHooks(settingsPath, { force: options.force, dryRun: options.dryRun });
+    lines.push(...hookLines.map(l => `- ${l}`));
   }
 
   lines.push("Restart the AI client, then run /trimctx in Claude Code or use the trimctx Codex skill.");
@@ -333,74 +370,7 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function findLatestSession(source: SessionSource): Promise<string> {
-  const roots = sessionRoots(source);
-  let latestFile = "";
-  let latestMtime = 0;
 
-  for (const root of roots) {
-    const candidate = await findLatestJsonlUnder(root);
-    if (candidate && candidate.mtimeMs > latestMtime) {
-      latestFile = candidate.file;
-      latestMtime = candidate.mtimeMs;
-    }
-  }
-
-  if (!latestFile) {
-    throw new Error(`no ${source} session files found under ${roots.map(prettyHomePath).join(" or ")}`);
-  }
-  return latestFile;
-}
-
-function sessionRoots(source: SessionSource): string[] {
-  const roots: Record<SessionSource, string[]> = {
-    auto: [join(homedir(), ".claude", "projects"), join(homedir(), ".codex", "sessions")],
-    claude: [join(homedir(), ".claude", "projects")],
-    codex: [join(homedir(), ".codex", "sessions")]
-  };
-  return roots[source];
-}
-
-async function findLatestJsonlUnder(root: string): Promise<{ file: string; mtimeMs: number } | undefined> {
-  let entries;
-  try {
-    entries = await readdir(root, { withFileTypes: true });
-  } catch {
-    return undefined;
-  }
-
-  let latest: { file: string; mtimeMs: number } | undefined;
-  for (const entry of entries) {
-    const fullPath = join(root, entry.name);
-    if (entry.isDirectory()) {
-      const nested = await findLatestJsonlUnder(fullPath);
-      if (nested && (!latest || nested.mtimeMs > latest.mtimeMs)) {
-        latest = nested;
-      }
-      continue;
-    }
-    if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
-    const fileStat = await stat(fullPath);
-    if (!latest || fileStat.mtimeMs > latest.mtimeMs) {
-      latest = { file: fullPath, mtimeMs: fileStat.mtimeMs };
-    }
-  }
-  return latest;
-}
-
-function parseSessionSource(value: string | undefined): SessionSource {
-  if (value === undefined || value === "auto" || value === "claude" || value === "codex") {
-    return value ?? "auto";
-  }
-  throw new Error("source must be one of: auto, claude, codex");
-}
-
-function prettyHomePath(file: string): string {
-  const home = homedir();
-  if (file === home) return "~";
-  if (file.startsWith(`${home}/`)) return `~/${file.slice(home.length + 1)}`;
-  return file;
-}
 
 interface CliAnalysisOptions {
   recentWindow?: string;
@@ -440,10 +410,6 @@ function parseOptionalNumber(value: string | undefined, flag: string): number | 
   return parsed;
 }
 
-async function analyzeFile(file: string, options: AnalysisOptions = {}) {
-  const input = await readFile(file, "utf8");
-  return createReport(analyzeMessages(parseJsonl(input, file), options), file);
-}
 
 async function assertDifferentFiles(leftFile: string, rightFile: string, message: string): Promise<void> {
   if (await sameFile(leftFile, rightFile)) {
@@ -461,4 +427,54 @@ async function sameFile(leftFile: string, rightFile: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function installHooks(
+  settingsPath: string,
+  options: { force?: boolean; dryRun?: boolean } = {}
+): Promise<string[]> {
+  const TRIMCTX_HOOK_COMMAND = "trimctx hook";
+  let settings: Record<string, unknown> = {};
+
+  try {
+    const raw = await readFile(settingsPath, "utf8");
+    settings = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    // 文件不存在，从空对象开始
+  }
+
+  const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
+  const stopHooks = (hooks.Stop ?? []) as Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
+
+  const hasTrimctxHook = stopHooks.some(group =>
+    (group.hooks ?? []).some(h => h.type === "command" && h.command === TRIMCTX_HOOK_COMMAND)
+  );
+
+  if (hasTrimctxHook && !options.force) {
+    return [`trimctx hooks already installed in ${settingsPath}`];
+  }
+
+  const newStopHooks = options.force
+    ? stopHooks.filter(group =>
+        !(group.hooks ?? []).some(h => h.type === "command" && h.command === TRIMCTX_HOOK_COMMAND)
+      )
+    : [...stopHooks];
+
+  newStopHooks.push({
+    hooks: [{ type: "command", command: TRIMCTX_HOOK_COMMAND }]
+  });
+
+  const newSettings = { ...settings, hooks: { ...hooks, Stop: newStopHooks } };
+  const output = `${JSON.stringify(newSettings, null, 2)}\n`;
+
+  if (options.dryRun) {
+    return [
+      `dry-run: would write Stop hook to ${settingsPath}`,
+      output.trimEnd()
+    ];
+  }
+
+  await mkdir(dirname(settingsPath), { recursive: true });
+  await writeFile(settingsPath, output, "utf8");
+  return [`installed Stop hook in ${settingsPath}`];
 }
