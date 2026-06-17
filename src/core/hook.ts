@@ -1,5 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { findLatestSession, analyzeFile } from "./session.js";
 import { formatContextState, injectContextStateSection } from "./context-state.js";
 
@@ -24,12 +24,13 @@ async function readStdinJson<T>(): Promise<T> {
   return JSON.parse(raw) as T;
 }
 
-async function findProjectClaudeMd(): Promise<string | undefined> {
-  const cwd = process.cwd();
-  const candidate = join(cwd, ".claude", "CLAUDE.md");
+function projectClaudeMdPath(): string {
+  return join(process.cwd(), ".claude", "CLAUDE.md");
+}
+
+async function readExistingClaudeMd(): Promise<string | undefined> {
   try {
-    await readFile(candidate, "utf8");
-    return candidate;
+    return await readFile(projectClaudeMdPath(), "utf8");
   } catch {
     return undefined;
   }
@@ -42,17 +43,15 @@ export async function runHook(options: { dryRun?: boolean } = {}): Promise<HookR
   const report = await analyzeFile(sessionFile);
   const pressure = report.summary.context_pressure.pressure_level;
   const rotCount = report.summary.remove_candidates + report.summary.compress_candidates;
-
-  const claudeMdPath = await findProjectClaudeMd();
+  const claudeMdPath = projectClaudeMdPath();
+  const existingContent = await readExistingClaudeMd();
 
   if (pressure === "low" && rotCount === 0) {
-    const existingPath = claudeMdPath;
-    if (existingPath) {
-      const content = await readFile(existingPath, "utf8");
-      const cleaned = injectContextStateSection(content, "");
-      if (cleaned !== content) {
+    if (existingContent) {
+      const cleaned = injectContextStateSection(existingContent, "");
+      if (cleaned !== existingContent) {
         if (!options.dryRun) {
-          await writeFile(existingPath, cleaned, "utf8");
+          await writeFile(claudeMdPath, cleaned, "utf8");
         }
         return { file: sessionFile, pressure, updated: true, message: "已清除上下文状态（压力低）" };
       }
@@ -61,20 +60,11 @@ export async function runHook(options: { dryRun?: boolean } = {}): Promise<HookR
   }
 
   const stateSection = formatContextState(report);
-
-  if (!claudeMdPath) {
-    return {
-      file: sessionFile,
-      pressure,
-      updated: false,
-      message: `未找到 .claude/CLAUDE.md，跳过注入。状态：${pressure} / ${rotCount} rot candidates`
-    };
-  }
-
-  const content = await readFile(claudeMdPath, "utf8");
+  const content = existingContent ?? "";
   const updated = injectContextStateSection(content, stateSection);
 
   if (!options.dryRun) {
+    await mkdir(dirname(claudeMdPath), { recursive: true });
     await writeFile(claudeMdPath, updated, "utf8");
   }
 
