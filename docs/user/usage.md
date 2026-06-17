@@ -164,7 +164,7 @@ If you plan to recommend trimctx to other users or validate a release candidate,
 npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
 ```
 
-The workflow is documented in `docs/phase0/phase0-plan.md`, `docs/phase0/manual-label-guide.md`, and `docs/phase0/validation-summary-template.md`.
+The workflow is documented in `docs/dev/phase0/phase0-plan.md`, `docs/dev/phase0/manual-label-guide.md`, and `docs/dev/phase0/validation-summary-template.md`.
 
 `reports/phase0/phase0-results.json` is private by default. It can include local paths plus captured `stderr` or `error` details, so publish only a sanitized summary or manually redacted excerpt.
 
@@ -255,6 +255,73 @@ trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
 
 The primary handoff includes source metadata, safety diagnostics, continuation rules, candidate review queue, warnings, and next commands. The optional `--next-context` file writes a shorter context packet for another agent or session.
 
+Example `handoff.md` output:
+
+```markdown
+# trimctx Handoff
+
+## Source
+- File: path/to/session.jsonl
+- Format: claude-code-jsonl
+- Messages: 633
+- Estimated tokens: 218385
+
+## Safety Summary
+- Remove candidates: 41
+- Compress candidates: 30
+- Protected messages: 338
+- Estimated removable tokens: 5592
+- Max rot score: 0.6428
+- Near remove threshold: 0
+
+## Continue From Here
+- Treat `remove_candidate` as the only class eligible for destructive workflows...
+- Treat `compress_candidate` as report-only review signal...
+- Keep original JSONL unchanged...
+- If remove candidates are zero, continue from the health report...
+
+## Candidate Review Queue
+- line 42, user, score 0.8500: old_message, low_reference_in_later_context
+- line 58, assistant, score 0.8200: superseded_by_later_instruction, old_message
+...
+
+## Protected High-Rot Signals
+- line 301, user, score 0.6500: contains_code_block, old_message
+
+## Warnings
+- session_compacted: session contains away_summary or compact_boundary markers
+
+## Commands
+- `trimctx analyze "path/to/session.jsonl"`
+- `trimctx report "path/to/session.jsonl" -o report.json`
+- `trimctx compress "path/to/session.jsonl" -o trimmed.jsonl`
+```
+
+Example `next-context.md` output:
+
+```markdown
+# Next Context
+
+Use this as the compact handoff for the next agent or session.
+
+## Current State
+- Source file: path/to/session.jsonl
+- Source format: claude-code-jsonl
+- Messages analyzed: 633
+- Remove candidates: 41
+- Compress candidates: 30
+
+## Operating Rules
+- Do not modify the original JSONL file.
+- Review remove candidates before applying any destructive workflow.
+- Use score diagnostics as trust signals, not as automatic tuning instructions.
+
+## Next Commands
+- `trimctx analyze "path/to/session.jsonl"`
+- `trimctx report "path/to/session.jsonl" -o report.json`
+- `trimctx handoff "path/to/session.jsonl" -o handoff.md --next-context next-context.md`
+```
+
 ### `trimctx current`
 
 Analyze the most recently modified Claude Code or Codex `.jsonl` session under local client session directories.
@@ -324,16 +391,33 @@ The package includes `codex/skills/trimctx/SKILL.md`, which provides a Codex-sup
 
 Each message can receive scores across these dimensions:
 
-| Dimension | Description |
-|---|---|
-| `superseded_score` | Later messages override or correct earlier instructions |
-| `low_reference_score` | The message is not referenced by later context |
-| `age_score` | Older messages receive more decay |
-| `redundancy_score` | The message is similar to nearby content |
-| `orphan_tool_score` | Tool calls or results are not connected to later context |
-| `low_value_score` | Metadata, acknowledgments, or low-information content |
+| Dimension | Weight | Description |
+|---|---:|---|
+| `superseded_score` | 0.30 | Later messages override or correct earlier instructions |
+| `low_reference_score` | 0.25 | The message is not referenced by later context |
+| `age_score` | 0.20 | Older messages receive more decay |
+| `redundancy_score` | 0.15 | The message is similar to nearby content (±3 messages) |
+| `orphan_tool_score` | 0.10 | Tool calls or results are not connected to later context |
+| `low_value_score` | — | Metadata, acknowledgments, or low-information content (independent path, not part of weighted sum) |
 
-The combined `rot_score` maps to decisions after protection rules are applied:
+Combined formula:
+
+```text
+base_rot_score = 0.30 × superseded + 0.25 × low_reference + 0.20 × age + 0.15 × redundancy + 0.10 × orphan_tool
+rot_score = max(base_rot_score, low_value_score) − importance_discount
+```
+
+Importance discounts (subtracted from `rot_score` to protect important content):
+
+| Protection signal | Discount |
+|---|---:|
+| Code block, error stack, git diff, test failure | −0.15 |
+| Shell command, architecture/API/config decision | −0.10 |
+| Tool result referenced later | −0.10 |
+| File path | −0.05 |
+| Natural language referencing tool result | −0.05 |
+
+Decision mapping:
 
 ```text
 protected => keep_protected

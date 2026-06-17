@@ -211,8 +211,8 @@ Phase 0 至少需要 5 个真实 Claude Code 长会话私有样本：
 ## 11. 文档关系
 
 - 本文档定义“要做什么”。
-- `docs/usage.md` 说明“怎么使用”。
-- `docs/roadmap.md` 说明“按什么阶段推进”。
-- `docs/execution-plan.md` 说明“怎么落地执行”。
-- `docs/status-and-next-steps.md` 记录“当前进度和下一步”。
+- `docs/user/usage.md` 说明”怎么使用”。
+- `docs/dev/roadmap.md` 说明”按什么阶段推进”。
+- `docs/dev/execution-plan.md` 说明”怎么落地执行”。
+- `docs/dev/status-and-next-steps.md` 记录”当前进度和下一步”。
 

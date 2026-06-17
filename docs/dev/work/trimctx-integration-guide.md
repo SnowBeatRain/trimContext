@@ -2,6 +2,9 @@
 
 > 基于真实 JSONL 样本分析（353 行，570 万 input tokens）撰写，针对你的实际数据结构。
 
+> **注意**：本文档中的**代码片段为历史参考**，不代表当前实现。实际 parser 位于 `src/adapters/claude-code-jsonl.ts`。
+> 本文档仍有价值的部分是：JSONL 格式边界情况（isMeta、streaming dedup、tool_result 内容变体、away_summary），这些在其他文档中未重复记录。
+
 ---
 
 ## 一、先搞清楚：你的 JSONL 长什么样

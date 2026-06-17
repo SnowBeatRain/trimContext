@@ -21,7 +21,7 @@ TBD - created by archiving change evaluate-work-docs-integration. Update Purpose
 #### Scenario: Compare proposed capabilities with current source
 
 - **WHEN** 系统完成 `docs/work` 材料盘点
-- **THEN** 系统检查当前 `src/`、`docs/requirements.md`、`docs/roadmap.md` 和 `docs/status-and-next-steps.md`
+- **THEN** 系统检查当前 `src/`、`docs/dev/requirements.md`、`docs/dev/roadmap.md` 和 `docs/dev/status-and-next-steps.md`
 - **AND** 系统把能力标记为“已覆盖”“当前缺失但有价值”“当前缺失但暂缓”“不建议集成”
 - **AND** 系统说明每个判断的依据
 

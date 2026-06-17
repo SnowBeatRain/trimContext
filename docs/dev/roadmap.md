@@ -6,10 +6,10 @@ trimctx is a local context-trimming tool for long AI coding sessions. It analyze
 
 The open-source goal is to make trimctx useful to other developers who run long Claude Code, Codex, or similar agent sessions and need a trustworthy way to inspect and reduce context bloat.
 
-For product requirements and boundaries, see `docs/requirements.md`.
-For CLI usage, see `docs/usage.md`.
-For the task-level execution plan, dataset requirements, validation criteria, and current task breakdown, see `docs/execution-plan.md`.
-For the team-reviewed iteration priorities and quality gates, see `docs/iteration-plan.md`.
+For product requirements and boundaries, see `docs/dev/requirements.md`.
+For CLI usage, see `docs/user/usage.md`.
+For the task-level execution plan, dataset requirements, validation criteria, and current task breakdown, see `docs/dev/execution-plan.md`.
+For the team-reviewed iteration priorities and quality gates, see `docs/dev/iteration-plan.md`.
 
 ## Non-goals
 
@@ -161,7 +161,7 @@ next:
 
 ## v0.3: Claude Code Integration
 
-Current status: deferred. Per `docs/iteration-plan.md`, do not start installation, hooks, status line, MCP, Web UI, or LLM summarization work until v0.2 validation and trust signals are stable.
+Current status: deferred. Per `docs/dev/iteration-plan.md`, do not start installation, hooks, status line, MCP, Web UI, or LLM summarization work until v0.2 validation and trust signals are stable.
 
 ### Goal
 

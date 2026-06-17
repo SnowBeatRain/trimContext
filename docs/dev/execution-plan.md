@@ -1,6 +1,8 @@
 # trimctx Execution Plan
 
-本文档是 trimctx 的可执行项目任务书。`docs/iteration-plan.md` 记录团队评审后的当前迭代计划，`docs/requirements.md` 说明项目需求，`docs/usage.md` 说明使用方式，`docs/roadmap.md` 说明版本路线；本文档说明每个阶段怎么落地、怎么验收、需要哪些数据和任务。
+本文档是 trimctx 的可执行项目任务书。本文档定义**执行任务、数据集要求和逐阶段验收标准**。
+团队评审后的迭代优先级、质量门和冻结项见 [`docs/dev/iteration-plan.md`](iteration-plan.md)。
+项目需求和边界见 `docs/dev/requirements.md`，使用说明见 `docs/user/usage.md`，版本路线见 `docs/dev/roadmap.md`。
 
 ## 0. 一句话定义
 

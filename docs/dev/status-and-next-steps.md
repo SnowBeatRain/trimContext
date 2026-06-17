@@ -3,30 +3,36 @@
 ## 文档分工
 
 - `README.md`：开源入口和快速开始。
-- `docs/requirements.md`：项目需求、边界和验收标准。
-- `docs/usage.md`：用户使用说明。
-- `docs/roadmap.md`：阶段路线和开源门槛。
-- `docs/execution-plan.md`：执行任务、数据集和 Phase 0 验收。
-- `docs/iteration-plan.md`：团队评审后的当前迭代计划、优先级和质量门。
+- `docs/dev/requirements.md`：项目需求、边界和验收标准。
+- `docs/user/usage.md`：用户使用说明。
+- `docs/dev/roadmap.md`：阶段路线和开源门槛。
+- `docs/dev/execution-plan.md`：执行任务、数据集和 Phase 0 验收。
+- `docs/dev/iteration-plan.md`：团队评审后的当前迭代计划、优先级和质量门。
 
 ## 当前已经完成
 
-v0.1 Phase 0 核心 CLI 已经实现：
+### v0.1 核心 CLI
 
-- `trimctx analyze <file>`
-- `trimctx analyze <file> --json`
+- `trimctx analyze <file>` / `--json`
 - `trimctx report <file> -o <report.json>`
 - `trimctx compress <file> -o <output.jsonl>`
-- `trimctx resume`（扫描 `~/.claude/projects/` 中最近修改的 Claude Code `.jsonl`）
-- Claude Code JSONL parser
-- OpenAI JSONL parser
-- Codex/Hermes rollout JSONL parser
-- ApproxTokenizer
-- safety rules
-- scorer
-- report JSON
-- compressor
-- 必需测试
+- Claude Code / OpenAI / Codex-Hermes 三种 JSONL parser（自动检测格式）
+- 近似 tokenizer（零外部依赖）
+- 安全规则引擎（13 条 hard-protect 规则）
+- 多维度 rot 评分器（6 维评分 + 重要性折扣）
+- JSON report schema（含 score_diagnostics）
+- 安全压缩器（原文件 hash 不变）
+
+### v0.2 CLI 可用性与集成
+
+- `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
+- `trimctx current` — 自动发现最新会话，支持 `--source auto|claude|codex`
+- `trimctx resume` — 快捷分析最新 Claude Code 会话
+- `trimctx handoff` — 生成确定性 Markdown 交接文档，支持 `--next-context`
+- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress`
+- Codex skill（`codex/skills/trimctx/SKILL.md`）
+- GitHub 安装脚本（`install.sh` / `install.ps1`）
+- `report` 中的 `score_diagnostics`（max/p90/near_threshold/protected_high_rot/decision_ranges）
 
 验证命令：
 
@@ -39,6 +45,18 @@ npm run build
 
 - `npm test` 通过
 - `npm run build` 通过
+
+### Phase 0 自动验证进度
+
+`reports/phase0/validation-summary.md` 已记录 5 个 Claude Code 私有样本的聚合验证结果：
+
+- 总 messages：5,681
+- 总 tokens：1,426,860
+- 总 remove candidates：351
+- 总 compress candidates：245
+- 所有样本压缩前后原始文件 hash 均未变化
+
+人工评审尚未完成（precision、protected recall、critical false deletion count 待确认）。真实私有 OpenAI 和 Codex/Hermes 样本验证仍待补充。
 
 ## 已修复的问题
 
@@ -181,7 +199,7 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 
 ### Step 1：完成 Phase 0 人工评审指标
 
-按 `docs/manual-review-rubric.md` 对私有验证结果进行人工评审，并只把聚合指标写入：
+按 `docs/dev/manual-review-rubric.md` 对私有验证结果进行人工评审，并只把聚合指标写入：
 
 ```text
 reports/phase0/validation-summary.md

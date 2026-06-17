@@ -31,12 +31,12 @@ Proposal 阶段只做探索、范围确认、proposal 和 specs。不要写实�
 按需读取：
 
 - `AGENTS.md`
-- `docs/iteration-plan.md`
-- `docs/requirements.md`
-- `docs/usage.md`
-- `docs/roadmap.md`
-- `docs/execution-plan.md`
-- `docs/status-and-next-steps.md`
+- `docs/dev/iteration-plan.md`
+- `docs/dev/requirements.md`
+- `docs/user/usage.md`
+- `docs/dev/roadmap.md`
+- `docs/dev/execution-plan.md`
+- `docs/dev/status-and-next-steps.md`
 - `spec-docs/product-rule.md`（如存在）
 
 确认现有 OpenSpec 状态：

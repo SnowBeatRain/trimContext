@@ -326,9 +326,9 @@ sha256sum session.jsonl
 
 ## 文档
 
-- [使用说明](docs/usage_zh.md) — 详细命令示例、输出和安全验证
-- [路线图](docs/roadmap.md) — 计划里程碑和功能
-- [需求说明](docs/requirements.md) — 项目范围和验收标准
+- [使用说明](docs/user/usage_zh.md) — 详细命令示例、输出和安全验证
+- [路线图](docs/dev/roadmap.md) — 计划里程碑和功能
+- [需求说明](docs/dev/requirements.md) — 项目范围和验收标准
 
 ## Phase 0 验证
 
@@ -338,7 +338,7 @@ sha256sum session.jsonl
 npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
 ```
 
-详见 `docs/phase0/phase0-plan.md`、`docs/phase0/manual-label-guide.md` 和 `docs/phase0/validation-summary-template.md`，按安全优先流程完成验证。
+详见 `docs/dev/phase0/phase0-plan.md`、`docs/dev/phase0/manual-label-guide.md` 和 `docs/dev/phase0/validation-summary-template.md`，按安全优先流程完成验证。
 
 ## 开发
 

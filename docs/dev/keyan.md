@@ -1,5 +1,23 @@
 # TrimContext 项目可行性研究报告（最终版）
 
+> **⚠️ 历史文档 — 仅供参考**
+>
+> 本文档撰写于项目启动前（2026-06-05），用于评估技术可行性。其中描述的技术选型、参数和时间线**已被实际实现替代**，不应作为当前技术参考：
+>
+> | 可行性研究中的描述 | 实际实现 |
+> |---|---|
+> | 测试框架 Jest | vitest |
+> | token 计数 @dqbd/tiktoken | 本地近似 tokenizer（零外部依赖） |
+> | 二进制打包 @yao-pkg/pkg | 不使用，纯 npm 分发 |
+> | Python SDK（pip install） | 不使用 Python |
+> | 4 维评分（权重 0.35/0.25/0.30/0.10） | 6 维评分（权重 0.3/0.25/0.2/0.15/0.1）+ 重要性折扣 |
+> | rot_score > 0.7 标记为腐化 | remove_threshold=0.80, compress_threshold=0.60 |
+> | 3 天 Phase 0 + 2 周 MVP | Phase 0 多样本验证仍在进行中 |
+>
+> 当前技术实现请参考：`docs/dev/requirements.md`、`docs/user/usage_zh.md`、`docs/dev/roadmap.md`。
+
+---
+
 > **版本**：1.0  
 > **日期**：2026-06-05  
 > **状态**：建议立即启动 MVP

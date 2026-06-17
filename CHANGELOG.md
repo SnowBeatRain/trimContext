@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-06-12
+
+### Added
+
+- `trimctx init` 命令，从 npm 包安装 Claude Code 插件和 Codex skill 到用户目录。
+- `trimctx current` 命令，自动发现并分析最新 Claude Code 或 Codex 会话，支持 `--source auto|claude|codex`。
+- `trimctx resume` 命令，快捷分析最新 Claude Code 会话（兼容旧入口）。
+- `trimctx handoff` 命令，生成确定性 Markdown 交接文档和可选的 `--next-context` 上下文包。
+- Claude Code 插件（`plugins/trimctx/`），提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令。
+- Codex skill（`codex/skills/trimctx/SKILL.md`），通过 skill/CLI 工作流支持 Codex 会话分析。
+- GitHub 安装脚本（`install.sh` / `install.ps1`），支持一条命令安装 CLI 和 AI 客户端资产。
+- `report` 中的 `summary.score_diagnostics` 字段，包含 `max_rot_score`、`p90_rot_score`、`near_remove_threshold_count`、`protected_high_rot_count` 和 `decision_score_ranges`。
+- CLI 版本号从 `package.json` 元数据读取，不再硬编码。
+
+### Fixed
+
+- 压缩时防止输出路径覆盖输入文件（inode 级别检测）。
+- OpenAI 格式压缩保留消息数组索引，避免错位。
+- Codex/Hermes 格式压缩正确保护 tool 交互记录，保留非消息行。
+- Codex parser 对 `function_call` 和 `custom_tool_call` 的 tool 交互设置保护标记。
+
 ## [0.2.0] - 2026-06-10
 
 ### Added

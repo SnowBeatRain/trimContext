@@ -9,7 +9,7 @@ trimctx is designed to **never delete by mistake**. The original conversation fi
 If you discover a security vulnerability, please report it privately:
 
 1. **Do not** open a public GitHub issue
-2. Email the maintainer with details of the vulnerability
+2. 通过 [GitHub Security Advisories](https://github.com/SnowBeatRain/trimContext/security/advisories/new) 提交漏洞报告，或在 [GitHub Issues](https://github.com/SnowBeatRain/trimContext/issues/new) 中标记为安全问题（不要包含漏洞细节）
 3. Include steps to reproduce if possible
 
 ## What Counts as a Security Issue

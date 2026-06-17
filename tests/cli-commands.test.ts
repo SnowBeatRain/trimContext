@@ -192,7 +192,7 @@ describe("CLI commands", () => {
 
     const { stdout } = await execFileAsync("node", ["--import", "tsx", "src/cli.ts", "resume", "--json"], {
       cwd: process.cwd(),
-      env: { ...process.env, HOME: home }
+      env: { ...process.env, HOME: home, USERPROFILE: home }
     });
 
     const report = JSON.parse(stdout) as AnalysisReport;
@@ -388,10 +388,14 @@ async function runCli(
   args: string[],
   env: NodeJS.ProcessEnv = {}
 ): Promise<{ code: number; stdout: string; stderr: string }> {
+  // Windows 上 homedir() 读 USERPROFILE 而非 HOME，需要同步设置
+  const effectiveEnv = env.HOME
+    ? { ...process.env, ...env, USERPROFILE: env.HOME }
+    : { ...process.env, ...env };
   try {
     const { stdout, stderr } = await execFileAsync("node", ["--import", "tsx", "src/cli.ts", ...args], {
       cwd: process.cwd(),
-      env: { ...process.env, ...env }
+      env: effectiveEnv
     });
     return { code: 0, stdout, stderr };
   } catch (error) {

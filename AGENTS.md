@@ -14,12 +14,12 @@ trimctx 是一个本地 AI 长对话上下文精简工具。目标是读取 Clau
 
 先阅读：
 
-- `docs/iteration-plan.md`
-- `docs/requirements.md`
-- `docs/usage.md`
-- `docs/roadmap.md`
-- `docs/execution-plan.md`
-- `docs/status-and-next-steps.md`
+- `docs/dev/iteration-plan.md`
+- `docs/dev/requirements.md`
+- `docs/user/usage.md`
+- `docs/dev/roadmap.md`
+- `docs/dev/execution-plan.md`
+- `docs/dev/status-and-next-steps.md`
 
 当前主线不是做 Web UI、MCP 或安装器，而是先完成 v0.2 CLI 可用性和 Phase 0 多样本验证：
 
@@ -55,9 +55,24 @@ npm run build
 CLI 验证：
 
 ```bash
+# 核心分析命令
 npx tsx src/cli.ts analyze <file>
 npx tsx src/cli.ts report <file> -o report.json
 npx tsx src/cli.ts compress <file> -o output.jsonl
+
+# 会话发现命令
+npx tsx src/cli.ts current                    # 自动发现最新 Claude Code 或 Codex 会话
+npx tsx src/cli.ts current --source claude    # 只扫描 Claude Code
+npx tsx src/cli.ts current --source codex     # 只扫描 Codex
+npx tsx src/cli.ts resume                     # 快捷分析最新 Claude Code 会话
+
+# 交接文档命令
+npx tsx src/cli.ts handoff <file> -o handoff.md --next-context next-context.md
+
+# AI 客户端资产安装
+npx tsx src/cli.ts init                       # 安装 Claude Code 插件 + Codex skill
+npx tsx src/cli.ts init --client claude       # 只安装 Claude Code
+npx tsx src/cli.ts init --dry-run             # 预览安装路径
 ```
 
 真实样本路径：

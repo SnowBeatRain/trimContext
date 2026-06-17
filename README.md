@@ -326,9 +326,9 @@ sha256sum session.jsonl
 
 ## Documentation
 
-- [Usage Guide](docs/usage.md) — detailed commands, outputs, and safety verification
-- [Roadmap](docs/roadmap.md) — planned milestones and features
-- [Requirements](docs/requirements.md) — project scope and acceptance criteria
+- [Usage Guide](docs/user/usage.md) — detailed commands, outputs, and safety verification
+- [Roadmap](docs/dev/roadmap.md) — planned milestones and features
+- [Requirements](docs/dev/requirements.md) — project scope and acceptance criteria
 
 ## Phase 0 validation
 
@@ -338,7 +338,7 @@ Before recommending trimctx to other users, validate it on a private multi-sampl
 npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
 ```
 
-See `docs/phase0/phase0-plan.md`, `docs/phase0/manual-label-guide.md`, and `docs/phase0/validation-summary-template.md` for the safety-first validation process.
+See `docs/dev/phase0/phase0-plan.md`, `docs/dev/phase0/manual-label-guide.md`, and `docs/dev/phase0/validation-summary-template.md` for the safety-first validation process.
 
 ## Development
 

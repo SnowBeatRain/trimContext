@@ -6,8 +6,10 @@ const execFileAsync = promisify(execFile);
 
 describe("package contents", () => {
   test("includes Claude plugin and Codex skill integration files", async () => {
-    const { stdout } = await execFileAsync("npm", ["pack", "--dry-run", "--json"], {
-      cwd: process.cwd()
+    const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+    const { stdout } = await execFileAsync(npmBin, ["pack", "--dry-run", "--json"], {
+      cwd: process.cwd(),
+      shell: process.platform === "win32"
     });
     const [pack] = JSON.parse(stdout) as Array<{ files: Array<{ path: string }> }>;
     const files = pack.files.map((file) => file.path);

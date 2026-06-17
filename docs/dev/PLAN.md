@@ -1,5 +1,9 @@
 # trimctx 最终目标方案
 
+> **文档定位**：本文档是产品愿景文档，定义用户体验目标、产品分层和安全原则。
+> 详细版本路线、阶段验收标准和 Non-goals 见 [`docs/dev/roadmap.md`](roadmap.md)。
+> v0.3/v0.4 中的具体命令（hook/watch/status/install codex/install mcp）均为规划中，待 Phase 0 验证完成后确认。
+
 ## 一句话定位
 
 trimctx 是一个本地 AI 长对话上下文精简工具：安装一次，在 AI 里一条命令分析当前会话，识别过时、重复、低价值、未引用内容，并生成安全压缩副本。
@@ -63,10 +67,10 @@ npx trimctx@latest install claude-code
 
 ## 当前版本路线
 
-项目需求和边界见：`docs/requirements.md`。
-使用说明见：`docs/usage.md`。
-详细阶段成果、验收标准和开源发布门槛见：`docs/roadmap.md`。
-具体执行任务、数据集要求、报告格式和 Phase 0 验收见：`docs/execution-plan.md`。
+项目需求和边界见：`docs/dev/requirements.md`。
+使用说明见：`docs/user/usage.md`。
+详细阶段成果、验收标准和开源发布门槛见：`docs/dev/roadmap.md`。
+具体执行任务、数据集要求、报告格式和 Phase 0 验收见：`docs/dev/execution-plan.md`。
 
 ### v0.1：核心可用
 

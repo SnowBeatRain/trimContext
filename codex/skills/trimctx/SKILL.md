@@ -71,6 +71,10 @@ npm link
   ```bash
   trimctx compress <file.jsonl> -o trimmed.jsonl
   ```
+- Generate handoff artifacts for continuing work in a later session:
+  ```bash
+  trimctx handoff <file.jsonl> -o handoff.md --next-context next-context.md
+  ```
 
 ## Safety Rules
 

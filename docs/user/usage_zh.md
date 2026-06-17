@@ -164,7 +164,7 @@ sha256sum session.jsonl
 npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
 ```
 
-验证流程见 `docs/phase0/phase0-plan.md`、`docs/phase0/manual-label-guide.md` 和 `docs/phase0/validation-summary-template.md`。
+验证流程见 `docs/dev/phase0/phase0-plan.md`、`docs/dev/phase0/manual-label-guide.md` 和 `docs/dev/phase0/validation-summary-template.md`。
 
 `reports/phase0/phase0-results.json` 默认视为私有产物。它可能包含本机路径以及捕获到的 `stderr` 或 `error` 细节；对外只发布脱敏摘要或人工删改后的片段。
 
@@ -255,6 +255,73 @@ trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
 
 主交接文档包含输入元信息、安全诊断、继续执行规则、候选审查队列、警告和下一步命令。可选的 `--next-context` 会写出更短的上下文包，供另一个 Agent 或会话使用。
 
+`handoff.md` 输出结构示例：
+
+```markdown
+# trimctx Handoff
+
+## Source
+- File: path/to/session.jsonl
+- Format: claude-code-jsonl
+- Messages: 633
+- Estimated tokens: 218385
+
+## Safety Summary
+- Remove candidates: 41
+- Compress candidates: 30
+- Protected messages: 338
+- Estimated removable tokens: 5592
+- Max rot score: 0.6428
+- Near remove threshold: 0
+
+## Continue From Here
+- Treat `remove_candidate` as the only class eligible for destructive workflows...
+- Treat `compress_candidate` as report-only review signal...
+- Keep original JSONL unchanged...
+- If remove candidates are zero, continue from the health report...
+
+## Candidate Review Queue
+- line 42, user, score 0.8500: old_message, low_reference_in_later_context
+- line 58, assistant, score 0.8200: superseded_by_later_instruction, old_message
+...
+
+## Protected High-Rot Signals
+- line 301, user, score 0.6500: contains_code_block, old_message
+
+## Warnings
+- session_compacted: session contains away_summary or compact_boundary markers
+
+## Commands
+- `trimctx analyze "path/to/session.jsonl"`
+- `trimctx report "path/to/session.jsonl" -o report.json`
+- `trimctx compress "path/to/session.jsonl" -o trimmed.jsonl`
+```
+
+`next-context.md` 输出结构示例：
+
+```markdown
+# Next Context
+
+Use this as the compact handoff for the next agent or session.
+
+## Current State
+- Source file: path/to/session.jsonl
+- Source format: claude-code-jsonl
+- Messages analyzed: 633
+- Remove candidates: 41
+- Compress candidates: 30
+
+## Operating Rules
+- Do not modify the original JSONL file.
+- Review remove candidates before applying any destructive workflow.
+- Use score diagnostics as trust signals, not as automatic tuning instructions.
+
+## Next Commands
+- `trimctx analyze "path/to/session.jsonl"`
+- `trimctx report "path/to/session.jsonl" -o report.json`
+- `trimctx handoff "path/to/session.jsonl" -o handoff.md --next-context next-context.md`
+```
+
 ### `trimctx current`
 
 分析本地客户端会话目录中最近修改的 Claude Code 或 Codex `.jsonl` 会话。
@@ -324,16 +391,33 @@ npm 包还包含 `plugins/trimctx/`，这是同一套命令文件的 Claude Code
 
 每条消息可能在以下维度上获得评分：
 
-| 维度 | 说明 |
-|---|---|
-| `superseded_score` | 后续消息覆盖或纠正了早期指令 |
-| `low_reference_score` | 后续上下文没有引用该消息 |
-| `age_score` | 越旧的消息衰减越高 |
-| `redundancy_score` | 与相邻内容相似 |
-| `orphan_tool_score` | 工具调用或结果与后续上下文无关联 |
-| `low_value_score` | 元信息、确认回复或低信息量内容 |
+| 维度 | 权重 | 说明 |
+|---|---:|---|
+| `superseded_score` | 0.30 | 后续消息覆盖或纠正了早期指令 |
+| `low_reference_score` | 0.25 | 后续上下文没有引用该消息 |
+| `age_score` | 0.20 | 越旧的消息衰减越高 |
+| `redundancy_score` | 0.15 | 与相邻内容（±3 条）相似 |
+| `orphan_tool_score` | 0.10 | 工具调用或结果与后续上下文无关联 |
+| `low_value_score` | — | 元信息、确认回复或低信息量内容（独立路径，不参与加权） |
 
-在保护规则之后，综合 `rot_score` 映射为决策：
+综合公式：
+
+```text
+base_rot_score = 0.30 × superseded + 0.25 × low_reference + 0.20 × age + 0.15 × redundancy + 0.10 × orphan_tool
+rot_score = max(base_rot_score, low_value_score) − importance_discount
+```
+
+重要性折扣（从 `rot_score` 中扣减，使重要内容更难被删除）：
+
+| 保护信号 | 折扣值 |
+|---|---:|
+| 代码块、错误栈、git diff、测试失败 | −0.15 |
+| Shell 命令、架构/API/配置决策 | −0.10 |
+| 被后续引用的工具结果 | −0.10 |
+| 文件路径 | −0.05 |
+| 引用工具结果的自然语言 | −0.05 |
+
+决策映射：
 
 ```text
 protected => keep_protected

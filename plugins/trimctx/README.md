@@ -9,6 +9,12 @@ This plugin adds Claude Code slash commands that call the local `trimctx` CLI.
 - `/trimctx:resume` — analyze the most recent Claude Code session.
 - `/trimctx:compress` — write a safe compressed copy of the most recent session to `trimmed.jsonl`.
 
+For handoff artifacts (not a slash command, use via CLI):
+
+```bash
+trimctx handoff <file.jsonl> -o handoff.md --next-context next-context.md
+```
+
 ## Requirements
 
 Node.js 20+ is required.
