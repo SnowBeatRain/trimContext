@@ -84,7 +84,7 @@ trimctx init
 trimctx analyze path/to/session.jsonl
 ```
 
-`trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。写入前可先用 `trimctx init --dry-run` 查看路径。
+`trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。省略 `--target` 时会询问安装到用户全局位置还是当前项目；写入前可先用 `trimctx init --dry-run` 查看路径。
 
 ## 快速开始
 
@@ -181,7 +181,7 @@ trimctx init --client codex --target project --dir .
 trimctx init --dry-run
 ```
 
-默认情况下，Claude Code 资产写入 `~/.claude/plugins/trimctx`，Codex skill 写入 `~/.codex/skills/trimctx`。已有资产不会被覆盖，除非传入 `--force`。
+默认情况下，`trimctx init` 会提示选择用户全局或项目级安装。传入 `--target user` 时，Claude Code 资产写入 `~/.claude/plugins/trimctx`，Codex skill 写入 `~/.codex/skills/trimctx`。已有资产不会被覆盖，除非传入 `--force`。
 
 ### `trimctx analyze <file>`
 

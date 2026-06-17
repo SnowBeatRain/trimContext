@@ -23,13 +23,42 @@ describe("CLI commands", () => {
   test("init installs Claude plugin and Codex skill into a user base directory", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-home-"));
 
-    const result = await runCli(["init", "--dir", home]);
+    const result = await runCli(["init", "--target", "user", "--dir", home]);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("installed all assets for user");
     expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
     expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx", "compress.md"))).toBe(true);
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
+  });
+
+  test("init prompts for user/global install target when target is omitted", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-prompt-home-"));
+
+    const result = await runCliWithInput(["init", "--dir", home], "1\n");
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Where should trimctx install AI-client assets?");
+    expect(result.stdout).toContain("installed all assets for user");
+    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
+    expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
+  });
+
+  test("init prompts for project install target when target is omitted", async () => {
+    const project = await mkdtemp(join(tmpdir(), "trimctx-init-prompt-project-"));
+
+    const result = await runCliWithInput(["init", "--client", "claude", "--dir", project], "2\n");
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("installed claude assets for project");
+    expect(await fileExists(join(project, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
+  });
+
+  test("init requires explicit target in non-interactive mode", async () => {
+    const result = await runCli(["init"]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("target is required in non-interactive mode");
   });
 
   test("init installs project-scoped assets without touching HOME", async () => {
@@ -47,10 +76,10 @@ describe("CLI commands", () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-conflict-"));
     const staleFile = join(home, ".codex", "skills", "trimctx", "stale.md");
 
-    const first = await runCli(["init", "--client", "codex", "--dir", home]);
+    const first = await runCli(["init", "--client", "codex", "--target", "user", "--dir", home]);
     await writeFile(staleFile, "old command", "utf8");
-    const second = await runCli(["init", "--client", "codex", "--dir", home]);
-    const forced = await runCli(["init", "--client", "codex", "--dir", home, "--force"]);
+    const second = await runCli(["init", "--client", "codex", "--target", "user", "--dir", home]);
+    const forced = await runCli(["init", "--client", "codex", "--target", "user", "--dir", home, "--force"]);
 
     expect(first.code).toBe(0);
     expect(second.code).not.toBe(0);
@@ -62,7 +91,7 @@ describe("CLI commands", () => {
   test("init dry-run prints paths without writing files", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-dry-run-"));
 
-    const result = await runCli(["init", "--client", "codex", "--dir", home, "--dry-run"]);
+    const result = await runCli(["init", "--client", "codex", "--target", "user", "--dir", home, "--dry-run"]);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("planned codex assets for user");
@@ -71,7 +100,7 @@ describe("CLI commands", () => {
   });
 
   test("init rejects unknown clients and targets", async () => {
-    const badClient = await runCli(["init", "--client", "vim"]);
+    const badClient = await runCli(["init", "--client", "vim", "--target", "user"]);
     const badTarget = await runCli(["init", "--target", "global"]);
 
     expect(badClient.code).not.toBe(0);
@@ -363,6 +392,41 @@ async function runCli(
     const { stdout, stderr } = await execFileAsync("node", ["--import", "tsx", "src/cli.ts", ...args], {
       cwd: process.cwd(),
       env: { ...process.env, ...env }
+    });
+    return { code: 0, stdout, stderr };
+  } catch (error) {
+    const result = error as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: result.code ?? 1,
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? ""
+    };
+  }
+}
+
+async function runCliWithInput(
+  args: string[],
+  input: string,
+  env: NodeJS.ProcessEnv = {}
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const script = [
+    "import { spawn } from 'node:child_process';",
+    "import { PassThrough } from 'node:stream';",
+    "const child = spawn(process.execPath, ['--import', 'tsx', 'src/cli.ts', ...process.argv.slice(1)], { stdio: ['pipe', 'pipe', 'pipe'] });",
+    "const stdout = new PassThrough();",
+    "stdout.isTTY = true;",
+    "stdout.pipe(process.stdout);",
+    "child.stdout.pipe(stdout);",
+    "child.stderr.pipe(process.stderr);",
+    "child.stdin.isTTY = true;",
+    `child.stdin.end(${JSON.stringify(input)});`,
+    "child.on('exit', code => process.exit(code ?? 1));"
+  ].join("\n");
+
+  try {
+    const { stdout, stderr } = await execFileAsync("node", ["--input-type=module", "-e", script, ...args], {
+      cwd: process.cwd(),
+      env: { ...process.env, TRIMCTX_FORCE_INTERACTIVE: "1", ...env }
     });
     return { code: 0, stdout, stderr };
   } catch (error) {

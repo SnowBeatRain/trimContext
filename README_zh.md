@@ -55,7 +55,7 @@ npm install -g trimctx
 trimctx init
 ```
 
-`trimctx init` 会把 Claude Code slash commands 安装到 `~/.claude/plugins/trimctx`，把 Codex skill 安装到 `~/.codex/skills/trimctx`。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
+`trimctx init` 会询问安装到当前用户全局位置，还是安装到当前项目。用户全局安装会把 Claude Code slash commands 写入 `~/.claude/plugins/trimctx`，把 Codex skill 写入 `~/.codex/skills/trimctx`。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
 
 也可以继续使用 GitHub 一条命令安装：
 
@@ -119,6 +119,7 @@ trimctx --help
 ```bash
 npm install -g trimctx
 trimctx init --client all
+trimctx init --target user --client all
 trimctx --help
 ```
 
@@ -157,21 +158,21 @@ trimctx resume
 安装 AI 客户端命令文件：
 
 ```bash
-trimctx init                 # 安装 Claude + Codex 用户级资产
-trimctx init --client claude # 只安装 Claude Code commands
-trimctx init --client codex  # 只安装 Codex skill
+trimctx init                 # 交互选择用户全局或项目级安装
+trimctx init --target user --client claude    # 只为当前用户安装 Claude Code commands
+trimctx init --target user --client codex     # 只为当前用户安装 Codex skill
 trimctx init --target project --dir .
 ```
 
 在 Claude Code 中使用：
 
-- `trimctx init` 默认把 `plugins/trimctx/` 安装到 `~/.claude/plugins/trimctx`。
+- `trimctx init` 会提示选择用户全局或项目级安装；`--target user` 会把 `plugins/trimctx/` 安装到 `~/.claude/plugins/trimctx`。
 - 插件提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令文件。
 - 安全边界：`/trimctx` 按文件修改时间分析最新本地 JSONL；不会写回 Claude Code，不会修改原始会话，只在用户明确触发时压缩。
 
 在 Codex 中使用：
 
-- `trimctx init` 默认把 `codex/skills/trimctx/SKILL.md` 安装到 `~/.codex/skills/trimctx`。
+- `trimctx init` 会提示选择用户全局或项目级安装；`--target user` 会把 `codex/skills/trimctx/SKILL.md` 安装到 `~/.codex/skills/trimctx`。
 - 运行 `trimctx current --source codex` 可分析 `~/.codex/sessions/` 下最新本地 Codex JSONL。
 - 这里明确是 skill/CLI 集成，不宣传为已验证的 Codex `/trimctx` slash command。
 
@@ -216,7 +217,7 @@ trimctx init --dry-run
 | 参数 | 默认值 | 说明 |
 |---|---:|---|
 | `--client <client>` | `all` | `claude`、`codex` 或 `all` |
-| `--target <target>` | `user` | `user` 安装到 home 目录下；`project` 安装到 `--dir` 或当前目录下 |
+| `--target <target>` | 提示选择 | `user` 安装到 home 目录下；`project` 安装到 `--dir` 或当前目录下 |
 | `--dir <directory>` | home/当前目录 | 覆盖基础目录 |
 | `--force` | `false` | 覆盖已有 trimctx 资产 |
 | `--dry-run` | `false` | 只打印计划路径，不写文件 |

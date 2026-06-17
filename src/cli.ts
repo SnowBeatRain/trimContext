@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { constants as fsConstants, readFileSync } from "node:fs";
 import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -24,7 +25,7 @@ program
 program
   .command("init")
   .option("--client <client>", "Client assets to install: claude, codex, or all.", "all")
-  .option("--target <target>", "Install target: user or project.", "user")
+  .option("--target <target>", "Install target: user or project. Prompts when omitted.")
   .option("--dir <directory>", "Project directory for --target project, or base home directory for --target user.")
   .option("--force", "Overwrite existing installed trimctx assets.")
   .option("--dry-run", "Print planned installation paths without writing files.")
@@ -190,7 +191,7 @@ interface InitResult {
 
 async function initClientAssets(options: InitOptions): Promise<InitResult> {
   const client = parseInitClient(options.client);
-  const target = parseInitTarget(options.target);
+  const target = await resolveInitTarget(options.target);
   const baseDir = resolve(options.dir ?? (target === "user" ? homedir() : process.cwd()));
   const assets = initAssetsFor(client, target, baseDir);
   const lines = [`trimctx init: ${options.dryRun ? "planned" : "installed"} ${client} assets for ${target}`];
@@ -250,10 +251,44 @@ function parseInitClient(value: string | undefined): InitClient {
 }
 
 function parseInitTarget(value: string | undefined): InitTarget {
-  if (value === undefined || value === "user" || value === "project") {
-    return value ?? "user";
+  if (value === "user" || value === "project") {
+    return value;
   }
   throw new Error("target must be one of: user, project");
+}
+
+async function resolveInitTarget(value: string | undefined): Promise<InitTarget> {
+  if (value !== undefined) {
+    return parseInitTarget(value);
+  }
+  if (!isInteractiveInput()) {
+    throw new Error("target is required in non-interactive mode; pass --target user or --target project");
+  }
+
+  const readline = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    for (;;) {
+      const answer = (await readline.question([
+        "Where should trimctx install AI-client assets?",
+        "  1) User/global: ~/.claude/plugins/trimctx and ~/.codex/skills/trimctx",
+        "  2) Project: ./.claude/plugins/trimctx and ./.codex/skills/trimctx",
+        "Choose 1 or 2 [1]: "
+      ].join("\n"))).trim().toLowerCase();
+      if (answer === "" || answer === "1" || answer === "user" || answer === "global") {
+        return "user";
+      }
+      if (answer === "2" || answer === "project" || answer === "local") {
+        return "project";
+      }
+      process.stdout.write("Please choose 1 for user/global or 2 for project.\n");
+    }
+  } finally {
+    readline.close();
+  }
+}
+
+function isInteractiveInput(): boolean {
+  return process.env.TRIMCTX_FORCE_INTERACTIVE === "1" || Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
 async function assertTemplateExists(path: string, label: string): Promise<void> {

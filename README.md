@@ -55,7 +55,7 @@ npm install -g trimctx
 trimctx init
 ```
 
-`trimctx init` installs Claude Code slash commands under `~/.claude/plugins/trimctx` and a Codex skill under `~/.codex/skills/trimctx`. Restart the AI client afterwards, then run `/trimctx` in Claude Code or ask Codex to use the trimctx skill.
+`trimctx init` asks whether to install globally for the current user or into the current project. User/global install writes Claude Code slash commands under `~/.claude/plugins/trimctx` and a Codex skill under `~/.codex/skills/trimctx`. Restart the AI client afterwards, then run `/trimctx` in Claude Code or ask Codex to use the trimctx skill.
 
 Alternative GitHub install path:
 
@@ -119,6 +119,7 @@ npm install only, without command files:
 ```bash
 npm install -g trimctx
 trimctx init --client all
+trimctx init --target user --client all
 trimctx --help
 ```
 
@@ -157,21 +158,21 @@ trimctx resume
 Install AI-client commands:
 
 ```bash
-trimctx init                 # install Claude + Codex user-level assets
-trimctx init --client claude # install only Claude Code commands
-trimctx init --client codex  # install only the Codex skill
+trimctx init                 # choose user/global or project install interactively
+trimctx init --target user --client claude    # install only Claude Code commands for this user
+trimctx init --target user --client codex     # install only the Codex skill for this user
 trimctx init --target project --dir .
 ```
 
 Use it from Claude Code:
 
-- `trimctx init` installs `plugins/trimctx/` to `~/.claude/plugins/trimctx` by default.
+- `trimctx init` prompts for user/global or project install; `--target user` installs `plugins/trimctx/` to `~/.claude/plugins/trimctx`.
 - The plugin exposes `/trimctx`, `/trimctx:analyze`, `/trimctx:resume`, and `/trimctx:compress` command files.
 - Safety boundary: `/trimctx` analyzes the latest local JSONL by modification time. It does not write back to Claude Code, does not modify the original session, and only compresses when explicitly requested.
 
 Use it from Codex:
 
-- `trimctx init` installs `codex/skills/trimctx/SKILL.md` to `~/.codex/skills/trimctx` by default.
+- `trimctx init` prompts for user/global or project install; `--target user` installs `codex/skills/trimctx/SKILL.md` to `~/.codex/skills/trimctx`.
 - Run `trimctx current --source codex` to analyze the latest local Codex JSONL under `~/.codex/sessions/`.
 - This is intentionally documented as a skill/CLI integration, not a verified `/trimctx` Codex slash command.
 
@@ -216,7 +217,7 @@ trimctx init --dry-run
 | Flag | Default | Description |
 |---|---:|---|
 | `--client <client>` | `all` | `claude`, `codex`, or `all` |
-| `--target <target>` | `user` | `user` installs under the home directory; `project` installs under `--dir` or the current directory |
+| `--target <target>` | prompts | `user` installs under the home directory; `project` installs under `--dir` or the current directory |
 | `--dir <directory>` | home/current | Override the base directory |
 | `--force` | `false` | Overwrite existing trimctx assets |
 | `--dry-run` | `false` | Print planned paths without writing files |

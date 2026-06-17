@@ -84,7 +84,7 @@ trimctx init
 trimctx analyze path/to/session.jsonl
 ```
 
-`trimctx init` installs Claude Code command files and the Codex skill from the npm package. Use `trimctx init --dry-run` to inspect paths before writing.
+`trimctx init` installs Claude Code command files and the Codex skill from the npm package. It prompts for user/global versus project install when `--target` is omitted. Use `trimctx init --dry-run` to inspect paths before writing.
 
 ## Quick Start
 
@@ -181,7 +181,7 @@ trimctx init --client codex --target project --dir .
 trimctx init --dry-run
 ```
 
-By default, Claude Code assets go to `~/.claude/plugins/trimctx` and Codex skill assets go to `~/.codex/skills/trimctx`. Existing assets are not overwritten unless `--force` is provided.
+By default, `trimctx init` prompts for user/global or project install. With `--target user`, Claude Code assets go to `~/.claude/plugins/trimctx` and Codex skill assets go to `~/.codex/skills/trimctx`. Existing assets are not overwritten unless `--force` is provided.
 
 ### `trimctx analyze <file>`
 
