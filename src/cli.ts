@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { constants as fsConstants } from "node:fs";
+import { constants as fsConstants, readFileSync } from "node:fs";
 import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
@@ -14,11 +14,12 @@ import type { AnalysisOptions } from "./core/options.js";
 
 const program = new Command();
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const PACKAGE_VERSION = readPackageVersion();
 
 program
   .name("trimctx")
   .description("Analyze and safely trim long AI conversation context.")
-  .version("0.2.0");
+  .version(PACKAGE_VERSION);
 
 program
   .command("init")
@@ -273,6 +274,19 @@ async function replaceInstalledAsset(asset: InitAsset): Promise<void> {
   await rm(asset.destination, { recursive: true, force: true });
   await mkdir(dirname(asset.destination), { recursive: true });
   await cp(asset.source, asset.destination, { recursive: true });
+}
+
+function readPackageVersion(): string {
+  try {
+    const raw = readFileSync(join(PACKAGE_ROOT, "package.json"), "utf8");
+    const packageJson = JSON.parse(raw) as { version?: unknown };
+    if (typeof packageJson.version === "string" && packageJson.version.length > 0) {
+      return packageJson.version;
+    }
+  } catch {
+    // Fall through to a visible fallback so --version still works in unusual dev layouts.
+  }
+  return "0.0.0-dev";
 }
 
 async function pathExists(path: string): Promise<boolean> {

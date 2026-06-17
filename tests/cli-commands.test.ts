@@ -11,6 +11,15 @@ const execFileAsync = promisify(execFile);
 
 
 describe("CLI commands", () => {
+  test("prints the package.json version", async () => {
+    const packageJson = JSON.parse(await readFile("package.json", "utf8")) as { version: string };
+
+    const result = await runCli(["--version"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe(packageJson.version);
+  });
+
   test("init installs Claude plugin and Codex skill into a user base directory", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-home-"));
 
