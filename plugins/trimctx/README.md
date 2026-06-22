@@ -1,19 +1,20 @@
-# trimctx Claude Code Plugin
+# trimctx Claude Code plugin
 
-This plugin adds Claude Code slash commands that call the local `trimctx` CLI.
+Analyze the latest local Claude Code or Codex JSONL conversation from inside Claude Code.
 
 ## Commands
 
-- `/trimctx` — analyze the most recent Claude Code or Codex JSONL session via `trimctx current --source auto --color`.
-- `/trimctx:analyze <file>` — analyze a specific JSONL session file.
-- `/trimctx:resume` — analyze the most recent Claude Code session.
-- `/trimctx:compress` — write a safe compressed copy of the most recent session to `trimmed.jsonl`.
+- `/trimctx` — analyze the latest local session.
+- `/trimctx:analyze` — run the same analysis explicitly.
+- `/trimctx:resume` — generate a compact resume-oriented summary.
+- `/trimctx:compress` — only when the user explicitly asks to write a compressed copy.
 
-For handoff artifacts (not a slash command, use via CLI):
+## Safety
 
-```bash
-trimctx handoff <file.jsonl> -o handoff.md --next-context next-context.md
-```
+- Reads local JSONL exports only.
+- Does not call an external LLM or upload transcript content.
+- Does not modify original session files.
+- Compression requires explicit user action and writes a separate output file.
 
 ## Requirements
 
@@ -24,19 +25,25 @@ Install the CLI and Claude Code plugin from GitHub without publishing to npm.
 Windows CMD:
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+powershell -NoProfile -Command "Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1"
+type install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1
+Get-Content install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 macOS / Linux / WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+curl -fsSLO https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh
+less install.sh
+bash install.sh
 ```
 
 Then restart Claude Code and run:
@@ -59,5 +66,3 @@ cp -R plugins/trimctx ~/.claude/plugins/trimctx
 The commands do not modify original session files by default. Compression is only triggered by `/trimctx:compress` or an explicit `trimctx current --compress <output.jsonl>` command.
 
 ## Safety boundary
-
-The plugin is a thin local wrapper around the CLI. It does not upload session data. It also does not automatically redact secrets from local reports or compressed artifacts, so review generated files before sharing them. `/trimctx` selects the latest local JSONL file by modification time; it is not a live-client current-session API.
