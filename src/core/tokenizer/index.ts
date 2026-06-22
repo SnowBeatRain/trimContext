@@ -2,7 +2,7 @@ import { LocalHeuristicTokenizer } from "./heuristic.js";
 import { createTiktokenTokenizer } from "./tiktoken.js";
 import type { TokenMetadata, TokenizerConfidence, TokenizerName } from "../../types/message.js";
 
-export type TokenizerPreference = "auto" | TokenizerName;
+export type TokenizerPreference = "auto" | "heuristic" | TokenizerName;
 
 export interface Tokenizer {
   readonly name: TokenizerName;
@@ -14,9 +14,6 @@ export interface Tokenizer {
 }
 
 export function selectTokenizer(preference: TokenizerPreference = "auto"): Tokenizer {
-  if (preference === "tiktoken") {
-    return createTiktokenTokenizer() ?? new LocalHeuristicTokenizer();
-  }
   if (preference === "heuristic") {
     return new LocalHeuristicTokenizer();
   }
