@@ -87,9 +87,9 @@ The script writes:
 
 The review status is:
 
-- `review_required` when labels are missing or metrics are incomplete
-- `locked` when all gates pass
-- `failed` when review ran but at least one gate failed
+- `review_required` when labels are missing, label references are invalid, duplicate labels exist, decisions mismatch the report, or metrics are incomplete
+- `locked` when all labels are valid and all gates pass
+- `failed` when review ran with valid labels but at least one metric gate failed
 
 ## Tuning Loop
 

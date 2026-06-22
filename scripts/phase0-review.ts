@@ -178,6 +178,7 @@ function normalizeLabel(record: LabelRecord, file: string, line: number): Normal
 }
 
 function summarize(reports: Map<string, ReportMessage[]>, labels: NormalizedLabel[]) {
+  const quality = validateLabels(reports, labels);
   const labelByKey = new Map(labels.map((label) => [messageKey(label.sample_id, label.message_id), label]));
   let removeCandidates = 0;
   let removeCandidatesReviewed = 0;
@@ -235,13 +236,52 @@ function summarize(reports: Map<string, ReportMessage[]>, labels: NormalizedLabe
     protected_keep: protectedKeep,
     protected_recall: protectedReviewed === 0 ? null : roundRatio(protectedKeep / protectedReviewed),
     over_protected: overProtected,
-    missed_low_value_noise: missedLowValueNoise
+    missed_low_value_noise: missedLowValueNoise,
+    ...quality
+  };
+}
+
+function validateLabels(reports: Map<string, ReportMessage[]>, labels: NormalizedLabel[]) {
+  const messageByKey = new Map<string, ReportMessage>();
+  for (const [sampleId, messages] of reports.entries()) {
+    for (const message of messages) {
+      const id = stringField(message.id);
+      if (id) messageByKey.set(messageKey(sampleId, id), message);
+    }
+  }
+
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  let unknownReferences = 0;
+  let decisionMismatches = 0;
+
+  for (const label of labels) {
+    const key = messageKey(label.sample_id, label.message_id);
+    const message = messageByKey.get(key);
+    if (seen.has(key)) duplicates.add(key);
+    seen.add(key);
+    if (!message) {
+      unknownReferences += 1;
+      continue;
+    }
+    const reportDecision = optionalDecision(message.decision);
+    if (label.decision && reportDecision && label.decision !== reportDecision) {
+      decisionMismatches += 1;
+    }
+  }
+
+  const duplicateLabels = duplicates.size;
+  return {
+    label_quality_issues: unknownReferences + duplicateLabels + decisionMismatches,
+    unknown_label_references: unknownReferences,
+    duplicate_labels: duplicateLabels,
+    decision_mismatches: decisionMismatches
   };
 }
 
 function evaluateGates(metrics: ReturnType<typeof summarize>): { passed: boolean; status: TrustStatus } {
   const reviewComplete = metrics.remove_candidates_reviewed === metrics.remove_candidates && metrics.protected_reviewed === metrics.protected_messages;
-  if (!reviewComplete || metrics.remove_candidate_precision === null || metrics.protected_recall === null) {
+  if (metrics.label_quality_issues > 0 || !reviewComplete || metrics.remove_candidate_precision === null || metrics.protected_recall === null) {
     return { passed: false, status: "review_required" };
   }
   const passed = metrics.critical_false_deletion === GATES.critical_false_deletion
@@ -295,6 +335,14 @@ function formatSummary(output: {
   lines.push(`| Protected reviewed | ${output.metrics.protected_reviewed} |`);
   lines.push(`| Over protected | ${output.metrics.over_protected} |`);
   lines.push(`| Missed low-value noise | ${output.metrics.missed_low_value_noise} |`);
+  lines.push("");
+  lines.push("## Label Quality");
+  lines.push("| Metric | Count |");
+  lines.push("| --- | ---: |");
+  lines.push(`| Label quality issues | ${output.metrics.label_quality_issues} |`);
+  lines.push(`| Unknown label references | ${output.metrics.unknown_label_references} |`);
+  lines.push(`| Duplicate labels | ${output.metrics.duplicate_labels} |`);
+  lines.push(`| Decision mismatches | ${output.metrics.decision_mismatches} |`);
   lines.push("");
   lines.push("## Safety Notes");
   lines.push("- Raw message content and reviewer notes are intentionally excluded from this summary.");

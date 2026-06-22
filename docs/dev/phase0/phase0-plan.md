@@ -63,15 +63,15 @@ Run manual-review aggregation after labels are filled:
 npm run --silent phase0:review -- --reports reports/phase0 --labels datasets/private/phase0-labels --out reports/phase0
 ```
 
-The review step writes `phase0-review.json` and `phase0-review.md`.
+The review step writes `phase0-review.json` and `phase0-review.md`. `phase0:review` is a repository development script; run it from a source checkout, not from a globally installed package.
 
 ## Trust Status
 
 | Status | Meaning |
 | --- | --- |
-| `review_required` | Default state; labels are missing, incomplete, or metrics are still null. |
-| `locked` | All manual-review gates pass and Phase 0 can be treated as trusted for the reviewed sample set. |
-| `failed` | Review ran, but at least one gate failed. |
+| `review_required` | Default state; labels are missing, label references are invalid, duplicate labels exist, decisions mismatch the report, or metrics are still null. |
+| `locked` | All labels are valid, all manual-review gates pass, and Phase 0 can be treated as trusted for the reviewed sample set. |
+| `failed` | Review ran with valid labels, but at least one metric gate failed. |
 
 ## Acceptance Criteria
 
