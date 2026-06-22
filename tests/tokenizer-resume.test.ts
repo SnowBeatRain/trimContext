@@ -65,8 +65,23 @@ describe("tokenizer layer", () => {
   test("auto falls back to heuristic when no model-specific tokenizer is available", () => {
     const tokenizer = selectTokenizer("auto");
 
-    expect(["local_heuristic", "tiktoken"]).toContain(tokenizer.name);
-    expect(["medium", "high"]).toContain(tokenizer.confidence);
+    expect(tokenizer.name).toBe("local_heuristic");
+    expect(tokenizer.confidence).toBe("medium");
+  });
+
+  test("tiktoken preference reports the actual fallback tokenizer when unavailable", () => {
+    const tokenizer = selectTokenizer("tiktoken");
+    const report = createReport([
+      message("m1", "user", "目标：验证 tokenizer fallback。", 1)
+    ], "session.jsonl");
+
+    expect(tokenizer.name).toBe("local_heuristic");
+    expect(report.tokenization.tokenizer).toBe("local_heuristic");
+    expect(report.summary.token_estimation).toMatchObject({
+      estimator: "local_heuristic",
+      estimated: true,
+      note: "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
+    });
   });
 });
 
@@ -88,6 +103,21 @@ describe("resume layer", () => {
     expect(readiness.score).toBe(100);
     expect(readiness.level).toBe("ready");
     expect(readiness.missing).toEqual([]);
+  });
+
+  test("does not require failed attempts for a ready continuation", () => {
+    const readiness = scoreResumeReadiness({
+      currentGoal: { text: "目标：完成 CLI 可用性收敛。", sourceLine: 1 },
+      decisions: [{ text: "必须保留现有 analyze/report 命令。", sourceLine: 2 }],
+      activeFiles: [{ path: "src/cli.ts", sourceLine: 3 }],
+      failures: [],
+      testSignals: [{ text: "npm test 通过。", sourceLine: 4 }],
+      nextSteps: [{ text: "下一步：复跑质量门。", sourceLine: 5 }]
+    });
+
+    expect(readiness.score).toBe(85);
+    expect(readiness.level).toBe("ready");
+    expect(readiness.missing).not.toContain("failed attempts");
   });
 
   test("adds tokenization and resume metadata to JSON reports", () => {

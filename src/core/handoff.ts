@@ -71,7 +71,21 @@ export function formatHandoff(report: AnalysisReport): string {
 
 export function formatNextContext(report: AnalysisReport): string {
   const base = formatNextContextMarkdown(report.resume).trimEnd();
-  return `${base}\n\n## Source\n- File: ${report.input.file}\n- Tokenizer: ${report.tokenization.tokenizer} (${report.tokenization.confidence})\n- Command: \`trimctx handoff ${quotePath(report.input.file)} -o handoff.md --next-context next-context.md\`\n`;
+  const lines: string[] = [base, "", "## Operating Rules"];
+  lines.push("- This context is heuristic; verify it for accuracy and sensitive content before pasting or sharing.");
+  lines.push("- Do not modify the original JSONL transcript; write reports, handoffs, and compressed copies to new files.");
+  lines.push("- Only `remove_candidate` messages are eligible for destructive workflows, and they still require review.");
+  lines.push("- Treat `compress_candidate` as report-only signal; preserve it by default.");
+  lines.push("");
+  lines.push("## Next Commands");
+  lines.push(`- \`trimctx analyze ${quotePath(report.input.file)}\``);
+  lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.json\``);
+  lines.push(`- \`trimctx handoff ${quotePath(report.input.file)} -o handoff.md --next-context next-context.md\``);
+  lines.push("");
+  lines.push("## Source");
+  lines.push(`- File: ${report.input.file}`);
+  lines.push(`- Tokenizer: ${report.tokenization.tokenizer} (${report.tokenization.confidence})`);
+  return `${lines.join("\n")}\n`;
 }
 
 function topCandidates(messages: AnalyzedMessage[], limit: number): AnalyzedMessage[] {
