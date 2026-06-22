@@ -9,7 +9,7 @@ This guide explains how to run trimctx safely against local Claude Code, OpenAI,
 - Node.js 20 or later
 - A JSONL conversation file from Claude Code, an OpenAI-style chat export, or a Codex/Hermes rollout export
 
-trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API. Claude Code inputs remain heuristic unless a Claude-compatible local tokenizer is added later.
+trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API.
 
 If you install `trimctx` globally and want exact `tiktoken` counts, install `js-tiktoken` in the same resolvable environment as the CLI, or use a project-local `trimctx` install with a project-local `js-tiktoken` dependency.
 
@@ -228,7 +228,7 @@ The report includes:
 
 - `input` — source file metadata
 - `summary` — message counts, token estimates, protected count, candidate counts, estimated savings, and score diagnostics
-- `tokenization` — tokenizer name and confidence; `local_heuristic` means a local estimate, while optional `js-tiktoken` enables exact high-confidence local counts for OpenAI-style and Codex/Hermes rollout inputs. Claude Code inputs remain heuristic because no Claude-compatible local tokenizer is bundled.
+- `tokenization` — tokenizer name and confidence; `local_heuristic` means a local estimate, while optional `js-tiktoken` enables exact high-confidence local counts for OpenAI-style and Codex/Hermes rollout inputs.
 - `messages` — per-message token estimates, decisions, reasons, and scores
 - `remove_candidates` — messages selected for safe removal by current thresholds
 - `warnings` — parser or analysis issues encountered during processing
