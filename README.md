@@ -149,7 +149,7 @@ trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.
 
 The resume state is a best-effort, heuristic continuation aid after a long session:
 
-- `tokenization` records the tokenizer name and confidence used for token estimates.
+- `tokenization` records the tokenizer name and confidence used for token estimates. By default trimctx uses the local heuristic tokenizer; when the optional `js-tiktoken` package is installed, `auto`/`tiktoken` mode uses exact `tiktoken` counts with high confidence.
 - `resume.readiness` scores whether the session has enough continuation signals.
 - `resume.currentGoal`, `decisions`, `activeFiles`, `failures`, `testSignals`, and `nextSteps` preserve likely continuation signals after compaction.
 - `trimctx handoff --next-context next-context.md` writes a short continuation draft alongside the fuller handoff report.
@@ -334,7 +334,7 @@ sha256sum session.jsonl
 
 - `compress_candidate` messages are kept as-is (no rewriting or summarizing yet).
 - JSON reports include `summary.score_diagnostics` to inspect score distribution before changing thresholds; diagnostics do not change compression behavior.
-- Token counts are local estimates, not model-specific tokenizer counts.
+- Token counts use the zero-dependency local heuristic unless the optional `js-tiktoken` package is installed; report metadata shows whether counts are exact (`tiktoken`) or estimated (`local_heuristic`).
 - Claude Code and Codex/Hermes rollout paths have been exercised on local samples; real multi-sample validation is still in progress, and OpenAI still needs a user-provided real export before Phase 0 is complete for every supported family. Review the report before relying on compressed output.
 - Default thresholds prefer avoiding false deletions over maximizing token savings; lower thresholds only after reviewing reports against private validation samples.
 - No Web UI, MCP server, or standalone installer yet. Claude Code is supported through project command files and the packaged plugin wrapper; Codex is supported through the documented skill/CLI workflow, not a verified slash command.

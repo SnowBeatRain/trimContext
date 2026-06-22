@@ -220,6 +220,7 @@ trimctx report session.jsonl -o report.json
 
 - `input` — 输入文件元信息
 - `summary` — 消息数、token 估算、protected 数量、候选数、预计节省量和评分诊断
+- `tokenization` — tokenizer 名称和置信度；`local_heuristic` 表示本地估算，安装可选 `js-tiktoken` 后可使用高置信精确计数
 - `messages` — 每条消息的 token 估算、决策、原因和评分
 - `remove_candidates` — 按当前阈值选出的可安全移除消息
 - `warnings` — 解析或分析过程中遇到的问题

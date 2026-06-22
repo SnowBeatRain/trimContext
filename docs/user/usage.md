@@ -220,6 +220,7 @@ The report includes:
 
 - `input` — source file metadata
 - `summary` — message counts, token estimates, protected count, candidate counts, estimated savings, and score diagnostics
+- `tokenization` — tokenizer name and confidence; `local_heuristic` means an estimate, while optional `js-tiktoken` enables exact high-confidence counts
 - `messages` — per-message token estimates, decisions, reasons, and scores
 - `remove_candidates` — messages selected for safe removal by current thresholds
 - `warnings` — parser or analysis issues encountered during processing

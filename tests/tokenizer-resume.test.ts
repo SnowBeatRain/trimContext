@@ -83,6 +83,29 @@ describe("tokenizer layer", () => {
       note: "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
     });
   });
+
+  test("uses an injected tiktoken encoder for exact counts when available", async () => {
+    const { createTiktokenTokenizerForTesting } = await import("../src/core/tokenizer/tiktoken.js");
+    const tokenizer = createTiktokenTokenizerForTesting(() => ({
+      encode: (text: string) => Array.from(text),
+      free: () => undefined
+    }));
+
+    expect(tokenizer).toBeDefined();
+    expect(tokenizer?.name).toBe("tiktoken");
+    expect(tokenizer?.confidence).toBe("high");
+
+    const metadata = tokenizer!.analyzeMessage("abcd");
+    expect(metadata).toMatchObject({
+      estimator: "tiktoken",
+      estimator_version: "tiktoken-v1",
+      estimated: false,
+      confidence: "high",
+      estimated_tokens: 8,
+      message_overhead_tokens: 4
+    });
+    expect(metadata.breakdown.char_count).toBe(4);
+  });
 });
 
 describe("resume layer", () => {
