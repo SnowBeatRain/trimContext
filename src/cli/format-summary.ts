@@ -14,6 +14,7 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
   lines.push(
     `  token estimate: ${s.token_estimation.estimator_version} (${s.token_estimation.estimator}, ${s.token_estimation.confidence} confidence)`
   );
+  lines.push(`  tokenizer: ${report.tokenization.tokenizer} (${report.tokenization.confidence} confidence)`);
   lines.push(
     `  context pressure: ${s.context_pressure.pressure_level.toUpperCase()}  removable: ${formatTokens(s.context_pressure.estimated_removable_tokens)} (${formatRatio(s.context_pressure.remove_candidate_ratio)})`
   );
@@ -64,6 +65,15 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
     lines.push("  no rot detected. conversation is clean.");
     lines.push("");
   }
+
+  lines.push("  resume:");
+  lines.push(
+    `    readiness: ${report.resume.readiness.level.toUpperCase()} (${report.resume.readiness.score}/100)`
+  );
+  lines.push(`    goal: ${formatEvidenceText(report.resume.currentGoal?.text)}`);
+  lines.push(`    next: ${formatEvidenceText(report.resume.nextSteps[0]?.text)}`);
+  lines.push(`    active files: ${report.resume.activeFiles.length}`);
+  lines.push("");
 
   lines.push("  next:");
   if (rotCount > 0) {
@@ -142,6 +152,13 @@ function formatTokens(tokens: number): string {
 
 function formatRatio(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatEvidenceText(text: string | undefined): string {
+  if (!text) return "none detected";
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= 96) return collapsed;
+  return `${collapsed.slice(0, 93)}...`;
 }
 
 function quotePath(file: string): string {

@@ -1,4 +1,5 @@
-import type { Decision, NormalizedMessage, Reason, RotScores, TokenBreakdown, TokenMetadata } from "./message.js";
+import type { Decision, NormalizedMessage, Reason, RotScores, TokenBreakdown, TokenMetadata, TokenizerConfidence, TokenizerName } from "./message.js";
+import type { ResumeState } from "./resume.js";
 
 export interface AnalyzedMessage {
   id: string;
@@ -33,11 +34,16 @@ export interface AnalysisSummary {
 }
 
 export interface TokenEstimationSummary {
-  estimator: "local_heuristic";
-  estimator_version: "approx-v1";
-  estimated: true;
-  confidence: "medium";
+  estimator: TokenizerName | "local_heuristic";
+  estimator_version: "heuristic-v1" | "tiktoken-v1" | "approx-v1";
+  estimated: boolean;
+  confidence: TokenizerConfidence;
   note: string;
+}
+
+export interface TokenizationSummary {
+  tokenizer: TokenizerName;
+  confidence: TokenizerConfidence;
 }
 
 export interface ContextPressure {
@@ -76,6 +82,8 @@ export interface AnalysisReport {
     source: NormalizedMessage["source"];
   };
   summary: AnalysisSummary;
+  tokenization: TokenizationSummary;
+  resume: ResumeState;
   messages: AnalyzedMessage[];
   remove_candidates: AnalyzedMessage[];
   warnings: string[];

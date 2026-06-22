@@ -198,6 +198,8 @@ describe("CLI commands", () => {
     const report = JSON.parse(stdout) as AnalysisReport;
     expect(report.input.file).toBe(file);
     expect(report.schema_version).toBe("trimctx.report.v1");
+    expect(report.tokenization.tokenizer).toBe("local_heuristic");
+    expect(report.resume.readiness.level).toBe("blocked");
   });
 
   test("current analyzes the most recent Claude Code session under HOME", async () => {
@@ -210,6 +212,8 @@ describe("CLI commands", () => {
     expect(result.code).toBe(0);
     const report = JSON.parse(result.stdout) as AnalysisReport;
     expect(report.input.file).toBe(file);
+    expect(report.tokenization.confidence).toBe("medium");
+    expect(report.resume.readiness.score).toBeGreaterThan(0);
   });
 
   test("current analyzes nested Codex sessions under HOME", async () => {
@@ -238,6 +242,7 @@ describe("CLI commands", () => {
     expect(result.code).toBe(0);
     const report = JSON.parse(result.stdout) as AnalysisReport;
     expect(report.input.file).toBe(codex.file);
+    expect(report.resume.decisions.some((decision) => decision.text.includes("Correction"))).toBe(true);
   });
 
   test("current rejects unknown sources", async () => {
@@ -281,7 +286,10 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("trimctx analysis");
     expect(result.stdout).toContain("messages / ");
     expect(result.stdout).toContain("token estimate:");
+    expect(result.stdout).toContain("tokenizer:");
     expect(result.stdout).toContain("context pressure:");
+    expect(result.stdout).toContain("resume:");
+    expect(result.stdout).toContain("readiness:");
     expect(result.stdout).toContain("next:");
     expect(() => JSON.parse(result.stdout)).toThrow();
   });
@@ -306,10 +314,13 @@ describe("CLI commands", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("handoff:");
-    expect(await readFile(output, "utf8")).toContain("# trimctx Handoff");
-    expect(await readFile(output, "utf8")).toContain("## Continue From Here");
-    expect(await readFile(nextContext, "utf8")).toContain("# Next Context");
-    expect(await readFile(nextContext, "utf8")).toContain("trimctx analyze");
+    const handoff = await readFile(output, "utf8");
+    const nextContextMarkdown = await readFile(nextContext, "utf8");
+    expect(handoff).toContain("# trimctx Handoff");
+    expect(handoff).toContain("## Continue From Here");
+    expect(handoff).toContain("## Resume Readiness");
+    expect(nextContextMarkdown).toContain("# Continue This Session");
+    expect(nextContextMarkdown).toContain("## Start Here");
   });
 
   test("analyze --json matches the report command output", async () => {

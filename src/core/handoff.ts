@@ -1,3 +1,4 @@
+import { formatNextContextMarkdown, formatResumeMarkdown } from "./resume/markdown.js";
 import type { AnalysisReport, AnalyzedMessage } from "../types/report.js";
 
 export function formatHandoff(report: AnalysisReport): string {
@@ -16,6 +17,9 @@ export function formatHandoff(report: AnalysisReport): string {
   lines.push(`- Format: ${report.input.source}`);
   lines.push(`- Messages: ${summary.total_messages}`);
   lines.push(`- Estimated tokens: ${summary.total_tokens}`);
+  lines.push(`- Tokenizer: ${report.tokenization.tokenizer} (${report.tokenization.confidence})`);
+  lines.push("");
+  lines.push(formatResumeMarkdown(report.resume));
   lines.push("");
   lines.push("## Safety Summary");
   lines.push(`- Remove candidates: ${summary.remove_candidates}`);
@@ -66,28 +70,8 @@ export function formatHandoff(report: AnalysisReport): string {
 }
 
 export function formatNextContext(report: AnalysisReport): string {
-  const lines: string[] = [];
-  lines.push("# Next Context");
-  lines.push("");
-  lines.push("Use this as the compact handoff for the next agent or session.");
-  lines.push("");
-  lines.push("## Current State");
-  lines.push(`- Source file: ${report.input.file}`);
-  lines.push(`- Source format: ${report.input.source}`);
-  lines.push(`- Messages analyzed: ${report.summary.total_messages}`);
-  lines.push(`- Remove candidates: ${report.summary.remove_candidates}`);
-  lines.push(`- Compress candidates: ${report.summary.compress_candidates}`);
-  lines.push("");
-  lines.push("## Operating Rules");
-  lines.push("- Do not modify the original JSONL file.");
-  lines.push("- Review remove candidates before applying any destructive workflow.");
-  lines.push("- Use score diagnostics as trust signals, not as automatic tuning instructions.");
-  lines.push("");
-  lines.push("## Next Commands");
-  lines.push(`- \`trimctx analyze ${quotePath(report.input.file)}\``);
-  lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.json\``);
-  lines.push(`- \`trimctx handoff ${quotePath(report.input.file)} -o handoff.md --next-context next-context.md\``);
-  return `${lines.join("\n")}\n`;
+  const base = formatNextContextMarkdown(report.resume).trimEnd();
+  return `${base}\n\n## Source\n- File: ${report.input.file}\n- Tokenizer: ${report.tokenization.tokenizer} (${report.tokenization.confidence})\n- Command: \`trimctx handoff ${quotePath(report.input.file)} -o handoff.md --next-context next-context.md\`\n`;
 }
 
 function topCandidates(messages: AnalyzedMessage[], limit: number): AnalyzedMessage[] {

@@ -69,11 +69,14 @@ export interface TokenBreakdown {
   char_count: number;
 }
 
+export type TokenizerName = "local_heuristic" | "heuristic" | "tiktoken";
+export type TokenizerConfidence = "low" | "medium" | "high";
+
 export interface TokenMetadata {
-  estimator: "local_heuristic";
-  estimator_version: "approx-v1";
-  estimated: true;
-  confidence: "medium";
+  estimator: TokenizerName | "local_heuristic";
+  estimator_version: "heuristic-v1" | "tiktoken-v1" | "approx-v1";
+  estimated: boolean;
+  confidence: TokenizerConfidence;
   estimated_tokens: number;
   message_overhead_tokens: number;
   breakdown: TokenBreakdown;

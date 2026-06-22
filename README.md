@@ -18,7 +18,9 @@ $ trimctx analyze ~/.claude/projects/my-project/abc123.jsonl
 trimctx analysis
 
   633 messages / 218K tokens
+  tokenizer: local_heuristic (medium confidence)
   health: MODERATE  rot: 10.8% (68 candidates)
+  resume: partial (60/100)
 
   trust:
     0 remove candidates means nothing crossed the safe deletion threshold.
@@ -140,6 +142,19 @@ Generate handoff artifacts for continuing the work:
 ```bash
 trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
+
+## Resume-aware handoff
+
+`trimctx analyze`, `trimctx report`, `trimctx current`, and `trimctx resume` include a local resume state in their reports. The extractor is rule-based and does not call external LLMs or APIs.
+
+The resume state is a best-effort, heuristic continuation aid after a long session:
+
+- `tokenization` records the tokenizer name and confidence used for token estimates.
+- `resume.readiness` scores whether the session has enough continuation signals.
+- `resume.currentGoal`, `decisions`, `activeFiles`, `failures`, `testSignals`, and `nextSteps` preserve likely continuation signals after compaction.
+- `trimctx handoff --next-context next-context.md` writes a short continuation draft alongside the fuller handoff report.
+
+The original JSONL session is still read-only. Resume extraction only affects reports and generated Markdown artifacts. Review generated handoffs before sharing or pasting them into another session; rule-based extraction can miss, misclassify, or redact imperfectly.
 
 Analyze the most recent Claude Code or Codex session automatically:
 

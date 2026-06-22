@@ -1,6 +1,9 @@
 import { createAnalysisWarnings } from "./diagnostics.js";
-import type { AnalysisReport, AnalyzedMessage } from "../types/report.js";
+import { extractResumeState } from "./resume/extractor.js";
+import type { AnalysisReport, AnalyzedMessage, TokenizationSummary } from "../types/report.js";
 import type { NormalizedMessage, TokenBreakdown } from "../types/message.js";
+
+type ReportForResume = Omit<AnalysisReport, "resume">;
 
 export function createReport(messages: NormalizedMessage[], file: string): AnalysisReport {
   const analyzedMessages = messages.map(toAnalyzedMessage);
@@ -9,9 +12,9 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
   const totalTokens = analyzedMessages.reduce((sum, message) => sum + message.tokens, 0);
   const savingTokens = removeCandidates.reduce((sum, message) => sum + message.tokens, 0);
   const warnings = detectWarnings(messages);
-
-  return {
-    schema_version: "trimctx.report.v1",
+  const tokenization = createTokenizationSummary(analyzedMessages);
+  const reportWithoutResume: ReportForResume = {
+    schema_version: "trimctx.report.v1" as const,
     input: {
       file,
       source: messages[0]?.source ?? "openai-jsonl"
@@ -25,20 +28,36 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
       protected_messages: analyzedMessages.filter((message) => message.protected).length,
       compress_candidates: analyzedMessages.filter((message) => message.decision === "compress_candidate").length,
       token_estimation: {
-        estimator: "local_heuristic",
-        estimator_version: "approx-v1",
-        estimated: true,
-        confidence: "medium",
-        note: "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
+        estimator: tokenization.tokenizer,
+        estimator_version: tokenization.tokenizer === "tiktoken" ? "tiktoken-v1" : "approx-v1",
+        estimated: tokenization.tokenizer !== "tiktoken",
+        confidence: tokenization.confidence,
+        note: tokenization.tokenizer === "tiktoken"
+          ? "Model-specific tokenizer count."
+          : "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
       },
       token_breakdown: sumTokenBreakdown(analyzedMessages),
       context_pressure: createContextPressure(analyzedMessages, removeCandidates, totalTokens, savingTokens),
       top_reasons: countTopReasons(analyzedMessages),
       score_diagnostics: createScoreDiagnostics(analyzedMessages)
     },
+    tokenization,
     messages: analyzedMessages,
     remove_candidates: removeCandidates,
     warnings: [...warnings, ...createAnalysisWarnings(messages)]
+  };
+  return {
+    ...reportWithoutResume,
+    resume: extractResumeState(reportWithoutResume)
+  };
+}
+
+function createTokenizationSummary(messages: AnalyzedMessage[]): TokenizationSummary {
+  const firstMetadata = messages.find((message) => message.token_metadata)?.token_metadata;
+  const estimator = firstMetadata?.estimator === "tiktoken" ? "tiktoken" : "local_heuristic";
+  return {
+    tokenizer: estimator,
+    confidence: firstMetadata?.confidence ?? "medium"
   };
 }
 
