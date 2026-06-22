@@ -42,6 +42,8 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
       score_diagnostics: createScoreDiagnostics(analyzedMessages)
     },
     tokenization,
+    phase0_trust: createPhase0TrustStatus(),
+    parser_diagnostics: createParserDiagnostics(analyzedMessages),
     messages: analyzedMessages,
     remove_candidates: removeCandidates,
     warnings: [...warnings, ...createAnalysisWarnings(messages)]
@@ -141,6 +143,45 @@ function createScoreDiagnostics(messages: AnalyzedMessage[]): AnalysisReport["su
       compress_candidate: scoreRange(messages.filter((message) => message.decision === "compress_candidate")),
       remove_candidate: scoreRange(messages.filter((message) => message.decision === "remove_candidate"))
     }
+  };
+}
+
+function createPhase0TrustStatus(): AnalysisReport["phase0_trust"] {
+  return {
+    status: "review_required",
+    metrics: {
+      critical_false_deletion: null,
+      protected_recall: null,
+      remove_candidate_precision: null
+    },
+    gates: {
+      critical_false_deletion: 0,
+      protected_recall: 1,
+      remove_candidate_precision: 0.7
+    },
+    notes: [
+      "Phase 0 trust is not locked until manual labels are reviewed.",
+      "remove_candidate and compress_candidate are review-only recommendations, not automatic deletion approval."
+    ]
+  };
+}
+
+function createParserDiagnostics(messages: AnalyzedMessage[]): AnalysisReport["parser_diagnostics"] {
+  const sourceLines = messages.map((message) => message.sourceLine);
+  const roleCounts: AnalysisReport["parser_diagnostics"]["role_counts"] = {};
+  for (const message of messages) {
+    roleCounts[message.role] = (roleCounts[message.role] ?? 0) + 1;
+  }
+  return {
+    source: messages[0]?.source ?? "openai-jsonl",
+    parsed_messages: messages.length,
+    source_lines: {
+      min: sourceLines.length > 0 ? Math.min(...sourceLines) : 0,
+      max: sourceLines.length > 0 ? Math.max(...sourceLines) : 0
+    },
+    role_counts: roleCounts,
+    empty_content_messages: messages.filter((message) => message.content.trim().length === 0).length,
+    missing_timestamp_messages: messages.filter((message) => !message.timestamp).length
   };
 }
 

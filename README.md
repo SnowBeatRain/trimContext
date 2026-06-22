@@ -20,13 +20,16 @@ $ trimctx analyze ~/.claude/projects/my-project/abc123.jsonl
 trimctx analysis
 
   633 messages / 218K tokens
+  token estimate: heuristic-v1 (local_heuristic, medium confidence)
   tokenizer: local_heuristic (medium confidence)
+  context pressure: HIGH  removable: 5.6K tokens (2.6%)
   health: MODERATE  rot: 10.8% (68 candidates)
-  resume: partial (60/100)
 
   trust:
-    0 remove candidates means nothing crossed the safe deletion threshold.
-    compress candidates, if any, are report-only and kept by default.
+    41 remove candidates crossed the safe deletion threshold.
+    review the JSON report before applying destructive workflows.
+    phase0: REVIEW_REQUIRED
+    candidates are review-only until Phase 0 gates are locked.
     max score: 0.6428; near threshold: 0
 
   breakdown:
@@ -43,8 +46,8 @@ trimctx analysis
     - low reference: 6
 
   next:
-    trimctx compress "~/.claude/projects/my-project/abc123.jsonl" -o trimmed.jsonl
     trimctx report "~/.claude/projects/my-project/abc123.jsonl" -o report.json
+    run Phase 0 manual review before using compress output as replacement context
     trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
 ```
 
@@ -59,7 +62,7 @@ npm install -g trimctx
 trimctx init
 ```
 
-`trimctx init` asks whether to install globally for the current user or into the current project. User/global install writes Claude Code slash commands under `~/.claude/plugins/trimctx` and a Codex skill under `~/.codex/skills/trimctx`. Restart the AI client afterwards, then run `/trimctx` in Claude Code or ask Codex to use the trimctx skill.
+`trimctx init` asks whether to install globally for the current user or into the current project. User/global install writes Claude Code slash commands under `~/.claude/plugins/trimctx` and a Codex skill under `~/.codex/skills/trimctx`. It does **not** install automatic hooks by default. Restart the AI client afterwards, then run `/trimctx` in Claude Code or ask Codex to use the trimctx skill.
 
 Alternative GitHub install path:
 
@@ -185,6 +188,8 @@ trimctx init                 # choose user/global or project install interactive
 trimctx init --target user --client claude    # install only Claude Code commands for this user
 trimctx init --target user --client codex     # install only the Codex skill for this user
 trimctx init --target project --dir .
+trimctx init --with-hooks    # experimental: also install Claude Stop hook automation
+trimctx install-hooks        # experimental: install hooks only, explicitly opt-in
 ```
 
 Use it from Claude Code:
@@ -228,7 +233,7 @@ npm run dev -- analyze path/to/session.jsonl
 
 ### `trimctx init`
 
-Install AI-client command files and skills from the npm package.
+Install AI-client command files and skills from the npm package. Hooks are not installed by default; hook automation is experimental and requires explicit opt-in with `trimctx install-hooks` or `trimctx init --with-hooks`.
 
 ```bash
 trimctx init
@@ -244,6 +249,7 @@ trimctx init --dry-run
 | `--dir <directory>` | home/current | Override the base directory |
 | `--force` | `false` | Overwrite existing trimctx assets |
 | `--dry-run` | `false` | Print planned paths without writing files |
+| `--with-hooks` | `false` | Experimental: also install Claude Stop hook automation |
 
 ### `trimctx analyze <file>`
 
@@ -265,7 +271,7 @@ trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 
 ### `trimctx report <file> -o <report.json>`
 
-Write a complete JSON report including per-message decisions, scores, reasons, and warnings.
+Write a complete JSON report including per-message decisions, scores, reasons, warnings, top-level `phase0_trust`, and top-level `parser_diagnostics`.
 
 ```bash
 trimctx report session.jsonl -o report.json
@@ -284,9 +290,9 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `keep_protected` | Always kept |
 | `keep` | Kept |
 | `compress_candidate` | Kept (report-only for now) |
-| `remove_candidate` | Removed only if not protected |
+| `remove_candidate` | Removed from the copy only if not protected; review-only until Phase 0 gates are locked |
 
-`compress_candidate` is intentionally conservative: it means trimctx found a stale or low-value signal, but not enough evidence to remove the message safely. Some formats, especially Codex/Hermes rollout files, may produce zero `remove_candidate` messages under default thresholds; treat that as a safety-first result rather than a parser failure.
+`compress_candidate` is intentionally conservative: it means trimctx found a stale or low-value signal, but not enough evidence to remove the message safely. `remove_candidate` is also a candidate for human review until Phase 0 trust is locked. Some formats, especially Codex/Hermes rollout files, may produce zero `remove_candidate` messages under default thresholds; treat that as a safety-first result rather than a parser failure.
 
 ### `trimctx handoff <file> -o <handoff.md>`
 

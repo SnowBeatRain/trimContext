@@ -16,7 +16,7 @@ describe("hook commands", () => {
     const result = await runCli(["install-hooks", "--dir", dir]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("installed Stop hook");
+    expect(result.stdout).toContain("installed experimental Stop hook");
     expect(await fileExists(settingsPath)).toBe(true);
 
     const settings = JSON.parse(await readFile(settingsPath, "utf8")) as {
@@ -74,7 +74,7 @@ describe("hook commands", () => {
     const forced = await runCli(["install-hooks", "--dir", dir, "--force"]);
 
     expect(forced.code).toBe(0);
-    expect(forced.stdout).toContain("installed Stop hook");
+    expect(forced.stdout).toContain("installed experimental Stop hook");
   });
 
   test("hook --dry-run runs analysis without modifying files", async () => {

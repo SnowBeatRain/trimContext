@@ -5,6 +5,7 @@ import { formatContextState, injectContextStateSection } from "./context-state.j
 
 interface HookInput {
   stop_hook_active?: boolean;
+  transcript_path?: string;
 }
 
 export interface HookResult {
@@ -37,9 +38,9 @@ async function readExistingClaudeMd(): Promise<string | undefined> {
 }
 
 export async function runHook(options: { dryRun?: boolean } = {}): Promise<HookResult> {
-  const _input = await readStdinJson<HookInput>();
+  const input = await readStdinJson<HookInput>();
 
-  const sessionFile = await findLatestSession("claude");
+  const sessionFile = input.transcript_path ?? await findLatestSession("claude");
   const report = await analyzeFile(sessionFile);
   const pressure = report.summary.context_pressure.pressure_level;
   const rotCount = report.summary.remove_candidates + report.summary.compress_candidates;

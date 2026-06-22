@@ -137,6 +137,43 @@ describe("createReport", () => {
     expect(report.remove_candidates).toHaveLength(1);
   });
 
+  test("marks Phase 0 trust as unlocked until manual review metrics are supplied", () => {
+    const removable = analyzedMessage("m1", ["old_message"]);
+    const protectedMessage = analyzedMessage("m2", ["contains_user_decision"]);
+    protectedMessage.decision = "keep_protected";
+    protectedMessage.protected = true;
+    protectedMessage.rot_score = 0.15;
+    protectedMessage.scores = { ...protectedMessage.scores, rot_score: 0.15 };
+
+    const report = createReport([removable, protectedMessage], "session.jsonl");
+
+    expect(report.phase0_trust).toEqual({
+      status: "review_required",
+      metrics: {
+        critical_false_deletion: null,
+        protected_recall: null,
+        remove_candidate_precision: null
+      },
+      gates: {
+        critical_false_deletion: 0,
+        protected_recall: 1,
+        remove_candidate_precision: 0.7
+      },
+      notes: [
+        "Phase 0 trust is not locked until manual labels are reviewed.",
+        "remove_candidate and compress_candidate are review-only recommendations, not automatic deletion approval."
+      ]
+    });
+    expect(report.parser_diagnostics).toEqual({
+      source: "openai-jsonl",
+      parsed_messages: 2,
+      source_lines: { min: 1, max: 2 },
+      role_counts: { assistant: 2 },
+      empty_content_messages: 0,
+      missing_timestamp_messages: 2
+    });
+  });
+
   test("returns no compact-signal warnings when input has no compact signals", () => {
     const report = createReport([analyzedMessage("m1", ["old_message"])], "session.jsonl");
     expect(report.warnings.join("\n")).not.toContain("session_compacted");

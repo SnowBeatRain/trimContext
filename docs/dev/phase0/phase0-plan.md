@@ -1,6 +1,6 @@
 # Phase 0 Validation Plan
 
-Phase 0 validates whether trimctx is safe enough for other people to try on real long-running AI conversations. Unit tests prove parser contracts; Phase 0 proves the default scoring and compression behavior on realistic data.
+Phase 0 validates whether trimctx is safe enough for other people to try on real long-running AI conversations. Unit tests prove parser contracts; Phase 0 proves the default scoring and compression behavior on realistic data. Phase 0 is not complete until manual-review gates are locked.
 
 ## Scope
 
@@ -10,7 +10,8 @@ Validate the full local pipeline on private JSONL exports:
 2. `trimctx report -o <report.json>`
 3. `trimctx compress -o <trimmed.jsonl>`
 4. input hash before/after compression
-5. manual review of `remove_candidates`
+5. manual labels for candidates and protected context
+6. `phase0:review` gate calculation
 
 Supported sources to cover:
 
@@ -28,7 +29,7 @@ Use at least 5 private samples before calling Phase 0 complete.
 | OpenAI JSONL | 1 | multi-message conversation or batched records |
 | Codex/Hermes rollout JSONL | 2 | `{timestamp, type, payload}` rollout exports |
 
-Place raw samples under `datasets/private/phase0/`. This path is gitignored and must not be committed.
+Place raw samples under `datasets/private/phase0/`. This path is gitignored and must not be committed. Place private labels under `datasets/private/phase0-labels/` or another gitignored path.
 
 ## Outputs
 
@@ -37,18 +38,40 @@ Write machine outputs under `reports/phase0/`. This path is gitignored.
 Expected files:
 
 - `reports/phase0/phase0-results.json`
+- `reports/phase0/phase0-review.json`
+- `reports/phase0/phase0-review.md`
 - `reports/phase0/<sample>.report.json`
 - `reports/phase0/<sample>.trimmed.jsonl`
 
-`phase0-results.json` is private by default: it may include local filesystem paths plus captured `stderr` or `error` details. Do not publish it directly; share only a sanitized `validation-summary.md` or a manually redacted excerpt.
+`phase0-results.json` is private by default: it may include local filesystem paths plus captured `stderr` or `error` details. Do not publish it directly; share only a sanitized validation summary or a manually redacted excerpt.
 
-## Command
+Each generated report includes top-level `phase0_trust` and `parser_diagnostics`. `phase0_trust.status` defaults to `review_required`; that is a prompt for manual review, not a completion claim.
+
+## Commands
+
+Run the batch validator:
 
 ```bash
 npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
 ```
 
 The script prints JSON to stdout and writes the same aggregate file to `reports/phase0/phase0-results.json`.
+
+Run manual-review aggregation after labels are filled:
+
+```bash
+npm run --silent phase0:review -- --reports reports/phase0 --labels datasets/private/phase0-labels --out reports/phase0
+```
+
+The review step writes `phase0-review.json` and `phase0-review.md`.
+
+## Trust Status
+
+| Status | Meaning |
+| --- | --- |
+| `review_required` | Default state; labels are missing, incomplete, or metrics are still null. |
+| `locked` | All manual-review gates pass and Phase 0 can be treated as trusted for the reviewed sample set. |
+| `failed` | Review ran, but at least one gate failed. |
 
 ## Acceptance Criteria
 
@@ -58,9 +81,10 @@ The script prints JSON to stdout and writes the same aggregate file to `reports/
 | Report success rate | >= 95% | `report_ok / sample_count` in `phase0-results.json` |
 | Compress success rate | >= 95% | `compress_ok / sample_count` in `phase0-results.json` |
 | Input mutation | 0 files | `input_unchanged == sample_count` |
-| Critical false deletion | 0 | manual review of every remove candidate |
-| Protected recall | 100% | manual review of recent, system, correction, and tool-result-sensitive content |
-| Remove-candidate precision | >= 70% | accepted remove candidates / reviewed remove candidates |
+| Critical false deletion | 0 | `critical_false_deletion` in `phase0-review.json` |
+| Protected recall | 100% | `protected_recall` in `phase0-review.json` |
+| Remove-candidate precision | >= 70% | `remove_candidate_precision` in `phase0-review.json` |
+| Trust status | `locked` | `trust_status` in `phase0-review.json` |
 
 ## Completion Checklist
 
@@ -69,6 +93,11 @@ The script prints JSON to stdout and writes the same aggregate file to `reports/
 - [ ] No raw private JSONL files appear in `git status`.
 - [ ] `phase0-results.json` shows all input hashes unchanged and remains private or fully redacted.
 - [ ] Every `remove_candidate` was manually labeled.
+- [ ] Protected keep examples were labeled.
+- [ ] `phase0-review.json` and `phase0-review.md` were generated.
 - [ ] Critical false deletions are zero.
-- [ ] Validation summary is filled from the template.
+- [ ] Protected recall is 100%.
+- [ ] Remove-candidate precision is at least 70%.
+- [ ] `trust_status` is `locked` before recommending compressed output as replacement context.
+- [ ] Public docs do not claim Phase 0 complete unless `trust_status` is `locked`.
 - [ ] Any rule changes are backed by a new unit test.

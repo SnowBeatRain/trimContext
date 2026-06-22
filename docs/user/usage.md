@@ -92,7 +92,7 @@ trimctx init
 trimctx analyze path/to/session.jsonl
 ```
 
-`trimctx init` installs Claude Code command files and the Codex skill from the npm package. It prompts for user/global versus project install when `--target` is omitted. Use `trimctx init --dry-run` to inspect paths before writing.
+`trimctx init` installs Claude Code command files and the Codex skill from the npm package. It prompts for user/global versus project install when `--target` is omitted. It does not install automatic hooks by default; `trimctx install-hooks` and `trimctx init --with-hooks` are experimental explicit opt-in automation. Use `trimctx init --dry-run` to inspect paths before writing.
 
 ## Quick Start
 
@@ -107,26 +107,23 @@ Typical summary shape:
 ```text
 trimctx analysis
 
-messages: 633
-tokens: 218,385
-protected: 338
-remove candidates: 41
-compress candidates: 30
-estimated saving: 5,592 tokens (2.56%)
+  633 messages / 218K tokens
+  token estimate: heuristic-v1 (local_heuristic, medium confidence)
+  tokenizer: local_heuristic (medium confidence)
+  context pressure: HIGH  removable: 5.6K tokens (2.6%)
+  health: MODERATE  rot: 10.8% (68 candidates)
 
-trust:
-- 0 remove candidates means nothing crossed the safe deletion threshold.
-- compress candidates, if any, are report-only and kept by default.
-- max score: 0.6428; near threshold: 0
+  trust:
+    41 remove candidates crossed the safe deletion threshold.
+    review the JSON report before applying destructive workflows.
+    phase0: REVIEW_REQUIRED
+    candidates are review-only until Phase 0 gates are locked.
+    max score: 0.6428; near threshold: 0
 
-top reasons:
-- recent_message: 241
-- superseded_by_later_instruction: 195
-- old_message: 190
-
-next:
-- trimctx report <file> -o report.json
-- trimctx compress <file> -o output.jsonl
+  next:
+    trimctx report "<file>" -o report.json
+    run Phase 0 manual review before using compress output as replacement context
+    trimctx analyze "<file>" --json
 ```
 
 Write a full JSON report before compressing:
@@ -152,7 +149,7 @@ trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.
 1. Run `analyze` to see whether trimctx finds meaningful candidates.
 2. Run `report` and inspect the reasons for `remove_candidate` messages.
 3. Keep the original JSONL file unchanged.
-4. Run `compress` with `-o` to create a new file.
+4. Run `compress` with `-o` to create a new file only after review; before Phase 0 trust is locked, treat that output as a review artifact rather than replacement context.
 5. Compare the original file hash before and after compression if you need safety evidence.
 
 ```bash
@@ -170,7 +167,10 @@ If you plan to recommend trimctx to other users or validate a release candidate,
 
 ```bash
 npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
+npm run --silent phase0:review -- --reports reports/phase0 --labels datasets/private/phase0-labels --out reports/phase0
 ```
+
+`phase0:review` writes `reports/phase0/phase0-review.json` and `reports/phase0/phase0-review.md`. Its `trust_status` is `review_required` while labels or metrics are incomplete, `locked` only when all gates pass, and `failed` when review completes but a gate fails.
 
 The workflow is documented in `docs/dev/phase0/phase0-plan.md`, `docs/dev/phase0/manual-label-guide.md`, and `docs/dev/phase0/validation-summary-template.md`.
 

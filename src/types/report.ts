@@ -70,6 +70,30 @@ export interface ScoreDiagnostics {
   decision_score_ranges: Record<Decision, ScoreRange>;
 }
 
+export interface Phase0TrustStatus {
+  status: "review_required" | "locked" | "failed";
+  metrics: {
+    critical_false_deletion: number | null;
+    protected_recall: number | null;
+    remove_candidate_precision: number | null;
+  };
+  gates: {
+    critical_false_deletion: 0;
+    protected_recall: 1;
+    remove_candidate_precision: 0.7;
+  };
+  notes: string[];
+}
+
+export interface ParserDiagnostics {
+  source: NormalizedMessage["source"];
+  parsed_messages: number;
+  source_lines: { min: number; max: number };
+  role_counts: Partial<Record<NormalizedMessage["role"], number>>;
+  empty_content_messages: number;
+  missing_timestamp_messages: number;
+}
+
 export interface ReasonCount {
   reason: Reason;
   count: number;
@@ -83,6 +107,8 @@ export interface AnalysisReport {
   };
   summary: AnalysisSummary;
   tokenization: TokenizationSummary;
+  phase0_trust: Phase0TrustStatus;
+  parser_diagnostics: ParserDiagnostics;
   resume: ResumeState;
   messages: AnalyzedMessage[];
   remove_candidates: AnalyzedMessage[];

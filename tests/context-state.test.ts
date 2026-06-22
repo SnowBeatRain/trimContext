@@ -58,6 +58,66 @@ function makeReport(overrides: Partial<AnalysisReport["summary"]> = {}): Analysi
     schema_version: "trimctx.report.v1",
     input: { file: "/test/session.jsonl", source: "claude-code-jsonl" },
     summary,
+    tokenization: {
+      tokenizer: "local_heuristic",
+      confidence: "medium"
+    },
+    phase0_trust: {
+      status: "review_required",
+      metrics: {
+        critical_false_deletion: null,
+        protected_recall: null,
+        remove_candidate_precision: null
+      },
+      gates: {
+        critical_false_deletion: 0,
+        protected_recall: 1,
+        remove_candidate_precision: 0.7
+      },
+      notes: []
+    },
+    parser_diagnostics: {
+      source: "claude-code-jsonl",
+      parsed_messages: 100,
+      source_lines: { min: 1, max: 120 },
+      role_counts: {
+        system: 4,
+        user: 38,
+        assistant: 40,
+        tool: 18
+      },
+      empty_content_messages: 2,
+      missing_timestamp_messages: 7
+    },
+    resume: {
+      currentGoal: { text: "继续 trimctx Phase 0 验证", messageId: "m0", sourceLine: 10, role: "user" },
+      decisions: [
+        { text: "compress_candidate 仅报告", messageId: "m1", sourceLine: 12, role: "assistant" }
+      ],
+      activeFiles: [
+        { path: "src/core/context-state.ts", messageId: "m2", sourceLine: 42 }
+      ],
+      failures: [],
+      testSignals: [
+        { text: "npm test", messageId: "m3", sourceLine: 80, role: "assistant" }
+      ],
+      nextSteps: [
+        { text: "补充状态块明细", messageId: "m4", sourceLine: 90, role: "assistant" }
+      ],
+      readiness: {
+        level: "ready",
+        score: 85,
+        missing: [],
+        signals: {
+          current_goal: true,
+          decisions: true,
+          active_files: true,
+          failures: false,
+          test_signals: true,
+          next_steps: true
+        }
+      }
+    },
     messages: [],
     remove_candidates: [],
     warnings: []
@@ -111,6 +171,22 @@ describe("formatContextState", () => {
     expect(result).toContain("metadata noise(20)");
     expect(result).toContain("old content(15)");
     expect(result).toContain("superseded(10)");
+  });
+
+  test("includes parser, tokenizer, decision, trust, and next action details", () => {
+    const report = makeReport();
+    const result = formatContextState(report);
+
+    expect(result).toContain("来源：claude-code-jsonl");
+    expect(result).toContain("解析：100 条，行 1-120");
+    expect(result).toContain("角色：system 4 / user 38 / assistant 40 / tool 18");
+    expect(result).toContain("Token：local_heuristic / medium / 估算");
+    expect(result).toContain("保护：80 条 / ~47.5K tokens / 95.0%");
+    expect(result).toContain("候选：remove 10 / compress 5 / near-threshold 2 / protected-high-rot 3");
+    expect(result).toContain("分数：max 0.900 / p90 0.800");
+    expect(result).toContain("信任：Phase0 review_required");
+    expect(result).toContain("续接：READY 85/100");
+    expect(result).toContain("建议：先运行 `trimctx report` 审查 remove_candidate；compress_candidate 默认保留。");
   });
 
   test("includes timestamp", () => {

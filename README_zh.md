@@ -20,11 +20,16 @@ $ trimctx analyze ~/.claude/projects/my-project/abc123.jsonl
 trimctx analysis
 
   633 messages / 218K tokens
+  token estimate: heuristic-v1 (local_heuristic, medium confidence)
+  tokenizer: local_heuristic (medium confidence)
+  context pressure: HIGH  removable: 5.6K tokens (2.6%)
   health: MODERATE  rot: 10.8% (68 candidates)
 
   trust:
-    0 remove candidates means nothing crossed the safe deletion threshold.
-    compress candidates, if any, are report-only and kept by default.
+    41 remove candidates crossed the safe deletion threshold.
+    review the JSON report before applying destructive workflows.
+    phase0: REVIEW_REQUIRED
+    candidates are review-only until Phase 0 gates are locked.
     max score: 0.6428; near threshold: 0
 
   breakdown:
@@ -41,8 +46,8 @@ trimctx analysis
     - low reference: 6
 
   next:
-    trimctx compress "~/.claude/projects/my-project/abc123.jsonl" -o trimmed.jsonl
     trimctx report "~/.claude/projects/my-project/abc123.jsonl" -o report.json
+    run Phase 0 manual review before using compress output as replacement context
     trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
 ```
 
@@ -57,7 +62,7 @@ npm install -g trimctx
 trimctx init
 ```
 
-`trimctx init` 会询问安装到当前用户全局位置，还是安装到当前项目。用户全局安装会把 Claude Code slash commands 写入 `~/.claude/plugins/trimctx`，把 Codex skill 写入 `~/.codex/skills/trimctx`。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
+`trimctx init` 会询问安装到当前用户全局位置，还是安装到当前项目。用户全局安装会把 Claude Code slash commands 写入 `~/.claude/plugins/trimctx`，把 Codex skill 写入 `~/.codex/skills/trimctx`。它默认**不会**安装自动 hook。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
 
 也可以继续使用 GitHub 一条命令安装：
 
@@ -183,6 +188,8 @@ trimctx init                 # 交互选择用户全局或项目级安装
 trimctx init --target user --client claude    # 只为当前用户安装 Claude Code commands
 trimctx init --target user --client codex     # 只为当前用户安装 Codex skill
 trimctx init --target project --dir .
+trimctx init --with-hooks    # 实验性：同时安装 Claude Stop hook 自动化
+trimctx install-hooks        # 实验性：只安装 hooks，必须显式 opt-in
 ```
 
 在 Claude Code 中使用：
@@ -226,7 +233,7 @@ npm run dev -- analyze path/to/session.jsonl
 
 ### `trimctx init`
 
-从 npm 包安装 AI 客户端命令文件与 skill。
+从 npm 包安装 AI 客户端命令文件与 skill。默认不安装 hooks；hook 自动化是实验性能力，需要通过 `trimctx install-hooks` 或 `trimctx init --with-hooks` 显式开启。
 
 ```bash
 trimctx init
@@ -242,6 +249,7 @@ trimctx init --dry-run
 | `--dir <directory>` | home/当前目录 | 覆盖基础目录 |
 | `--force` | `false` | 覆盖已有 trimctx 资产 |
 | `--dry-run` | `false` | 只打印计划路径，不写文件 |
+| `--with-hooks` | `false` | 实验性：同时安装 Claude Stop hook 自动化 |
 
 ### `trimctx analyze <file>`
 
@@ -263,7 +271,7 @@ trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 
 ### `trimctx report <file> -o <report.json>`
 
-写出完整 JSON 报告，包含逐条消息的决策、评分、原因和警告。
+写出完整 JSON 报告，包含逐条消息的决策、评分、原因、警告、顶层 `phase0_trust` 和顶层 `parser_diagnostics`。
 
 ```bash
 trimctx report session.jsonl -o report.json
@@ -282,9 +290,9 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `keep_protected` | 始终保留 |
 | `keep` | 保留 |
 | `compress_candidate` | 保留（当前仅报告） |
-| `remove_candidate` | 仅在非 protected 时移除 |
+| `remove_candidate` | 仅在非 protected 时从副本移除；Phase 0 gates locked 前仅作为人工审查候选 |
 
-`compress_candidate` 是有意保守的信号：它表示 trimctx 发现了过期或低价值迹象，但还没有足够证据安全删除该消息。某些格式，尤其是 Codex/Hermes rollout 文件，在默认阈值下可能产生 0 条 `remove_candidate`；这应视为安全优先的结果，而不是 parser 失败。
+`compress_candidate` 是有意保守的信号：它表示 trimctx 发现了过期或低价值迹象，但还没有足够证据安全删除该消息。`remove_candidate` 在 Phase 0 trust locked 前也只是人工审查候选。某些格式，尤其是 Codex/Hermes rollout 文件，在默认阈值下可能产生 0 条 `remove_candidate`；这应视为安全优先的结果，而不是 parser 失败。
 
 ### `trimctx handoff <file> -o <handoff.md>`
 

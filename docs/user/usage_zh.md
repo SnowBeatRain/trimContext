@@ -92,7 +92,7 @@ trimctx init
 trimctx analyze path/to/session.jsonl
 ```
 
-`trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。省略 `--target` 时会询问安装到用户全局位置还是当前项目；写入前可先用 `trimctx init --dry-run` 查看路径。
+`trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。省略 `--target` 时会询问安装到用户全局位置还是当前项目；默认不安装自动 hooks。`trimctx install-hooks` 和 `trimctx init --with-hooks` 是实验性显式 opt-in 自动化。写入前可先用 `trimctx init --dry-run` 查看路径。
 
 ## 快速开始
 
@@ -107,26 +107,23 @@ trimctx analyze path/to/session.jsonl
 ```text
 trimctx analysis
 
-messages: 633
-tokens: 218,385
-protected: 338
-remove candidates: 41
-compress candidates: 30
-estimated saving: 5,592 tokens (2.56%)
+  633 messages / 218K tokens
+  token estimate: heuristic-v1 (local_heuristic, medium confidence)
+  tokenizer: local_heuristic (medium confidence)
+  context pressure: HIGH  removable: 5.6K tokens (2.6%)
+  health: MODERATE  rot: 10.8% (68 candidates)
 
-trust:
-- 0 remove candidates means nothing crossed the safe deletion threshold.
-- compress candidates, if any, are report-only and kept by default.
-- max score: 0.6428; near threshold: 0
+  trust:
+    41 remove candidates crossed the safe deletion threshold.
+    review the JSON report before applying destructive workflows.
+    phase0: REVIEW_REQUIRED
+    candidates are review-only until Phase 0 gates are locked.
+    max score: 0.6428; near threshold: 0
 
-top reasons:
-- recent_message: 241
-- superseded_by_later_instruction: 195
-- old_message: 190
-
-next:
-- trimctx report <file> -o report.json
-- trimctx compress <file> -o output.jsonl
+  next:
+    trimctx report "<file>" -o report.json
+    run Phase 0 manual review before using compress output as replacement context
+    trimctx analyze "<file>" --json
 ```
 
 压缩前建议先写出完整 JSON 报告：
@@ -152,7 +149,7 @@ trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.
 1. 运行 `analyze`，确认 trimctx 是否找到了有意义的候选。
 2. 运行 `report`，检查 `remove_candidate` 消息的原因。
 3. 保留原始 JSONL 文件不变。
-4. 运行带 `-o` 的 `compress`，创建新文件。
+4. 仅在审查后运行带 `-o` 的 `compress` 创建新文件；Phase 0 trust locked 之前，请把输出视为审查产物，而不是替代上下文。
 5. 如果需要安全证据，在压缩前后比较原文件 hash。
 
 ```bash
@@ -170,7 +167,10 @@ sha256sum session.jsonl
 
 ```bash
 npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
+npm run --silent phase0:review -- --reports reports/phase0 --labels datasets/private/phase0-labels --out reports/phase0
 ```
+
+`phase0:review` 会写出 `reports/phase0/phase0-review.json` 和 `reports/phase0/phase0-review.md`。其中 `trust_status` 在标注或指标不完整时为 `review_required`，只有所有门禁通过才是 `locked`，评审完成但门禁失败则是 `failed`。
 
 验证流程见 `docs/dev/phase0/phase0-plan.md`、`docs/dev/phase0/manual-label-guide.md` 和 `docs/dev/phase0/validation-summary-template.md`。
 

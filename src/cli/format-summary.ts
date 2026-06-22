@@ -28,6 +28,8 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
     lines.push(`    ${s.remove_candidates} remove candidates crossed the safe deletion threshold.`);
     lines.push("    review the JSON report before applying destructive workflows.");
   }
+  lines.push(`    phase0: ${report.phase0_trust.status.toUpperCase()}`);
+  lines.push("    candidates are review-only until Phase 0 gates are locked.");
   lines.push(`    max score: ${s.score_diagnostics.max_rot_score.toFixed(4)}; near threshold: ${s.score_diagnostics.near_remove_threshold_count}`);
 
   if (report.warnings.length > 0) {
@@ -76,10 +78,12 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
   lines.push("");
 
   lines.push("  next:");
-  if (rotCount > 0) {
-    lines.push(`    trimctx compress ${quotePath(report.input.file)} -o trimmed.jsonl`);
-  }
   lines.push(`    trimctx report ${quotePath(report.input.file)} -o report.json`);
+  if (report.phase0_trust.status === "locked" && rotCount > 0) {
+    lines.push(`    trimctx compress ${quotePath(report.input.file)} -o trimmed.jsonl`);
+  } else if (rotCount > 0) {
+    lines.push("    run Phase 0 manual review before using compress output as replacement context");
+  }
   lines.push(`    trimctx analyze ${quotePath(report.input.file)} --json`);
 
   return `${lines.join("\n")}\n`;

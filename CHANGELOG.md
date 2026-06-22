@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Phase 0 trust-loop report metadata via top-level `phase0_trust`, including trust status, manual-review metrics, gates, and review notes.
+- Parser diagnostics via top-level `parser_diagnostics`, including source type, parsed message count, source-line range, role counts, empty-content count, and missing-timestamp count.
+- `npm run phase0:review` for computing Phase 0 manual-review metrics and producing `phase0-review.json` / `phase0-review.md`.
+- Experimental explicit opt-in hook automation through `trimctx install-hooks` and `trimctx init --with-hooks`.
+
+### Changed
+
+- CLI summaries now show `phase0: REVIEW_REQUIRED` and state that candidates are review-only until Phase 0 gates are locked.
+- Candidate guidance is more conservative: `compress_candidate` remains report-only, and compression output should not be used as replacement context before Phase 0 trust is locked.
+- `trimctx init` no longer installs hooks by default; hooks require explicit experimental opt-in.
+
 ## [0.2.3] - 2026-06-22
 
 `0.2.3` is a release milestone for local-first context continuation: it brings resume-aware reports, handoff/next-context artifacts, optional exact token counting for OpenAI/Codex-family inputs, and safer package-visible install guidance into one publishable npm release. It is not a Phase 0 completion marker; real multi-sample validation and compression-strategy tuning continue toward a later release.

@@ -30,6 +30,23 @@ describe("CLI commands", () => {
     expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
     expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx", "compress.md"))).toBe(true);
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
+    expect(await fileExists(join(home, ".claude", "settings.json"))).toBe(false);
+    expect(result.stdout).toContain("install-hooks");
+  });
+
+  test("init installs Claude hooks only when explicitly requested", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-hooks-home-"));
+
+    const result = await runCli(["init", "--target", "user", "--dir", home, "--with-hooks"]);
+
+    expect(result.code).toBe(0);
+    const settings = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8")) as {
+      hooks?: { Stop?: Array<{ hooks?: Array<{ command?: string }> }> };
+    };
+    expect(settings.hooks?.Stop?.some(group =>
+      group.hooks?.some(hook => hook.command === "trimctx hook")
+    )).toBe(true);
+    expect(result.stdout).toContain("experimental Stop hook");
   });
 
   test("init prompts for user/global install target when target is omitted", async () => {
@@ -245,6 +262,27 @@ describe("CLI commands", () => {
     expect(report.resume.decisions.some((decision) => decision.text.includes("Correction"))).toBe(true);
   });
 
+  test("hook analyzes the transcript_path provided on stdin before falling back to latest", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-hook-home-"));
+    const project = await mkdtemp(join(tmpdir(), "trimctx-hook-project-"));
+    const olderSession = await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
+    const newerSession = await writeLowPressureFixture(join(home, ".claude", "projects", "project-b"));
+    const older = new Date("2026-01-01T00:00:00.000Z");
+    const newer = new Date("2026-01-02T00:00:00.000Z");
+    await utimes(olderSession.file, older, older);
+    await utimes(newerSession.file, newer, newer);
+
+    const result = await runCliWithInput(
+      ["hook", "--dry-run"],
+      `${JSON.stringify({ transcript_path: olderSession.file })}\n`,
+      { HOME: home },
+      project
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("rot candidates");
+  });
+
   test("current rejects unknown sources", async () => {
     const result = await runCli(["current", "--source", "unknown"]);
 
@@ -385,6 +423,19 @@ async function writeSessionFixture(dir = ""): Promise<{ dir: string; file: strin
   return { dir: targetDir, file };
 }
 
+async function writeLowPressureFixture(dir = ""): Promise<{ dir: string; file: string }> {
+  const targetDir = dir || await mkdtemp(join(tmpdir(), "trimctx-cli-low-pressure-"));
+  await mkdir(targetDir, { recursive: true });
+  const file = join(targetDir, "session.jsonl");
+  const lines = [
+    '{"type":"system","uuid":"sys-1","message":{"role":"system","content":"System stays"}}',
+    '{"type":"user","uuid":"user-1","message":{"role":"user","content":"Please summarize current status"}}',
+    '{"type":"assistant","uuid":"assistant-1","message":{"role":"assistant","content":"Current status is clean and no old context needs removal"}}'
+  ];
+  await writeFile(file, `${lines.join("\n")}\n`, "utf8");
+  return { dir: targetDir, file };
+}
+
 async function sha256(file: string): Promise<string> {
   return createHash("sha256").update(await readFile(file)).digest("hex");
 }
@@ -425,12 +476,18 @@ async function runCli(
 async function runCliWithInput(
   args: string[],
   input: string,
-  env: NodeJS.ProcessEnv = {}
+  env: NodeJS.ProcessEnv = {},
+  cwd = process.cwd()
 ): Promise<{ code: number; stdout: string; stderr: string }> {
+  const cliPath = join(process.cwd(), "src", "cli.ts");
+  const tsxLoaderPath = join(process.cwd(), "node_modules", "tsx", "dist", "loader.mjs");
   const script = [
     "import { spawn } from 'node:child_process';",
     "import { PassThrough } from 'node:stream';",
-    "const child = spawn(process.execPath, ['--import', 'tsx', 'src/cli.ts', ...process.argv.slice(1)], { stdio: ['pipe', 'pipe', 'pipe'] });",
+    `const cliPath = ${JSON.stringify(cliPath)};`,
+    `const runCwd = ${JSON.stringify(cwd)};`,
+    `const tsxLoaderPath = ${JSON.stringify(tsxLoaderPath)};`,
+    "const child = spawn(process.execPath, ['--import', tsxLoaderPath, cliPath, ...process.argv.slice(1)], { cwd: runCwd, stdio: ['pipe', 'pipe', 'pipe'] });",
     "const stdout = new PassThrough();",
     "stdout.isTTY = true;",
     "stdout.pipe(process.stdout);",
@@ -443,7 +500,7 @@ async function runCliWithInput(
 
   try {
     const { stdout, stderr } = await execFileAsync("node", ["--input-type=module", "-e", script, ...args], {
-      cwd: process.cwd(),
+      cwd,
       env: { ...process.env, TRIMCTX_FORCE_INTERACTIVE: "1", ...env }
     });
     return { code: 0, stdout, stderr };

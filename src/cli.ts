@@ -35,6 +35,7 @@ program
   .option("--dir <directory>", "Project directory for --target project, or base home directory for --target user.")
   .option("--force", "Overwrite existing installed trimctx assets.")
   .option("--dry-run", "Print planned installation paths without writing files.")
+  .option("--with-hooks", "Also install the experimental Claude Code Stop hook.")
   .description("Install AI-client command files and skills for Claude Code and Codex.")
   .action(async (options: InitOptions) => {
     const result = await initClientAssets(options);
@@ -181,7 +182,7 @@ program
   .option("--dir <directory>", "Override the base directory.")
   .option("--force", "Overwrite existing trimctx hook configuration.")
   .option("--dry-run", "Print planned configuration without writing.")
-  .description("Install Claude Code Stop hook into settings.json.")
+  .description("Install experimental Claude Code Stop hook into settings.json.")
   .action(async (options: { target?: string; dir?: string; force?: boolean; dryRun?: boolean }) => {
     const target = parseInitTarget(options.target);
     const baseDir = options.dir ? resolve(options.dir) : (target === "user" ? homedir() : process.cwd());
@@ -207,6 +208,7 @@ interface InitOptions {
   dir?: string;
   force?: boolean;
   dryRun?: boolean;
+  withHooks?: boolean;
 }
 
 interface InitAsset {
@@ -245,10 +247,12 @@ async function initClientAssets(options: InitOptions): Promise<InitResult> {
     lines.push(`- ${asset.label}: ${asset.destination}`);
   }
 
-  if (client === "all" || client === "claude") {
+  if (options.withHooks && (client === "all" || client === "claude")) {
     const settingsPath = join(baseDir, ".claude", "settings.json");
     const hookLines = await installHooks(settingsPath, { force: options.force, dryRun: options.dryRun });
     lines.push(...hookLines.map(l => `- ${l}`));
+  } else if (client === "all" || client === "claude") {
+    lines.push("- hooks not installed by default; run `trimctx install-hooks` or `trimctx init --with-hooks` to enable experimental Stop-hook automation.");
   }
 
   lines.push("Restart the AI client, then run /trimctx in Claude Code or use the trimctx Codex skill.");
@@ -451,7 +455,7 @@ async function installHooks(
   );
 
   if (hasTrimctxHook && !options.force) {
-    return [`trimctx hooks already installed in ${settingsPath}`];
+    return [`experimental Stop hook already installed in ${settingsPath}`];
   }
 
   const newStopHooks = options.force
@@ -469,12 +473,12 @@ async function installHooks(
 
   if (options.dryRun) {
     return [
-      `dry-run: would write Stop hook to ${settingsPath}`,
+      `dry-run: would write experimental Stop hook to ${settingsPath}`,
       output.trimEnd()
     ];
   }
 
   await mkdir(dirname(settingsPath), { recursive: true });
   await writeFile(settingsPath, output, "utf8");
-  return [`installed Stop hook in ${settingsPath}`];
+  return [`installed experimental Stop hook in ${settingsPath}`];
 }
