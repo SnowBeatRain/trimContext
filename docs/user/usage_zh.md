@@ -9,7 +9,7 @@
 - Node.js 20 或更高版本
 - 来自 Claude Code、OpenAI 风格聊天导出或 Codex/Hermes rollout 导出的 JSONL 对话文件
 
-trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库。Token 计算也保持本地：内置 `local_heuristic` 是默认 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确计数且不调用厂商 API。
+trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库。Token 计算也保持本地：内置 `local_heuristic` 是默认 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确计数且不调用厂商 API。`0.2.3` 是打包发布与续接能力里程碑，不代表 Phase 0 已完成；使用压缩输出前仍应审查报告。
 
 如果你全局安装 `trimctx` 且希望启用精确 `tiktoken` 计数，请把 `js-tiktoken` 安装到 CLI 能解析到的同一环境；或者在项目内同时本地安装 `trimctx` 和 `js-tiktoken`。
 

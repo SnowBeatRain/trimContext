@@ -8,6 +8,8 @@ trimctx reads your JSONL conversation files, identifies low-value or stale messa
 
 **Safety rule: trimctx prefers missing a deletion over deleting the wrong message.**
 
+**Release milestone:** `0.2.3` packages resume-aware reports, handoff/next-context artifacts, optional exact `tiktoken` counting for OpenAI/Codex-family inputs, and safer AI-client install guidance into one npm-ready release. It is still conservative by design: Phase 0 is not complete until broader real-sample validation and manual review metrics are finished.
+
 [中文说明](README_zh.md)
 
 ## What it looks like

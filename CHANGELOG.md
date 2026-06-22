@@ -7,14 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.3] - 2026-06-22
 
+`0.2.3` is a release milestone for local-first context continuation: it brings resume-aware reports, handoff/next-context artifacts, optional exact token counting for OpenAI/Codex-family inputs, and safer package-visible install guidance into one publishable npm release. It is not a Phase 0 completion marker; real multi-sample validation and compression-strategy tuning continue toward a later release.
+
 ### Added
 
+- Resume-aware report metadata and handoff artifacts that preserve likely continuation signals such as goals, decisions, active files, failures, test signals, and next steps.
 - Optional `js-tiktoken` integration for exact high-confidence token counts when the peer dependency is installed.
 - Tokenizer tests covering exact `tiktoken` metadata and the local heuristic fallback.
+- Package-content regression coverage to prevent unsafe download-and-execute install examples from entering published npm artifacts.
 
 ### Changed
 
 - Documentation now distinguishes local heuristic estimates from exact `tiktoken` counts in report metadata.
+- AI-client install guidance now uses download → review → run examples instead of pipe-to-shell commands.
 
 ## [0.2.1] - 2026-06-12
 

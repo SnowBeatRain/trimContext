@@ -8,6 +8,8 @@ trimctx 读取你的 JSONL 对话文件，识别低价值或过期消息，解�
 
 **安全原则：trimctx 宁可少删，也不要误删。**
 
+**发布里程碑：** `0.2.3` 把 resume-aware reports、handoff/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数，以及更安全的 AI 客户端安装说明整合成一个 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
+
 [English](README.md)
 
 ## 长什么样
