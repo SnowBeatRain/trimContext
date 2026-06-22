@@ -61,22 +61,28 @@ trimctx init
 
 Windows CMD：
 
-> 如果提示 `'irm' 不是内部或外部命令`，说明你在 CMD，不是在 PowerShell，请用下面这条 CMD 命令。
+> 如果 CMD 提示 `'pwsh' is not recognized`，可改用 `powershell`。执行前请先审阅下载到本地的脚本。
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+pwsh -NoProfile -Command "Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1"
+type install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 ```
 
 Windows PowerShell：
 
 ```powershell
-irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1
+Get-Content install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 macOS / Linux / WSL：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+curl -fsSLO https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh
+less install.sh
+bash install.sh
 ```
 
 然后重启 Claude Code，直接运行：

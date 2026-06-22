@@ -21,22 +21,28 @@ This path does not require publishing trimctx to npm.
 
 Windows CMD:
 
-> If CMD says `'irm' is not recognized`, you are not in PowerShell. Use this CMD command instead.
+> If CMD says `'pwsh' is not recognized`, use `powershell` instead. Review the downloaded script before running it.
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+pwsh -NoProfile -Command "Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1"
+type install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1
+Get-Content install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 macOS / Linux / WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+curl -fsSLO https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh
+less install.sh
+bash install.sh
 ```
 
 On Windows, it installs CLI shims at `%USERPROFILE%\.local\bin`, installs the Claude Code plugin at `%USERPROFILE%\.claude\plugins\trimctx`, and keeps the source checkout at `%LOCALAPPDATA%\trimctx`.

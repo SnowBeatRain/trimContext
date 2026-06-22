@@ -16,19 +16,25 @@ Use the `trimctx` CLI as the source of truth. Do not reimplement JSONL parsing, 
 Windows CMD:
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex"
+pwsh -NoProfile -Command "Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1"
+type install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 | iex
+Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1
+Get-Content install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 macOS / Linux / WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh | bash
+curl -fsSLO https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh
+less install.sh
+bash install.sh
 ```
 
 If trimctx is published to npm later, global npm install can also be used:
