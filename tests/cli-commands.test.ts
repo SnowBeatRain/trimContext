@@ -321,6 +321,9 @@ describe("CLI commands", () => {
     expect(handoff).toContain("## Resume Readiness");
     expect(nextContextMarkdown).toContain("# Continue This Session");
     expect(nextContextMarkdown).toContain("## Start Here");
+    expect(nextContextMarkdown).toContain("## Operating Rules");
+    expect(nextContextMarkdown).toContain("Do not modify the original JSONL transcript");
+    expect(nextContextMarkdown).toContain("trimctx analyze");
   });
 
   test("analyze --json matches the report command output", async () => {

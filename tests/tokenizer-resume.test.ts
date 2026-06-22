@@ -153,6 +153,11 @@ describe("resume layer", () => {
     expect(nextContext).toContain("## Active Files");
     expect(nextContext).toContain("## Current Problem");
     expect(nextContext).toContain("## Start Here");
+    expect(nextContext).toContain("## Operating Rules");
+    expect(nextContext).toContain("Do not modify the original JSONL transcript");
+    expect(nextContext).toContain("## Next Commands");
+    expect(nextContext).toContain("trimctx analyze");
+    expect(nextContext).toContain("trimctx report");
   });
 
   test("redacts common sensitive values from resume evidence", () => {
