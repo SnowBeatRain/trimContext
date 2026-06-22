@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest";
+import { analyzeMessages } from "../src/core/analyzer.js";
 import { formatHandoff, formatNextContext } from "../src/core/handoff.js";
 import { createReport } from "../src/core/reporter.js";
 import { extractResumeState } from "../src/core/resume/extractor.js";
 import { scoreResumeReadiness } from "../src/core/resume/readiness.js";
-import { selectTokenizer } from "../src/core/tokenizer/index.js";
+import { selectTokenizer, selectTokenizerForSource } from "../src/core/tokenizer/index.js";
+import { setTiktokenEncoderFactoryForTesting } from "../src/core/tokenizer/tiktoken.js";
 import type { NormalizedMessage } from "../src/types/message.js";
 
 function message(id: string, role: NormalizedMessage["role"], content: string, sourceLine: number): NormalizedMessage {
@@ -87,7 +89,7 @@ describe("tokenizer layer", () => {
   test("uses an injected tiktoken encoder for exact counts when available", async () => {
     const { createTiktokenTokenizerForTesting } = await import("../src/core/tokenizer/tiktoken.js");
     const tokenizer = createTiktokenTokenizerForTesting(() => ({
-      encode: (text: string) => Array.from(text),
+      encode: (text: string) => Array.from(text).map((_, index) => index),
       free: () => undefined
     }));
 
@@ -105,6 +107,36 @@ describe("tokenizer layer", () => {
       message_overhead_tokens: 4
     });
     expect(metadata.breakdown.char_count).toBe(4);
+  });
+
+  test("uses local tiktoken for OpenAI and Codex when available but keeps Claude Code heuristic by default", () => {
+    setTiktokenEncoderFactoryForTesting(() => ({
+      encode: (text: string) => Array.from(text).map((_, index) => index)
+    }));
+
+    try {
+      expect(selectTokenizerForSource("openai-jsonl").name).toBe("tiktoken");
+      expect(selectTokenizerForSource("codex-jsonl").name).toBe("tiktoken");
+      expect(selectTokenizerForSource("claude-code-jsonl").name).toBe("local_heuristic");
+
+      const openAiMessage = message("m1", "user", "abcd", 1);
+      const claudeMessage = { ...message("m2", "user", "abcd", 2), source: "claude-code-jsonl" as const };
+      const [openAiAnalyzed, claudeAnalyzed] = analyzeMessages([openAiMessage, claudeMessage]);
+
+      expect(openAiAnalyzed.token_metadata).toMatchObject({
+        estimator: "tiktoken",
+        estimated: false,
+        confidence: "high",
+        estimated_tokens: 8
+      });
+      expect(claudeAnalyzed.token_metadata).toMatchObject({
+        estimator: "local_heuristic",
+        estimated: true,
+        confidence: "medium"
+      });
+    } finally {
+      setTiktokenEncoderFactoryForTesting(undefined);
+    }
   });
 });
 

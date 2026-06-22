@@ -1,6 +1,6 @@
 import { LocalHeuristicTokenizer } from "./heuristic.js";
 import { createTiktokenTokenizer } from "./tiktoken.js";
-import type { TokenMetadata, TokenizerConfidence, TokenizerName } from "../../types/message.js";
+import type { MessageSource, TokenMetadata, TokenizerConfidence, TokenizerName } from "../../types/message.js";
 
 export type TokenizerPreference = "auto" | "heuristic" | TokenizerName;
 
@@ -18,6 +18,13 @@ export function selectTokenizer(preference: TokenizerPreference = "auto"): Token
     return new LocalHeuristicTokenizer();
   }
   return createTiktokenTokenizer() ?? new LocalHeuristicTokenizer();
+}
+
+export function selectTokenizerForSource(source: MessageSource | undefined, preference: TokenizerPreference = "auto"): Tokenizer {
+  if (source === "claude-code-jsonl" && preference === "auto") {
+    return new LocalHeuristicTokenizer();
+  }
+  return selectTokenizer(preference);
 }
 
 export { ApproxTokenizer, LocalHeuristicTokenizer } from "./heuristic.js";

@@ -141,6 +141,19 @@ trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
 ```
 
+## Resume-aware 交接
+
+`trimctx analyze`、`trimctx report`、`trimctx current` 和 `trimctx resume` 会在报告中包含本地 resume state。提取器基于规则，不调用外部 LLM 或 API。
+
+resume state 是长会话后的最佳努力、启发式续接辅助：
+
+- `tokenization` 记录 token 计算使用的 tokenizer 名称和置信度。默认使用本地启发式 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确 `tiktoken` 计数且不调用厂商 API。Claude Code 输入仍保持本地启发式路径，直到后续接入 Claude 兼容的本地 tokenizer。
+- `resume.readiness` 评估会话是否包含足够续接信号。
+- `resume.currentGoal`、`decisions`、`activeFiles`、`failures`、`testSignals` 和 `nextSteps` 会保留压缩后可能需要的续接线索。
+- `trimctx handoff --next-context next-context.md` 会在完整 handoff 报告旁边写出一份较短的续接草稿。
+
+原始 JSONL 会话仍然只读。Resume 提取只影响报告和生成的 Markdown 产物。分享或粘贴到另一个会话前，请人工审查生成的 handoff；规则提取可能遗漏、误分类或脱敏不完美。
+
 自动分析最新的 Claude Code 或 Codex 会话：
 
 ```bash
@@ -319,7 +332,7 @@ sha256sum session.jsonl
 
 - `compress_candidate` 消息保持原样（暂不改写或摘要）。
 - JSON 报告包含 `summary.score_diagnostics`，用于在调整阈值前查看评分分布；诊断字段不会改变压缩行为。
-- token 数是本地估算，不等同于特定模型 tokenizer 的精确计数。
+- token 数默认使用零依赖本地启发式估算。安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可使用本地精确 `tiktoken` 计数，不调用厂商 API；Claude Code 输入仍保持启发式估算，因为当前未内置 Claude 兼容的本地 tokenizer。
 - Claude Code 和 Codex/Hermes rollout 路径已用本地样本验证；真实多样本验证仍在进行中，OpenAI 还需要用户提供真实导出样本后，Phase 0 才能覆盖所有已支持来源。建议先审查报告，再使用压缩输出。
 - 默认阈值优先避免误删，而不是最大化 token 节省；只有在用私有验证样本审查报告后，才建议下调阈值。
 - 暂无 Web UI、MCP server 或独立安装器。Claude Code 已通过项目命令文件和插件包装支持；Codex 已通过 skill/CLI 工作流支持，不宣传为已验证的 slash command。

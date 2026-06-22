@@ -10,12 +10,18 @@ interface TiktokenEncoder {
 
 type EncoderFactory = () => TiktokenEncoder | undefined;
 
+let testEncoderFactory: EncoderFactory | undefined;
+
 export function createTiktokenTokenizer(): Tokenizer | undefined {
-  return createTiktokenTokenizerFromFactory(loadJsTiktokenEncoder);
+  return createTiktokenTokenizerFromFactory(testEncoderFactory ?? loadJsTiktokenEncoder);
 }
 
 export function createTiktokenTokenizerForTesting(factory: EncoderFactory): Tokenizer | undefined {
   return createTiktokenTokenizerFromFactory(factory);
+}
+
+export function setTiktokenEncoderFactoryForTesting(factory: EncoderFactory | undefined): void {
+  testEncoderFactory = factory;
 }
 
 function createTiktokenTokenizerFromFactory(factory: EncoderFactory): Tokenizer | undefined {

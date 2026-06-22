@@ -142,6 +142,42 @@ describe("createReport", () => {
     expect(report.warnings.join("\n")).not.toContain("session_compacted");
   });
 
+  test("does not warn about approximate tokens when all messages use exact tokenization", () => {
+    const candidate = analyzedMessage("m1", ["old_message"]);
+    candidate.token_metadata = {
+      estimator: "tiktoken",
+      estimator_version: "tiktoken-v1",
+      estimated: false,
+      confidence: "high",
+      estimated_tokens: 8,
+      message_overhead_tokens: 4,
+      breakdown: {
+        cjk_chars: 0,
+        ascii_tokens: 0,
+        latin_words: 1,
+        numbers: 0,
+        symbols: 0,
+        whitespace_runs: 0,
+        code_like_segments: 0,
+        path_like_segments: 0,
+        json_like_segments: 0,
+        line_count: 1,
+        char_count: 4
+      }
+    };
+    candidate.tokens = 8;
+
+    const report = createReport([candidate], "session.jsonl");
+
+    expect(report.tokenization).toEqual({ tokenizer: "tiktoken", confidence: "high" });
+    expect(report.summary.token_estimation).toMatchObject({
+      estimator: "tiktoken",
+      estimated: false,
+      note: "Model-specific tokenizer count."
+    });
+    expect(report.warnings.join("\n")).not.toContain("Token counts are approximate");
+  });
+
   test("includes tokenizer metadata, token breakdown, and context pressure", () => {
     const candidate = analyzedMessage("m1", ["old_message"]);
     candidate.content = "const answer = {\"ok\": true}\n路径 /tmp/session.jsonl";

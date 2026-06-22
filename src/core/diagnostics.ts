@@ -19,9 +19,11 @@ export function parseJsonlRecords(input: string, file = "<input>"): JsonlRecord[
 }
 
 export function createAnalysisWarnings(messages: NormalizedMessage[]): string[] {
-  const warnings = [
-    "Token counts are approximate local estimates, not model-specific tokenizer counts."
-  ];
+  const warnings = [];
+
+  if (messages.some((message) => message.token_metadata?.estimated !== false)) {
+    warnings.push("Token counts are approximate local estimates, not model-specific tokenizer counts.");
+  }
 
   if (messages.some((message) => message.decision === "compress_candidate")) {
     warnings.push(

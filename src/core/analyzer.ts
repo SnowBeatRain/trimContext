@@ -5,14 +5,14 @@ import { parseJsonlRecords } from "./diagnostics.js";
 import { resolveAnalysisOptions, type AnalysisOptions } from "./options.js";
 import { applySafetyRules } from "./safety.js";
 import { scoreMessages } from "./scorer.js";
-import { selectTokenizer } from "./tokenizer/index.js";
+import { selectTokenizerForSource } from "./tokenizer/index.js";
 import type { NormalizedMessage } from "../types/message.js";
 
 export function analyzeMessages(messages: NormalizedMessage[], options: AnalysisOptions = {}): NormalizedMessage[] {
   const resolved = resolveAnalysisOptions(options);
-  const tokenizer = selectTokenizer();
   // Analysis is staged: estimate local token cost first, then mark safety constraints before scoring rot.
   const withTokens = messages.map((message) => {
+    const tokenizer = selectTokenizerForSource(message.source);
     const tokenMetadata = tokenizer.analyzeMessage(message.content);
     return {
       ...message,
