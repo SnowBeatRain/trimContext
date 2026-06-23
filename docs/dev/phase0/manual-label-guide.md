@@ -68,7 +68,10 @@ Mark a `remove_candidate` as `critical_keep` immediately if it contains any of t
 remove_candidate_precision = safe_remove / reviewed_remove_candidates
 critical_false_deletion = count(remove_candidate labels where label == critical_keep)
 protected_recall = protected_keep / reviewed_protected_examples
+protected_sample_coverage = reviewed_non_critical_protected / non_critical_protected
 ```
+
+Critical protected messages are protected messages with `rot_score >= 0.6`, matching the protected-high-rot queue that Phase 0 reviewers must inspect because these messages are protected yet look stale or noisy. Phase 0 requires all critical protected messages to be labeled, while other protected messages only need representative sampling. The default non-critical protected sample gate is `20%`.
 
 Phase 0 should not pass if `critical_false_deletion > 0`, even when aggregate precision is high. `questionable_remove` does not count as safe for precision.
 

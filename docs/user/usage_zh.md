@@ -170,7 +170,7 @@ npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase
 npm run --silent phase0:review -- --reports reports/phase0 --labels datasets/private/phase0-labels --out reports/phase0
 ```
 
-`phase0:review` 是仓库开发脚本，应在源码检出目录中运行，不是全局安装后的 `trimctx` 包命令。脚本会写出 `reports/phase0/phase0-review.json` 和 `reports/phase0/phase0-review.md`。其中 `trust_status` 在标注、label 引用或指标不完整时为 `review_required`，只有所有门禁通过才是 `locked`，评审完成但指标门禁失败则是 `failed`。
+`phase0:review` 是仓库开发脚本，应在源码检出目录中运行，不是全局安装后的 `trimctx` 包命令。脚本会写出 `reports/phase0/phase0-review.json` 和 `reports/phase0/phase0-review.md`。其中 `trust_status` 在标注、label 引用或指标不完整时为 `review_required`，只有所有门禁通过才是 `locked`，评审完成但指标门禁失败则是 `failed`。Protected 评审会刻意控制范围：关键 protected 消息必须全量标注，非关键 protected 消息用代表性抽样覆盖。
 
 验证流程见 `docs/dev/phase0/phase0-plan.md`、`docs/dev/phase0/manual-label-guide.md` 和 `docs/dev/phase0/validation-summary-template.md`。
 

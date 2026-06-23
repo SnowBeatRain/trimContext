@@ -47,6 +47,52 @@ describe("phase0 manual review metrics", () => {
     expect(summary).not.toContain("contains user decision");
   });
 
+  test("locks trust when critical protected are complete and non-critical protected are sampled", async () => {
+    const { root, reportsDir, labelsDir } = await createReviewFixture();
+
+    await writeFile(join(reportsDir, "sample.report.json"), JSON.stringify({
+      schema_version: "trimctx.report.v1",
+      messages: [
+        { id: "m1", decision: "remove_candidate", protected: false },
+        { id: "m2", decision: "keep_protected", protected: true, reasons: ["system_or_developer_message"], rot_score: 0.7 },
+        { id: "m3", decision: "keep_protected", protected: true, reasons: ["contains_tool_interaction"], rot_score: 0.8 },
+        { id: "m4", decision: "keep_protected", protected: true, reasons: ["recent_message"], rot_score: 0.1 },
+        { id: "m5", decision: "keep_protected", protected: true, reasons: ["recent_message"], rot_score: 0.2 }
+      ]
+    }), "utf8");
+    await writeFile(join(labelsDir, "labels.jsonl"), [
+      JSON.stringify({ sample_id: "sample", message_id: "m1", decision: "remove_candidate", label: "safe_remove", review_note: "duplicate" }),
+      JSON.stringify({ sample_id: "sample", message_id: "m2", decision: "keep_protected", label: "protected_keep", review_note: "system" }),
+      JSON.stringify({ sample_id: "sample", message_id: "m3", decision: "keep_protected", label: "protected_keep", review_note: "tool" }),
+      JSON.stringify({ sample_id: "sample", message_id: "m4", decision: "keep_protected", label: "protected_keep", review_note: "sampled recent" })
+    ].join("\n"), "utf8");
+
+    await runReview(reportsDir, labelsDir, root);
+
+    const output = JSON.parse(await readFile(join(root, "phase0-review.json"), "utf8"));
+    expect(output.metrics).toMatchObject({
+      remove_candidates: 1,
+      remove_candidates_reviewed: 1,
+      critical_protected_messages: 2,
+      critical_protected_reviewed: 2,
+      protected_messages: 4,
+      protected_reviewed: 3,
+      protected_sample_coverage: 0.5,
+      protected_review_requirement_met: true,
+      critical_false_deletion: 0,
+      protected_recall: 1,
+      remove_candidate_precision: 1
+    });
+    expect(output.gates_passed).toBe(true);
+    expect(output.trust_status).toBe("locked");
+
+    const summary = await readFile(join(root, "phase0-review.md"), "utf8");
+    expect(summary).toContain("| Critical protected messages | 2 |");
+    expect(summary).toContain("| Critical protected reviewed | 2 |");
+    expect(summary).toContain("| Protected sample coverage | 50.0% |");
+    expect(summary).toContain("critical protected messages plus a sampled subset of other protected messages");
+  });
+
   test("keeps trust review_required when labels contain quality issues", async () => {
     const { root, reportsDir, labelsDir } = await createReviewFixture();
 

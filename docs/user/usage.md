@@ -170,7 +170,7 @@ npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase
 npm run --silent phase0:review -- --reports reports/phase0 --labels datasets/private/phase0-labels --out reports/phase0
 ```
 
-`phase0:review` is a repository development script; run it from a source checkout, not from a globally installed `trimctx` package. The script writes `reports/phase0/phase0-review.json` and `reports/phase0/phase0-review.md`. Its `trust_status` is `review_required` while labels, label references, or metrics are incomplete, `locked` only when all gates pass, and `failed` when review completes but a metric gate fails.
+`phase0:review` is a repository development script; run it from a source checkout, not from a globally installed `trimctx` package. The script writes `reports/phase0/phase0-review.json` and `reports/phase0/phase0-review.md`. Its `trust_status` is `review_required` while labels, label references, or metrics are incomplete, `locked` only when all gates pass, and `failed` when review completes but a metric gate fails. Protected review is intentionally scoped: all critical protected messages must be labeled, while non-critical protected messages are checked by representative sampling.
 
 The workflow is documented in `docs/dev/phase0/phase0-plan.md`, `docs/dev/phase0/manual-label-guide.md`, and `docs/dev/phase0/validation-summary-template.md`.
 

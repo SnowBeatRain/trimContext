@@ -16,6 +16,8 @@ interface ReportMessage {
   id?: unknown;
   decision?: unknown;
   protected?: unknown;
+  reasons?: unknown;
+  rot_score?: unknown;
 }
 
 interface ReportFile {
@@ -43,7 +45,9 @@ interface NormalizedLabel {
 const GATES = {
   critical_false_deletion: 0,
   protected_recall: 1,
-  remove_candidate_precision: 0.7
+  remove_candidate_precision: 0.7,
+  protected_sample_coverage: 0.2,
+  critical_protected_rot_score: 0.6
 } as const;
 
 async function main(): Promise<void> {
@@ -70,7 +74,7 @@ async function main(): Promise<void> {
     trust_status: gates.status,
     notes: [
       "Manual review metrics are computed from labels only; raw message content and review notes are intentionally excluded.",
-      "Phase 0 trust is locked only when all gates pass."
+      "Phase 0 trust is locked only when all gates pass and protected review covers all critical protected messages plus a sampled subset of other protected messages."
     ]
   };
 
@@ -188,6 +192,10 @@ function summarize(reports: Map<string, ReportMessage[]>, labels: NormalizedLabe
   let protectedMessages = 0;
   let protectedReviewed = 0;
   let protectedKeep = 0;
+  let criticalProtectedMessages = 0;
+  let criticalProtectedReviewed = 0;
+  let nonCriticalProtectedMessages = 0;
+  let nonCriticalProtectedReviewed = 0;
   let overProtected = 0;
   let missedLowValueNoise = 0;
 
@@ -210,9 +218,20 @@ function summarize(reports: Map<string, ReportMessage[]>, labels: NormalizedLabe
       }
 
       if (isProtected) {
+        const isCriticalProtected = hasCriticalProtectedReason(message);
         protectedMessages += 1;
+        if (isCriticalProtected) {
+          criticalProtectedMessages += 1;
+        } else {
+          nonCriticalProtectedMessages += 1;
+        }
         if (label) {
           protectedReviewed += 1;
+          if (isCriticalProtected) {
+            criticalProtectedReviewed += 1;
+          } else {
+            nonCriticalProtectedReviewed += 1;
+          }
           if (label.label === "protected_keep") protectedKeep += 1;
           if (label.label === "over_protected") overProtected += 1;
         }
@@ -223,6 +242,12 @@ function summarize(reports: Map<string, ReportMessage[]>, labels: NormalizedLabe
   for (const label of labels) {
     if (label.label === "missed_low_value_noise") missedLowValueNoise += 1;
   }
+
+  const protectedSampleCoverage = nonCriticalProtectedMessages === 0
+    ? 1
+    : roundRatio(nonCriticalProtectedReviewed / nonCriticalProtectedMessages);
+  const protectedReviewRequirementMet = criticalProtectedReviewed === criticalProtectedMessages
+    && protectedSampleCoverage >= GATES.protected_sample_coverage;
 
   return {
     remove_candidates: removeCandidates,
@@ -235,10 +260,20 @@ function summarize(reports: Map<string, ReportMessage[]>, labels: NormalizedLabe
     protected_reviewed: protectedReviewed,
     protected_keep: protectedKeep,
     protected_recall: protectedReviewed === 0 ? null : roundRatio(protectedKeep / protectedReviewed),
+    critical_protected_messages: criticalProtectedMessages,
+    critical_protected_reviewed: criticalProtectedReviewed,
+    non_critical_protected_messages: nonCriticalProtectedMessages,
+    non_critical_protected_reviewed: nonCriticalProtectedReviewed,
+    protected_sample_coverage: protectedSampleCoverage,
+    protected_review_requirement_met: protectedReviewRequirementMet,
     over_protected: overProtected,
     missed_low_value_noise: missedLowValueNoise,
     ...quality
   };
+}
+
+function hasCriticalProtectedReason(message: ReportMessage): boolean {
+  return typeof message.rot_score === "number" && message.rot_score >= GATES.critical_protected_rot_score;
 }
 
 function validateLabels(reports: Map<string, ReportMessage[]>, labels: NormalizedLabel[]) {
@@ -280,7 +315,7 @@ function validateLabels(reports: Map<string, ReportMessage[]>, labels: Normalize
 }
 
 function evaluateGates(metrics: ReturnType<typeof summarize>): { passed: boolean; status: TrustStatus } {
-  const reviewComplete = metrics.remove_candidates_reviewed === metrics.remove_candidates && metrics.protected_reviewed === metrics.protected_messages;
+  const reviewComplete = metrics.remove_candidates_reviewed === metrics.remove_candidates && metrics.protected_review_requirement_met;
   if (metrics.label_quality_issues > 0 || !reviewComplete || metrics.remove_candidate_precision === null || metrics.protected_recall === null) {
     return { passed: false, status: "review_required" };
   }
@@ -333,6 +368,12 @@ function formatSummary(output: {
   lines.push(`| Questionable remove | ${output.metrics.questionable_remove} |`);
   lines.push(`| Protected messages | ${output.metrics.protected_messages} |`);
   lines.push(`| Protected reviewed | ${output.metrics.protected_reviewed} |`);
+  lines.push(`| Critical protected messages | ${output.metrics.critical_protected_messages} |`);
+  lines.push(`| Critical protected reviewed | ${output.metrics.critical_protected_reviewed} |`);
+  lines.push(`| Non-critical protected messages | ${output.metrics.non_critical_protected_messages} |`);
+  lines.push(`| Non-critical protected reviewed | ${output.metrics.non_critical_protected_reviewed} |`);
+  lines.push(`| Protected sample coverage | ${percent(output.metrics.protected_sample_coverage)} |`);
+  lines.push(`| Protected review requirement met | ${output.metrics.protected_review_requirement_met ? "yes" : "no"} |`);
   lines.push(`| Over protected | ${output.metrics.over_protected} |`);
   lines.push(`| Missed low-value noise | ${output.metrics.missed_low_value_noise} |`);
   lines.push("");
@@ -346,7 +387,7 @@ function formatSummary(output: {
   lines.push("");
   lines.push("## Safety Notes");
   lines.push("- Raw message content and reviewer notes are intentionally excluded from this summary.");
-  lines.push("- Phase 0 remains review-required until all candidates and protected messages have labels.");
+  lines.push("- Phase 0 remains review-required until all remove candidates are labeled and protected review covers all critical protected messages plus a sampled subset of other protected messages.");
   return `${lines.join("\n")}\n`;
 }
 
