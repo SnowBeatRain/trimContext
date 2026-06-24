@@ -127,32 +127,19 @@ npm link
 trimctx --help
 ```
 
-npm install only, without command files:
+Core daily workflow:
 
 ```bash
-npm install -g trimctx
-trimctx init --client all
-trimctx init --target user --client all
-trimctx --help
-```
-
-Write a full JSON report for review:
-
-```bash
-trimctx report path/to/session.jsonl -o report.json
-```
-
-Generate a compressed copy (original untouched):
-
-```bash
-trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
-```
-
-Generate handoff artifacts for continuing the work:
-
-```bash
+trimctx init
+trimctx current
 trimctx handoff path/to/session.jsonl
 ```
+
+- `trimctx init` installs the Claude Code plugin and Codex skill files.
+- `trimctx current` analyzes the latest local Claude Code or Codex session.
+- `trimctx handoff <file>` creates a UID-based continuation package you can reference later.
+
+Need deeper inspection? Use `trimctx analyze <file>` for a direct file summary and `trimctx report <file> -o report.json` for the full JSON audit trail. Use `trimctx compress` only after reviewing the report; compression remains conservative and never modifies the original file.
 
 ## Resume-aware handoff
 
@@ -231,7 +218,9 @@ npm run dev -- analyze path/to/session.jsonl
 
 ## Commands
 
-### `trimctx init`
+### Core commands
+
+#### `trimctx init`
 
 Install AI-client command files and skills from the npm package. Hooks are not installed by default; hook automation is experimental and requires explicit opt-in with `trimctx install-hooks` or `trimctx init --with-hooks`.
 
@@ -251,7 +240,29 @@ trimctx init --dry-run
 | `--dry-run` | `false` | Print planned paths without writing files |
 | `--with-hooks` | `false` | Experimental: also install Claude Stop hook automation |
 
-### `trimctx analyze <file>`
+#### `trimctx current`
+
+Analyze the most recent Claude Code or Codex session automatically.
+
+```bash
+trimctx current
+trimctx current --source claude
+trimctx current --source codex
+```
+
+#### `trimctx handoff <file>`
+
+Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
+
+```bash
+trimctx handoff session.jsonl
+```
+
+By default, this creates `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` for easy handoff references. `manifest.json` includes absolute file paths for local automation plus relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root; legacy single-file output remains available with `-o handoff.md --next-context next-context.md`. Handoff packages may include original transcript content and secrets in `report.json`; review before sharing.
+
+### Diagnostic commands
+
+#### `trimctx analyze <file>`
 
 Print a terminal summary or full JSON report.
 
@@ -269,7 +280,9 @@ trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 | `--remove-threshold <score>` | `0.80` | Minimum rot_score to mark as `remove_candidate` |
 | `--compress-threshold <score>` | `0.60` | Minimum rot_score to mark as `compress_candidate` |
 
-### `trimctx report <file> -o <report.json>`
+### Advanced audit commands
+
+#### `trimctx report <file> -o <report.json>`
 
 Write a complete JSON report including per-message decisions, scores, reasons, warnings, top-level `phase0_trust`, and top-level `parser_diagnostics`.
 
@@ -277,7 +290,9 @@ Write a complete JSON report including per-message decisions, scores, reasons, w
 trimctx report session.jsonl -o report.json
 ```
 
-### `trimctx compress <file> -o <output.jsonl>`
+### Experimental compression command
+
+#### `trimctx compress <file> -o <output.jsonl>`
 
 Write a safe compressed copy. The original file is never modified.
 
@@ -294,19 +309,11 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 `compress_candidate` is intentionally conservative: it means trimctx found a stale or low-value signal, but not enough evidence to remove the message safely. `remove_candidate` is also a candidate for human review until Phase 0 trust is locked. Some formats, especially Codex/Hermes rollout files, may produce zero `remove_candidate` messages under default thresholds; treat that as a safety-first result rather than a parser failure.
 
-### `trimctx handoff <file>`
+### Legacy alias
 
-Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
+#### `trimctx resume`
 
-```bash
-trimctx handoff session.jsonl
-```
-
-By default, this creates `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` for easy handoff references. `manifest.json` includes absolute file paths for local automation plus relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root; legacy single-file output remains available with `-o handoff.md --next-context next-context.md`. Handoff packages may include original transcript content and secrets in `report.json`; review before sharing.
-
-### `trimctx resume`
-
-Find and analyze the most recent Claude Code session under `~/.claude/projects/`.
+Find and analyze the most recent Claude Code session under `~/.claude/projects/`. Prefer `trimctx current` for new workflows.
 
 ```bash
 trimctx resume

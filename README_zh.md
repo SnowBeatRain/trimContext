@@ -127,32 +127,19 @@ npm link
 trimctx --help
 ```
 
-仅通过 npm 安装时：
+日常核心流程：
 
 ```bash
-npm install -g trimctx
-trimctx init --client all
-trimctx init --target user --client all
-trimctx --help
-```
-
-写出完整 JSON 报告用于审查：
-
-```bash
-trimctx report path/to/session.jsonl -o report.json
-```
-
-生成压缩副本（原文件不动）：
-
-```bash
-trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
-```
-
-生成继续交接文档：
-
-```bash
+trimctx init
+trimctx current
 trimctx handoff path/to/session.jsonl
 ```
+
+- `trimctx init` 安装 Claude Code 插件和 Codex skill 文件。
+- `trimctx current` 自动分析最新的本地 Claude Code 或 Codex 会话。
+- `trimctx handoff <file>` 生成可用 UID 引用的继续交接包。
+
+需要更深入排查时，再使用 `trimctx analyze <file>` 查看指定文件摘要，或用 `trimctx report <file> -o report.json` 写出完整 JSON 审计报告。`trimctx compress` 只建议在审查报告后使用；压缩仍保持保守，并且永远不修改原文件。
 
 ## Resume-aware 交接
 
@@ -231,7 +218,9 @@ npm run dev -- analyze path/to/session.jsonl
 
 ## 命令
 
-### `trimctx init`
+### 核心命令
+
+#### `trimctx init`
 
 从 npm 包安装 AI 客户端命令文件与 skill。默认不安装 hooks；hook 自动化是实验性能力，需要通过 `trimctx install-hooks` 或 `trimctx init --with-hooks` 显式开启。
 
@@ -251,7 +240,29 @@ trimctx init --dry-run
 | `--dry-run` | `false` | 只打印计划路径，不写文件 |
 | `--with-hooks` | `false` | 实验性：同时安装 Claude Stop hook 自动化 |
 
-### `trimctx analyze <file>`
+#### `trimctx current`
+
+自动分析最新的 Claude Code 或 Codex 会话。
+
+```bash
+trimctx current
+trimctx current --source claude
+trimctx current --source codex
+```
+
+#### `trimctx handoff <file>`
+
+写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
+
+```bash
+trimctx handoff session.jsonl
+```
+
+默认会创建 `.trimctx/handoffs/<uid>/`，其中包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。UID 使用 UTC 时间（`ctx_YYYYMMDD_HHMMSS_xxxxxx`）并以 `copyable uid: ...` 输出，方便直接复制引用。`manifest.json` 同时包含本机自动化可用的绝对路径，以及便于移动或归档 package 的相对文件名。可用 `--out <dir>` 指定自定义 package 根目录；旧版单文件输出仍可通过 `-o handoff.md --next-context next-context.md` 使用。交接包可能在 `report.json` 中包含原始会话内容和密钥，分享前请先审查。
+
+### 诊断命令
+
+#### `trimctx analyze <file>`
 
 输出终端摘要或完整 JSON 报告。
 
@@ -269,7 +280,9 @@ trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 | `--remove-threshold <score>` | `0.80` | 标记为 `remove_candidate` 的最低 rot_score |
 | `--compress-threshold <score>` | `0.60` | 标记为 `compress_candidate` 的最低 rot_score |
 
-### `trimctx report <file> -o <report.json>`
+### 高级审计命令
+
+#### `trimctx report <file> -o <report.json>`
 
 写出完整 JSON 报告，包含逐条消息的决策、评分、原因、警告、顶层 `phase0_trust` 和顶层 `parser_diagnostics`。
 
@@ -277,7 +290,9 @@ trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 trimctx report session.jsonl -o report.json
 ```
 
-### `trimctx compress <file> -o <output.jsonl>`
+### 实验性压缩命令
+
+#### `trimctx compress <file> -o <output.jsonl>`
 
 写出安全压缩副本。原文件永远不被修改。
 
@@ -294,19 +309,11 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 `compress_candidate` 是有意保守的信号：它表示 trimctx 发现了过期或低价值迹象，但还没有足够证据安全删除该消息。`remove_candidate` 在 Phase 0 trust locked 前也只是人工审查候选。某些格式，尤其是 Codex/Hermes rollout 文件，在默认阈值下可能产生 0 条 `remove_candidate`；这应视为安全优先的结果，而不是 parser 失败。
 
-### `trimctx handoff <file>`
+### 兼容别名
 
-写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
+#### `trimctx resume`
 
-```bash
-trimctx handoff session.jsonl
-```
-
-默认会创建 `.trimctx/handoffs/<uid>/`，其中包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。UID 使用 UTC 时间（`ctx_YYYYMMDD_HHMMSS_xxxxxx`）并以 `copyable uid: ...` 输出，方便直接复制引用。`manifest.json` 同时包含本机自动化可用的绝对路径，以及便于移动或归档 package 的相对文件名。可用 `--out <dir>` 指定自定义 package 根目录；旧版单文件输出仍可通过 `-o handoff.md --next-context next-context.md` 使用。交接包可能在 `report.json` 中包含原始会话内容和密钥，分享前请先审查。
-
-### `trimctx resume`
-
-查找并分析 `~/.claude/projects/` 下最近修改的 Claude Code 会话。
+查找并分析 `~/.claude/projects/` 下最近修改的 Claude Code 会话。新流程优先使用 `trimctx current`。
 
 ```bash
 trimctx resume
