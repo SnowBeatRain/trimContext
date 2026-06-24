@@ -364,6 +364,158 @@ describe("CLI commands", () => {
     expect(nextContextMarkdown).toContain("trimctx analyze");
   });
 
+  test("handoff writes a uid-based package by default", async () => {
+    const { file } = await writeSessionFixture();
+
+    const result = await runCli(["handoff", file]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("copyable uid: ctx_");
+    expect(result.stdout).toContain("uid: ctx_");
+    expect(result.stdout).toContain("handoff:");
+    expect(result.stdout).toContain("next-context:");
+    expect(result.stdout).toContain("manifest:");
+    expect(result.stdout).toContain("report:");
+
+    const uid = result.stdout.match(/uid: (ctx_[a-z0-9_]+)/)?.[1];
+    expect(uid).toBeDefined();
+    const packageDir = join(process.cwd(), ".trimctx", "handoffs", uid!);
+    const handoffPath = join(packageDir, "handoff.md");
+    const nextContextPath = join(packageDir, "next-context.md");
+    const manifestPath = join(packageDir, "manifest.json");
+    const reportPath = join(packageDir, "report.json");
+
+    const handoff = await readFile(handoffPath, "utf8");
+    const nextContext = await readFile(nextContextPath, "utf8");
+    const report = JSON.parse(await readFile(reportPath, "utf8")) as AnalysisReport;
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      schema_version: string;
+      uid: string;
+      files: Record<string, string>;
+      files_relative: Record<string, string>;
+      warnings: string[];
+      input: { file: string; sha256: string; source: string };
+      summary: { total_messages: number; remove_candidates: number; protected_messages: number };
+    };
+
+    expect(handoff).toContain("# trimctx Handoff");
+    expect(nextContext).toContain("# Next Context");
+    expect(report.input.source).toBe("claude-code-jsonl");
+    expect(manifest.schema_version).toBe("trimctx.handoff_manifest.v1");
+    expect(manifest.uid).toBe(uid);
+    expect(manifest.input.file).toBe(file);
+    expect(manifest.input.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(manifest.input.source).toBe("claude-code-jsonl");
+    expect(manifest.summary.total_messages).toBeGreaterThan(0);
+    expect(manifest.summary.protected_messages).toBeGreaterThan(0);
+    expect(manifest.files.handoff).toBe(handoffPath);
+    expect(manifest.files.next_context).toBe(nextContextPath);
+    expect(manifest.files.manifest).toBe(manifestPath);
+    expect(manifest.files.report).toBe(reportPath);
+    expect(manifest.files_relative).toEqual({
+      handoff: "handoff.md",
+      next_context: "next-context.md",
+      manifest: "manifest.json",
+      report: "report.json"
+    });
+    expect(manifest.warnings.join("\n")).toContain("may contain original transcript content and secrets");
+  });
+
+  test("handoff --out writes a uid-based handoff package under a custom directory", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const outputDir = join(dir, "handoffs");
+
+    const result = await runCli(["handoff", file, "--out", outputDir]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("copyable uid: ctx_");
+    expect(result.stdout).toContain("uid: ctx_");
+    expect(result.stdout).toContain("handoff:");
+    expect(result.stdout).toContain("next-context:");
+    expect(result.stdout).toContain("manifest:");
+    expect(result.stdout).toContain("report:");
+
+    const uid = result.stdout.match(/uid: (ctx_[a-z0-9_]+)/)?.[1];
+    expect(uid).toBeDefined();
+    const packageDir = join(outputDir, uid!);
+    const handoffPath = join(packageDir, "handoff.md");
+    const nextContextPath = join(packageDir, "next-context.md");
+    const manifestPath = join(packageDir, "manifest.json");
+    const reportPath = join(packageDir, "report.json");
+
+    const handoff = await readFile(handoffPath, "utf8");
+    const nextContext = await readFile(nextContextPath, "utf8");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      schema_version: string;
+      uid: string;
+      files: Record<string, string>;
+      files_relative: Record<string, string>;
+      warnings: string[];
+      input: { file: string; sha256: string; source: string };
+      summary: { total_messages: number; remove_candidates: number; protected_messages: number };
+    };
+
+    expect(await fileExists(reportPath)).toBe(true);
+    expect(handoff).toContain("# trimctx Handoff");
+    expect(nextContext).toContain("# Next Context");
+    expect(manifest.schema_version).toBe("trimctx.handoff_manifest.v1");
+    expect(manifest.uid).toBe(uid);
+    expect(manifest.input.file).toBe(file);
+    expect(manifest.input.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(manifest.input.source).toBe("claude-code-jsonl");
+    expect(manifest.summary.total_messages).toBeGreaterThan(0);
+    expect(manifest.summary.protected_messages).toBeGreaterThan(0);
+    expect(manifest.files.handoff).toBe(handoffPath);
+    expect(manifest.files.next_context).toBe(nextContextPath);
+    expect(manifest.files.manifest).toBe(manifestPath);
+    expect(manifest.files.report).toBe(reportPath);
+    expect(manifest.files_relative).toEqual({
+      handoff: "handoff.md",
+      next_context: "next-context.md",
+      manifest: "manifest.json",
+      report: "report.json"
+    });
+    expect(manifest.warnings.join("\n")).toContain("may contain original transcript content and secrets");
+  });
+
+  test("handoff rejects mixing --out with explicit output files", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const outputDir = join(dir, "handoffs");
+    const output = join(dir, "handoff.md");
+
+    const withOutput = await runCli(["handoff", file, "-o", output, "--out", outputDir]);
+    const withNextContext = await runCli(["handoff", file, "--out", outputDir, "--next-context", join(dir, "next.md")]);
+
+    expect(withOutput.code).not.toBe(0);
+    expect(withOutput.stderr).toContain("--out cannot be combined with -o/--output or --next-context");
+    expect(withNextContext.code).not.toBe(0);
+    expect(withNextContext.stderr).toContain("--out cannot be combined with -o/--output or --next-context");
+  });
+
+  test("handoff --out-dir alias writes a uid-based handoff package", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const outputDir = join(dir, "handoffs-alias");
+
+    const result = await runCli(["handoff", file, "--out-dir", outputDir]);
+
+    expect(result.code).toBe(0);
+    const uid = result.stdout.match(/uid: (ctx_[a-z0-9_]+)/)?.[1];
+    expect(uid).toBeDefined();
+    expect(await fileExists(join(outputDir, uid!, "handoff.md"))).toBe(true);
+    expect(await fileExists(join(outputDir, uid!, "next-context.md"))).toBe(true);
+    expect(await fileExists(join(outputDir, uid!, "manifest.json"))).toBe(true);
+    expect(await fileExists(join(outputDir, uid!, "report.json"))).toBe(true);
+  });
+
+  test("handoff rejects --next-context without legacy output", async () => {
+    const { file, dir } = await writeSessionFixture();
+
+    const result = await runCli(["handoff", file, "--next-context", join(dir, "next.md")]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("--next-context requires -o/--output");
+  });
+
   test("analyze --json matches the report command output", async () => {
     const { file, dir } = await writeSessionFixture();
     const output = join(dir, "report.json");

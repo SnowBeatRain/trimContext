@@ -151,7 +151,7 @@ trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 生成继续交接文档：
 
 ```bash
-trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff path/to/session.jsonl
 ```
 
 ## Resume-aware 交接
@@ -163,7 +163,7 @@ resume state 是长会话后的最佳努力、启发式续接辅助：
 - `tokenization` 记录 token 计算使用的 tokenizer 名称和置信度。默认使用本地启发式 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确 `tiktoken` 计数且不调用厂商 API。
 - `resume.readiness` 评估会话是否包含足够续接信号。
 - `resume.currentGoal`、`decisions`、`activeFiles`、`failures`、`testSignals` 和 `nextSteps` 会保留压缩后可能需要的续接线索。
-- `trimctx handoff --next-context next-context.md` 会在完整 handoff 报告旁边写出一份较短的续接草稿。
+- `trimctx handoff <file>` 会在 `.trimctx/handoffs/<uid>/` 下写出基于 UID 的完整交接包，包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。
 
 原始 JSONL 会话仍然只读。Resume 提取只影响报告和生成的 Markdown 产物。分享或粘贴到另一个会话前，请人工审查生成的 handoff；规则提取可能遗漏、误分类或脱敏不完美。
 
@@ -294,13 +294,15 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 `compress_candidate` 是有意保守的信号：它表示 trimctx 发现了过期或低价值迹象，但还没有足够证据安全删除该消息。`remove_candidate` 在 Phase 0 trust locked 前也只是人工审查候选。某些格式，尤其是 Codex/Hermes rollout 文件，在默认阈值下可能产生 0 条 `remove_candidate`；这应视为安全优先的结果，而不是 parser 失败。
 
-### `trimctx handoff <file> -o <handoff.md>`
+### `trimctx handoff <file>`
 
 写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
 
 ```bash
-trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff session.jsonl
 ```
+
+默认会创建 `.trimctx/handoffs/<uid>/`，其中包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。UID 使用 UTC 时间（`ctx_YYYYMMDD_HHMMSS_xxxxxx`）并以 `copyable uid: ...` 输出，方便直接复制引用。`manifest.json` 同时包含本机自动化可用的绝对路径，以及便于移动或归档 package 的相对文件名。可用 `--out <dir>` 指定自定义 package 根目录；旧版单文件输出仍可通过 `-o handoff.md --next-context next-context.md` 使用。交接包可能在 `report.json` 中包含原始会话内容和密钥，分享前请先审查。
 
 ### `trimctx resume`
 

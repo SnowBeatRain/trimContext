@@ -110,7 +110,7 @@ Make the CLI comfortable for real users, not just internal validation.
 - `trimctx report <file> -o <report.json>` remains the full machine-readable report path.
 - `trimctx resume` analyzes the most recent Claude Code transcript.
 - `trimctx current --source codex` analyzes the latest Codex session from the documented local path.
-- `trimctx handoff <file> -o handoff.md --next-context next-context.md` writes deterministic continuation artifacts without LLM calls.
+- `trimctx handoff <file>` writes deterministic UID-based continuation packages without LLM calls.
 - Better error messages for unsupported JSONL, unreadable files, and unsafe output paths.
 - Advanced threshold flags exist for validation/tuning, but the default path should remain conservative and simple.
 - Zero `remove_candidate` results on a real sample are acceptable when messages do not cross the stricter removal threshold; document this as conservative safety behavior rather than treating it as parser failure.

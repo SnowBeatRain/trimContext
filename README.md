@@ -151,7 +151,7 @@ trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 Generate handoff artifacts for continuing the work:
 
 ```bash
-trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff path/to/session.jsonl
 ```
 
 ## Resume-aware handoff
@@ -163,7 +163,7 @@ The resume state is a best-effort, heuristic continuation aid after a long sessi
 - `tokenization` records the tokenizer name and confidence used for token estimates. By default trimctx uses the local heuristic tokenizer. When the optional `js-tiktoken` package is installed, OpenAI-style and Codex/Hermes rollout inputs can use exact local `tiktoken` counts with high confidence.
 - `resume.readiness` scores whether the session has enough continuation signals.
 - `resume.currentGoal`, `decisions`, `activeFiles`, `failures`, `testSignals`, and `nextSteps` preserve likely continuation signals after compaction.
-- `trimctx handoff --next-context next-context.md` writes a short continuation draft alongside the fuller handoff report.
+- `trimctx handoff <file>` writes a uid-based package under `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`.
 
 The original JSONL session is still read-only. Resume extraction only affects reports and generated Markdown artifacts. Review generated handoffs before sharing or pasting them into another session; rule-based extraction can miss, misclassify, or redact imperfectly.
 
@@ -294,13 +294,15 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 `compress_candidate` is intentionally conservative: it means trimctx found a stale or low-value signal, but not enough evidence to remove the message safely. `remove_candidate` is also a candidate for human review until Phase 0 trust is locked. Some formats, especially Codex/Hermes rollout files, may produce zero `remove_candidate` messages under default thresholds; treat that as a safety-first result rather than a parser failure.
 
-### `trimctx handoff <file> -o <handoff.md>`
+### `trimctx handoff <file>`
 
 Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
 
 ```bash
-trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff session.jsonl
 ```
+
+By default, this creates `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` for easy handoff references. `manifest.json` includes absolute file paths for local automation plus relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root; legacy single-file output remains available with `-o handoff.md --next-context next-context.md`. Handoff packages may include original transcript content and secrets in `report.json`; review before sharing.
 
 ### `trimctx resume`
 

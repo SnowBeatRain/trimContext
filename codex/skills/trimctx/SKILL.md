@@ -79,8 +79,9 @@ npm link
   ```
 - Generate handoff artifacts for continuing work in a later session:
   ```bash
-  trimctx handoff <file.jsonl> -o handoff.md --next-context next-context.md
+  trimctx handoff <file.jsonl>
   ```
+  This writes `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json` by default.
 
 ## Safety Rules
 

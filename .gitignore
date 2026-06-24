@@ -12,3 +12,4 @@ coverage/
 handoff.md
 next-context.md
 trimmed.jsonl
+.trimctx/

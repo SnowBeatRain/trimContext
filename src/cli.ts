@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { constants as fsConstants, readFileSync } from "node:fs";
 import { access, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
@@ -144,27 +145,25 @@ program
 program
   .command("handoff")
   .argument("<file>")
-  .requiredOption("-o, --output <handoff.md>")
-  .option("--next-context <next-context.md>", "Also write a compact next-context markdown file.")
+  .option("-o, --output <handoff.md>", "Write a legacy single handoff markdown file.")
+  .option("--next-context <next-context.md>", "Also write a compact next-context markdown file with --output.")
+  .option("--out, --out-dir <directory>", "Write a uid-based handoff package under this directory.")
   .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
   .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
   .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
   .description("Write markdown handoff artifacts for continuing a long conversation safely.")
-  .action(async (file: string, options: CliAnalysisOptions & { output: string; nextContext?: string }) => {
-    await assertDifferentFiles(file, options.output, "Output file must be different from input file");
-    if (options.nextContext) {
-      await assertDifferentFiles(file, options.nextContext, "Next context file must be different from input file");
-      await assertDifferentFiles(options.output, options.nextContext, "Next context file must be different from handoff output file");
+  .action(async (file: string, options: CliAnalysisOptions & { output?: string; nextContext?: string; outDir?: string }) => {
+    if (options.outDir && (options.output || options.nextContext)) {
+      throw new Error("--out cannot be combined with -o/--output or --next-context");
     }
-    const report = await analyzeFile(file, parseAnalysisOptions(options));
-    await writeFile(options.output, formatHandoff(report), "utf8");
-    if (options.nextContext) {
-      await writeFile(options.nextContext, formatNextContext(report), "utf8");
+    if (options.output) {
+      await writeLegacyHandoff(file, { ...options, output: options.output });
+      return;
     }
-    process.stdout.write(`handoff: ${options.output}\n`);
     if (options.nextContext) {
-      process.stdout.write(`next-context: ${options.nextContext}\n`);
+      throw new Error("--next-context requires -o/--output; omit both to create a handoff package");
     }
+    await writeHandoffPackage(file, options);
   });
 
 program
@@ -372,6 +371,110 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function writeLegacyHandoff(
+  file: string,
+  options: CliAnalysisOptions & { output: string; nextContext?: string }
+): Promise<void> {
+  await assertDifferentFiles(file, options.output, "Output file must be different from input file");
+  if (options.nextContext) {
+    await assertDifferentFiles(file, options.nextContext, "Next context file must be different from input file");
+    await assertDifferentFiles(options.output, options.nextContext, "Next context file must be different from handoff output file");
+  }
+  const report = await analyzeFile(file, parseAnalysisOptions(options));
+  await writeFile(options.output, formatHandoff(report), "utf8");
+  if (options.nextContext) {
+    await writeFile(options.nextContext, formatNextContext(report), "utf8");
+  }
+  process.stdout.write(`handoff: ${options.output}\n`);
+  if (options.nextContext) {
+    process.stdout.write(`next-context: ${options.nextContext}\n`);
+  }
+}
+
+async function writeHandoffPackage(
+  file: string,
+  options: CliAnalysisOptions & { outDir?: string }
+): Promise<void> {
+  const uid = generateHandoffUid();
+  const rootDir = resolve(options.outDir ?? join(".trimctx", "handoffs"));
+  const packageDir = join(rootDir, uid);
+  const handoffPath = join(packageDir, "handoff.md");
+  const nextContextPath = join(packageDir, "next-context.md");
+  const manifestPath = join(packageDir, "manifest.json");
+  const reportPath = join(packageDir, "report.json");
+
+  await assertDifferentFiles(file, handoffPath, "Handoff package must be different from input file");
+  await assertDifferentFiles(file, nextContextPath, "Handoff package must be different from input file");
+  await assertDifferentFiles(file, manifestPath, "Handoff package must be different from input file");
+  await assertDifferentFiles(file, reportPath, "Handoff package must be different from input file");
+  if (await pathExists(packageDir)) {
+    throw new Error(`handoff package already exists: ${packageDir}`);
+  }
+
+  const report = await analyzeFile(file, parseAnalysisOptions(options));
+  const inputHash = createHash("sha256").update(await readFile(file)).digest("hex");
+  const manifest = {
+    schema_version: "trimctx.handoff_manifest.v1",
+    uid,
+    created_at: new Date().toISOString(),
+    trimctx_version: PACKAGE_VERSION,
+    input: {
+      file,
+      sha256: inputHash,
+      source: report.input.source
+    },
+    files: {
+      handoff: handoffPath,
+      next_context: nextContextPath,
+      manifest: manifestPath,
+      report: reportPath
+    },
+    files_relative: {
+      handoff: "handoff.md",
+      next_context: "next-context.md",
+      manifest: "manifest.json",
+      report: "report.json"
+    },
+    warnings: [
+      "This package may contain original transcript content and secrets; review before sharing."
+    ],
+    summary: {
+      total_messages: report.summary.total_messages,
+      remove_candidates: report.summary.remove_candidates,
+      compress_candidates: report.summary.compress_candidates,
+      protected_messages: report.summary.protected_messages,
+      context_pressure: report.summary.context_pressure
+    }
+  };
+
+  await mkdir(packageDir, { recursive: true });
+  await writeFile(handoffPath, formatHandoff(report), "utf8");
+  await writeFile(nextContextPath, formatNextContext(report), "utf8");
+  await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  process.stdout.write(`copyable uid: ${uid}\n`);
+  process.stdout.write(`uid: ${uid}\n`);
+  process.stdout.write(`handoff: ${handoffPath}\n`);
+  process.stdout.write(`next-context: ${nextContextPath}\n`);
+  process.stdout.write(`manifest: ${manifestPath}\n`);
+  process.stdout.write(`report: ${reportPath}\n`);
+}
+
+function generateHandoffUid(): string {
+  const now = new Date();
+  const timestamp = [
+    now.getUTCFullYear(),
+    String(now.getUTCMonth() + 1).padStart(2, "0"),
+    String(now.getUTCDate()).padStart(2, "0"),
+    "_",
+    String(now.getUTCHours()).padStart(2, "0"),
+    String(now.getUTCMinutes()).padStart(2, "0"),
+    String(now.getUTCSeconds()).padStart(2, "0")
+  ].join("");
+  return `ctx_${timestamp}_${randomBytes(3).toString("hex")}`;
 }
 
 

@@ -28,7 +28,7 @@
 - `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
 - `trimctx current` — 自动发现最新会话，支持 `--source auto|claude|codex`
 - `trimctx resume` — 快捷分析最新 Claude Code 会话
-- `trimctx handoff` — 生成确定性 Markdown 交接文档，支持 `--next-context`
+- `trimctx handoff` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
 - Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress`
 - Codex skill（`codex/skills/trimctx/SKILL.md`）
 - GitHub 安装脚本（`install.sh` / `install.ps1`）
@@ -233,7 +233,7 @@ reports/phase0/validation-summary.md
 - `trimctx compress <file> -o <output.jsonl>`
 - `trimctx resume`
 - `trimctx current --source codex`
-- `trimctx handoff <file> -o handoff.md --next-context next-context.md`
+- `trimctx handoff <file>`
 
 ### Step 4：冻结高风险扩展
 

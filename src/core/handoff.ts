@@ -54,6 +54,7 @@ export function formatHandoff(report: AnalysisReport): string {
   }
   lines.push("");
   lines.push("## Warnings");
+  lines.push("- This handoff package may include original transcript content and secrets; review it before sharing or pasting into another system.");
   if (report.warnings.length === 0) {
     lines.push("- None.");
   } else {
@@ -80,7 +81,7 @@ export function formatNextContext(report: AnalysisReport): string {
   lines.push("## Next Commands");
   lines.push(`- \`trimctx analyze ${quotePath(report.input.file)}\``);
   lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.json\``);
-  lines.push(`- \`trimctx handoff ${quotePath(report.input.file)} -o handoff.md --next-context next-context.md\``);
+  lines.push(`- \`trimctx handoff ${quotePath(report.input.file)}\``);
   lines.push("");
   lines.push("## Source");
   lines.push(`- File: ${report.input.file}`);

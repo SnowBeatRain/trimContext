@@ -141,7 +141,7 @@ trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 生成后续会话使用的交接文档：
 
 ```bash
-trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff path/to/session.jsonl
 ```
 
 ## 推荐流程
@@ -254,15 +254,15 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `compress_candidate` | 保留；仅报告候选 |
 | `remove_candidate` | 仅在非 protected 时移除 |
 
-### `trimctx handoff <file> -o <handoff.md>`
+### `trimctx handoff <file>`
 
 写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
 
 ```bash
-trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff session.jsonl
 ```
 
-主交接文档包含输入元信息、安全诊断、继续执行规则、候选审查队列、警告和下一步命令。可选的 `--next-context` 会写出更短的上下文包，供另一个 Agent 或会话使用。
+默认情况下，trimctx 会在 `.trimctx/handoffs/<uid>/` 下写出基于 UID 的完整交接包。交接包包含主 handoff、较短的续接上下文、机器可读 manifest，以及完整 JSON report。UID 使用 UTC 时间（`ctx_YYYYMMDD_HHMMSS_xxxxxx`）并以 `copyable uid: ...` 输出，方便粘贴到后续指令中。`manifest.json` 同时保存本机自动化可用的绝对路径，以及便于移动或归档 package 的相对文件名。可用 `--out <dir>` 指定自定义 package 根目录；旧版单文件输出仍可通过 `-o handoff.md --next-context next-context.md` 使用。交接包可能在 `report.json` 中包含原始会话内容和密钥，分享前请先审查。
 
 `handoff.md` 输出结构示例：
 
@@ -298,6 +298,7 @@ trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
 - line 301, user, score 0.6500: contains_code_block, old_message
 
 ## Warnings
+- This handoff package may include original transcript content and secrets; review it before sharing or pasting into another system.
 - session_compacted: session contains away_summary or compact_boundary markers
 
 ## Commands
@@ -328,7 +329,7 @@ Use this as the compact handoff for the next agent or session.
 ## Next Commands
 - `trimctx analyze "path/to/session.jsonl"`
 - `trimctx report "path/to/session.jsonl" -o report.json`
-- `trimctx handoff "path/to/session.jsonl" -o handoff.md --next-context next-context.md`
+- `trimctx handoff "path/to/session.jsonl"`
 ```
 
 ### `trimctx current`

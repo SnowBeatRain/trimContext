@@ -141,7 +141,7 @@ trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 Generate handoff artifacts for continuing work in a later session:
 
 ```bash
-trimctx handoff path/to/session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff path/to/session.jsonl
 ```
 
 ## Recommended Workflow
@@ -254,15 +254,15 @@ If a report contains `compress_candidate` messages but no `remove_candidate` mes
 | `compress_candidate` | Kept; report-only candidate |
 | `remove_candidate` | Removed only if not protected |
 
-### `trimctx handoff <file> -o <handoff.md>`
+### `trimctx handoff <file>`
 
 Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
 
 ```bash
-trimctx handoff session.jsonl -o handoff.md --next-context next-context.md
+trimctx handoff session.jsonl
 ```
 
-The primary handoff includes source metadata, safety diagnostics, continuation rules, candidate review queue, warnings, and next commands. The optional `--next-context` file writes a shorter context packet for another agent or session.
+By default, trimctx writes a uid-based package under `.trimctx/handoffs/<uid>/`. The package includes the primary handoff, a shorter continuation context, a machine-readable manifest, and the full JSON report. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` so it can be pasted into follow-up instructions. `manifest.json` stores absolute file paths for local automation and relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root. Legacy single-file output is still available with `-o handoff.md --next-context next-context.md`. Review the package before sharing because `report.json` may include original transcript content and secrets.
 
 Example `handoff.md` output:
 
@@ -298,6 +298,7 @@ Example `handoff.md` output:
 - line 301, user, score 0.6500: contains_code_block, old_message
 
 ## Warnings
+- This handoff package may include original transcript content and secrets; review it before sharing or pasting into another system.
 - session_compacted: session contains away_summary or compact_boundary markers
 
 ## Commands
@@ -328,7 +329,7 @@ Use this as the compact handoff for the next agent or session.
 ## Next Commands
 - `trimctx analyze "path/to/session.jsonl"`
 - `trimctx report "path/to/session.jsonl" -o report.json`
-- `trimctx handoff "path/to/session.jsonl" -o handoff.md --next-context next-context.md`
+- `trimctx handoff "path/to/session.jsonl"`
 ```
 
 ### `trimctx current`

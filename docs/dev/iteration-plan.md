@@ -157,8 +157,8 @@ Goal: help users continue work safely after a long or noisy session.
 
 Current implementation:
 
-- `trimctx handoff <file> -o handoff.md`
-- optional `--next-context next-context.md`
+- `trimctx handoff <file>` writes a UID-based package under `.trimctx/handoffs/<uid>/`
+- legacy single-file output remains available with `-o handoff.md --next-context next-context.md`
 - deterministic Markdown output, no LLM dependency
 - source JSONL remains unchanged
 
