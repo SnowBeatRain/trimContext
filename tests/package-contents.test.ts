@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
@@ -20,6 +21,23 @@ async function listPackedFiles(): Promise<string[]> {
   const [pack] = JSON.parse(stdout) as Array<{ files: Array<{ path: string }> }>;
 
   return pack.files.map((file) => file.path);
+}
+
+async function packTarball(destination: string): Promise<string> {
+  const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+  const { stdout } = await execFileAsync(npmBin, ["pack", "--pack-destination", destination, "--json"], {
+    cwd: process.cwd(),
+    shell: process.platform === "win32"
+  });
+  const [pack] = JSON.parse(stdout) as Array<{ filename: string }>;
+
+  return path.join(destination, pack.filename);
+}
+
+function installedTrimctxBinary(prefix: string): string {
+  return process.platform === "win32"
+    ? path.join(prefix, "trimctx.cmd")
+    : path.join(prefix, "bin", "trimctx");
 }
 
 describe("package contents", () => {
@@ -60,4 +78,31 @@ describe("package contents", () => {
 
     expect(unsafeMatches).toEqual([]);
   });
+
+  test("packed tarball installs a runnable trimctx binary", async () => {
+    const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+    const packageJson = JSON.parse(await readFile(path.join(process.cwd(), "package.json"), "utf8")) as { version: string };
+    const tempDir = await mkdtemp(path.join(tmpdir(), "trimctx-pack-smoke-"));
+    const prefix = path.join(tempDir, "prefix");
+
+    try {
+      const tarball = await packTarball(tempDir);
+      await execFileAsync(npmBin, ["install", "--global", "--prefix", prefix, tarball], {
+        cwd: tempDir,
+        shell: process.platform === "win32"
+      });
+
+      const trimctxBin = installedTrimctxBinary(prefix);
+      const version = await execFileAsync(trimctxBin, ["--version"], { shell: process.platform === "win32" });
+      const help = await execFileAsync(trimctxBin, ["--help"], { shell: process.platform === "win32" });
+
+      expect(version.stdout.trim()).toBe(packageJson.version);
+      expect(help.stdout).toContain("Usage: trimctx [options] [command]");
+      expect(help.stdout).toContain("Commands:");
+      expect(help.stdout).toContain("init [options]");
+      expect(help.stdout).toContain("analyze [options] <file>");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

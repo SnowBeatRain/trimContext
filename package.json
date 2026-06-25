@@ -53,6 +53,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "dev": "tsx src/cli.ts",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test && npm run build",
     "phase0:run": "tsx scripts/phase0-run.ts",
     "phase0:review": "tsx scripts/phase0-review.ts"
   },

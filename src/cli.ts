@@ -58,8 +58,7 @@ program
     const file = await findLatestSession("claude");
     const analysisOptions = parseAnalysisOptions(options);
     if (options.compress) {
-      const result = await compressFile(file, options.compress, analysisOptions);
-      process.stdout.write(`${JSON.stringify(result.report.summary, null, 2)}\n`);
+      await writeCompressionResult(file, options.compress, analysisOptions);
       return;
     }
     const report = await analyzeFile(file, analysisOptions);
@@ -85,8 +84,7 @@ program
     const file = await findLatestSession(source);
     const analysisOptions = parseAnalysisOptions(options);
     if (options.compress) {
-      const result = await compressFile(file, options.compress, analysisOptions);
-      process.stdout.write(`${JSON.stringify(result.report.summary, null, 2)}\n`);
+      await writeCompressionResult(file, options.compress, analysisOptions);
       return;
     }
     const report = await analyzeFile(file, analysisOptions);
@@ -138,8 +136,7 @@ program
   .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
   .description("Write a safe compressed JSONL copy without modifying the original.")
   .action(async (file: string, options: CliAnalysisOptions & { output: string }) => {
-    const result = await compressFile(file, options.output, parseAnalysisOptions(options));
-    process.stdout.write(`${JSON.stringify(result.report.summary, null, 2)}\n`);
+    await writeCompressionResult(file, options.output, parseAnalysisOptions(options));
   });
 
 program
@@ -517,6 +514,12 @@ function parseOptionalNumber(value: string | undefined, flag: string): number | 
   return parsed;
 }
 
+
+async function writeCompressionResult(inputFile: string, outputFile: string, options: AnalysisOptions): Promise<void> {
+  await assertDifferentFiles(inputFile, outputFile, "Output file must be different from input file");
+  const result = await compressFile(inputFile, outputFile, options);
+  process.stdout.write(`${JSON.stringify({ output: outputFile, summary: result.report.summary }, null, 2)}\n`);
+}
 
 async function assertDifferentFiles(leftFile: string, rightFile: string, message: string): Promise<void> {
   if (await sameFile(leftFile, rightFile)) {

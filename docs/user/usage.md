@@ -4,12 +4,22 @@ This guide explains how to run trimctx safely against local Claude Code, OpenAI,
 
 [中文版](usage_zh.md)
 
+## Quick Start
+
+```bash
+npm install -g trimctx
+trimctx analyze path/to/session.jsonl
+trimctx init
+```
+
+trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API.
+
 ## Requirements
 
 - Node.js 20 or later
 - A JSONL conversation file from Claude Code, an OpenAI-style chat export, or a Codex/Hermes rollout export
 
-trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API. The `0.2.3` release is a packaging and continuation milestone, not a Phase 0 completion claim; keep reviewing reports before relying on compression output.
+trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API. The `0.2.5` release is a packaging and continuation milestone, not a Phase 0 completion claim; keep reviewing reports before relying on compression output.
 
 If you install `trimctx` globally and want exact `tiktoken` counts, install `js-tiktoken` in the same resolvable environment as the CLI, or use a project-local `trimctx` install with a project-local `js-tiktoken` dependency.
 
@@ -88,9 +98,13 @@ Install the CLI and then install AI-client command files:
 
 ```bash
 npm install -g trimctx
+trimctx --version
+trimctx --help
 trimctx init
 trimctx analyze path/to/session.jsonl
 ```
+
+For release verification, install from npm or a packed tarball in a clean prefix and confirm the installed `trimctx --version` and `trimctx --help` commands run before installing AI-client assets.
 
 `trimctx init` installs Claude Code command files and the Codex skill from the npm package. It prompts for user/global versus project install when `--target` is omitted. It does not install automatic hooks by default; `trimctx install-hooks` and `trimctx init --with-hooks` are experimental explicit opt-in automation. Use `trimctx init --dry-run` to inspect paths before writing.
 

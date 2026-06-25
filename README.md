@@ -8,9 +8,23 @@ trimctx reads your JSONL conversation files, identifies low-value or stale messa
 
 **Safety rule: trimctx prefers missing a deletion over deleting the wrong message.**
 
-**Release milestone:** `0.2.3` packages resume-aware reports, handoff/next-context artifacts, optional exact `tiktoken` counting for OpenAI/Codex-family inputs, and safer AI-client install guidance into one npm-ready release. It is still conservative by design: Phase 0 is not complete until broader real-sample validation and manual review metrics are finished.
+**Release milestone:** `0.2.5` packages resume-aware reports, handoff/next-context artifacts, optional exact `tiktoken` counting for OpenAI/Codex-family inputs, AI-client install guidance, and npm package smoke checks into one npm-ready release. It is still conservative by design: Phase 0 is not complete until broader real-sample validation and manual review metrics are finished.
 
 [中文说明](README_zh.md)
+
+## Quick Start
+
+**Requires Node.js 20+.**
+
+Install from npm, then analyze a session and prepare AI-client assets:
+
+```bash
+npm install -g trimctx
+trimctx analyze path/to/session.jsonl
+trimctx init
+```
+
+Use `trimctx analyze` for a short summary, `trimctx report` for the full JSON audit trail, and `trimctx compress` only after reviewing the report.
 
 ## What it looks like
 
@@ -51,16 +65,19 @@ trimctx analysis
     trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
 ```
 
-## Quick Start
+## Installation
 
-**Requires Node.js 20+.**
+For release verification, install from npm or a packed tarball in a clean prefix and confirm `trimctx --version` and `trimctx --help` run from the installed binary before running `trimctx init`.
 
-Install from npm, then install AI-client command files:
 
 ```bash
 npm install -g trimctx
+trimctx --version
+trimctx --help
 trimctx init
 ```
+
+For release verification, install from npm or a packed tarball in a clean prefix and confirm `trimctx --version` and `trimctx --help` run from the installed binary before running `trimctx init`.
 
 `trimctx init` asks whether to install globally for the current user or into the current project. User/global install writes Claude Code slash commands under `~/.claude/plugins/trimctx` and a Codex skill under `~/.codex/skills/trimctx`. It does **not** install automatic hooks by default. Restart the AI client afterwards, then run `/trimctx` in Claude Code or ask Codex to use the trimctx skill.
 

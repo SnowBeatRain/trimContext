@@ -4,12 +4,22 @@
 
 [English](usage.md)
 
+## 快速开始
+
+```bash
+npm install -g trimctx
+trimctx analyze path/to/session.jsonl
+trimctx init
+```
+
+trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库。Token 计算也保持本地：内置 `local_heuristic` 是默认 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确计数且不调用厂商 API。
+
 ## 环境要求
 
 - Node.js 20 或更高版本
 - 来自 Claude Code、OpenAI 风格聊天导出或 Codex/Hermes rollout 导出的 JSONL 对话文件
 
-trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库。Token 计算也保持本地：内置 `local_heuristic` 是默认 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确计数且不调用厂商 API。`0.2.3` 是打包发布与续接能力里程碑，不代表 Phase 0 已完成；使用压缩输出前仍应审查报告。
+trimctx 是本地工具：不调用 LLM、不上传文件、不使用数据库。Token 计算也保持本地：内置 `local_heuristic` 是默认 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确计数且不调用厂商 API。`0.2.5` 是打包发布与续接能力里程碑，不代表 Phase 0 已完成；使用压缩输出前仍应审查报告。
 
 如果你全局安装 `trimctx` 且希望启用精确 `tiktoken` 计数，请把 `js-tiktoken` 安装到 CLI 能解析到的同一环境；或者在项目内同时本地安装 `trimctx` 和 `js-tiktoken`。
 
@@ -88,9 +98,13 @@ node dist/cli.js analyze path/to/session.jsonl
 
 ```bash
 npm install -g trimctx
+trimctx --version
+trimctx --help
 trimctx init
 trimctx analyze path/to/session.jsonl
 ```
+
+发布验收时，请从 npm 或打包出的 tarball 安装到干净 prefix，并先确认安装后的 `trimctx --version` 和 `trimctx --help` 可运行，再安装 AI 客户端资产。
 
 `trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。省略 `--target` 时会询问安装到用户全局位置还是当前项目；默认不安装自动 hooks。`trimctx install-hooks` 和 `trimctx init --with-hooks` 是实验性显式 opt-in 自动化。写入前可先用 `trimctx init --dry-run` 查看路径。
 

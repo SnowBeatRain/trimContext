@@ -8,9 +8,23 @@ trimctx 读取你的 JSONL 对话文件，识别低价值或过期消息，解�
 
 **安全原则：trimctx 宁可少删，也不要误删。**
 
-**发布里程碑：** `0.2.3` 把 resume-aware reports、handoff/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数，以及更安全的 AI 客户端安装说明整合成一个 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
+**发布里程碑：** `0.2.5` 把 resume-aware reports、handoff/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数、AI 客户端安装说明，以及 npm 包 smoke 检查整合成一个 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
 
 [English](README.md)
+
+## 快速开始
+
+**需要 Node.js 20+。**
+
+从 npm 安装，然后直接分析一个会话并准备 AI 客户端资产：
+
+```bash
+npm install -g trimctx
+trimctx analyze path/to/session.jsonl
+trimctx init
+```
+
+`trimctx analyze` 用于查看短摘要，`trimctx report` 用于输出完整 JSON 审计报告，`trimctx compress` 则建议在审查报告后再使用。
 
 ## 长什么样
 
@@ -51,16 +65,19 @@ trimctx analysis
     trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
 ```
 
-## 快速开始
+## 安装
 
-**需要 Node.js 20+。**
+发布验收时，请从 npm 或打包出的 tarball 安装到干净 prefix，并先确认安装后的 `trimctx --version` 和 `trimctx --help` 可运行，再执行 `trimctx init`。
 
-从 npm 安装，然后安装 AI 客户端可识别的命令文件：
 
 ```bash
 npm install -g trimctx
+trimctx --version
+trimctx --help
 trimctx init
 ```
+
+发布验收时，请从 npm 或打包出的 tarball 安装到干净 prefix，并先确认安装后的 `trimctx --version` 和 `trimctx --help` 可运行，再执行 `trimctx init`。
 
 `trimctx init` 会询问安装到当前用户全局位置，还是安装到当前项目。用户全局安装会把 Claude Code slash commands 写入 `~/.claude/plugins/trimctx`，把 Codex skill 写入 `~/.codex/skills/trimctx`。它默认**不会**安装自动 hook。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
 

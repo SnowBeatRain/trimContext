@@ -150,7 +150,10 @@ describe("CLI commands", () => {
       cwd: process.cwd()
     });
 
-    expect(JSON.parse(stdout)).toMatchObject({ total_messages: expect.any(Number) });
+    expect(JSON.parse(stdout)).toMatchObject({
+      output,
+      summary: { total_messages: expect.any(Number) }
+    });
     expect(await sha256(file)).toBe(originalBefore);
     expect(await readFile(output, "utf8")).toContain("padding 34");
   });
@@ -219,6 +222,22 @@ describe("CLI commands", () => {
     expect(report.resume.readiness.level).toBe("blocked");
   });
 
+  test("resume compresses the most recent Claude Code session", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-resume-compress-home-"));
+    const projectDir = join(home, ".claude", "projects", "project-a");
+    const { dir } = await writeSessionFixture(projectDir);
+    const output = join(dir, "resume.trimmed.jsonl");
+
+    const result = await runCli(["resume", "--compress", output], { HOME: home });
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      output,
+      summary: { total_messages: expect.any(Number) }
+    });
+    expect(await readFile(output, "utf8")).toContain("padding 34");
+  });
+
   test("current analyzes the most recent Claude Code session under HOME", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
     const projectDir = join(home, ".claude", "projects", "project-a");
@@ -231,6 +250,22 @@ describe("CLI commands", () => {
     expect(report.input.file).toBe(file);
     expect(report.tokenization.confidence).toBe("medium");
     expect(report.resume.readiness.score).toBeGreaterThan(0);
+  });
+
+  test("current compresses the most recent session and prints output metadata", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-current-compress-home-"));
+    const projectDir = join(home, ".claude", "projects", "project-a");
+    const { dir } = await writeSessionFixture(projectDir);
+    const output = join(dir, "current.trimmed.jsonl");
+
+    const result = await runCli(["current", "--source", "claude", "--compress", output], { HOME: home });
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      output,
+      summary: { total_messages: expect.any(Number) }
+    });
+    expect(await readFile(output, "utf8")).toContain("padding 34");
   });
 
   test("current analyzes nested Codex sessions under HOME", async () => {
