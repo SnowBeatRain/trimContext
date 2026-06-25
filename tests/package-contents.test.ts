@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -12,10 +12,17 @@ const unsafeInstallPipePatterns = [
   /\biwr\s+[^\n|]*\|\s*iex\b/i
 ];
 
+function npmCommandEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.npm_config_dry_run;
+  return env;
+}
+
 async function listPackedFiles(): Promise<string[]> {
   const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
   const { stdout } = await execFileAsync(npmBin, ["pack", "--dry-run", "--json"], {
     cwd: process.cwd(),
+    env: npmCommandEnv(),
     shell: process.platform === "win32"
   });
   const [pack] = JSON.parse(stdout) as Array<{ files: Array<{ path: string }> }>;
@@ -27,6 +34,7 @@ async function packTarball(destination: string): Promise<string> {
   const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
   const { stdout } = await execFileAsync(npmBin, ["pack", "--pack-destination", destination, "--json"], {
     cwd: process.cwd(),
+    env: npmCommandEnv(),
     shell: process.platform === "win32"
   });
   const [pack] = JSON.parse(stdout) as Array<{ filename: string }>;
@@ -87,8 +95,10 @@ describe("package contents", () => {
 
     try {
       const tarball = await packTarball(tempDir);
+      await mkdir(path.join(prefix, "lib"), { recursive: true });
       await execFileAsync(npmBin, ["install", "--global", "--prefix", prefix, tarball], {
         cwd: tempDir,
+        env: npmCommandEnv(),
         shell: process.platform === "win32"
       });
 

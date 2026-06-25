@@ -77,8 +77,6 @@ trimctx --help
 trimctx init
 ```
 
-发布验收时，请从 npm 或打包出的 tarball 安装到干净 prefix，并先确认安装后的 `trimctx --version` 和 `trimctx --help` 可运行，再执行 `trimctx init`。
-
 `trimctx init` 会询问安装到当前用户全局位置，还是安装到当前项目。用户全局安装会把 Claude Code slash commands 写入 `~/.claude/plugins/trimctx`，把 Codex skill 写入 `~/.codex/skills/trimctx`。它默认**不会**安装自动 hook。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
 
 也可以继续使用 GitHub 一条命令安装：
