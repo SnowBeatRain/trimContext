@@ -63,6 +63,20 @@ describe("package contents", () => {
     expect(files).toContain("codex/skills/trimctx/SKILL.md");
   });
 
+  test("publishes only the bundled CLI, not the source or expanded module tree", async () => {
+    const files = await listPackedFiles();
+
+    expect(files).toContain("dist/cli.js");
+    expect(files.some((file) => file.startsWith("src/"))).toBe(false);
+    expect(files.some((file) => file.endsWith(".ts"))).toBe(false);
+    expect(files.some((file) => file.endsWith(".d.ts"))).toBe(false);
+    expect(files.some((file) => file.startsWith("dist/core/"))).toBe(false);
+    expect(files.some((file) => file.startsWith("dist/adapters/"))).toBe(false);
+    expect(files.some((file) => file.startsWith("dist/types/"))).toBe(false);
+    expect(files.some((file) => file.startsWith("docs/dev/"))).toBe(false);
+    expect(files).not.toContain("CONTRIBUTING.md");
+  });
+
   test("does not publish download-and-execute install pipe examples", async () => {
     const files = await listPackedFiles();
     const publicTextFiles = files.filter((file) => {

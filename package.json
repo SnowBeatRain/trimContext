@@ -1,6 +1,6 @@
 {
   "name": "trimctx",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Local CLI for analyzing and safely trimming long AI conversation context. Supports Claude Code, OpenAI, and Codex JSONL formats.",
   "type": "module",
   "license": "MIT",
@@ -29,32 +29,26 @@
     "trimctx": "dist/cli.js"
   },
   "files": [
-    "dist/",
+    "dist/cli.js",
     "install.sh",
     "install.ps1",
     "plugins/trimctx/",
     "codex/skills/trimctx/",
     "docs/user/usage.md",
     "docs/user/usage_zh.md",
-    "docs/dev/roadmap.md",
-    "docs/dev/iteration-plan.md",
-    "docs/dev/manual-review-rubric.md",
-    "docs/dev/phase0/phase0-plan.md",
-    "docs/dev/phase0/manual-label-guide.md",
-    "docs/dev/phase0/validation-summary-template.md",
     "README.md",
     "README_zh.md",
     "CHANGELOG.md",
-    "LICENSE",
-    "docs/dev/requirements.md",
-    "CONTRIBUTING.md"
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:publish": "npm run build:types && esbuild src/cli.ts --bundle --platform=node --target=node20 --format=esm --packages=external --minify --legal-comments=none --outfile=dist/cli.js && node scripts/fix-publish-bundle.mjs",
+    "build:types": "tsc -p tsconfig.json",
     "test": "vitest run",
     "dev": "tsx src/cli.ts",
-    "prepack": "npm run build",
-    "prepublishOnly": "npm test && npm run build",
+    "prepack": "npm run build:publish",
+    "prepublishOnly": "npm test && npm run build:publish",
     "phase0:run": "tsx scripts/phase0-run.ts",
     "phase0:review": "tsx scripts/phase0-review.ts"
   },
@@ -63,6 +57,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.11",
+    "esbuild": "^0.28.1",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
     "vitest": "^1.6.0"

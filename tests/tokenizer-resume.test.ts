@@ -65,25 +65,35 @@ describe("tokenizer layer", () => {
   });
 
   test("auto falls back to heuristic when no model-specific tokenizer is available", () => {
-    const tokenizer = selectTokenizer("auto");
+    setTiktokenEncoderFactoryForTesting(() => undefined);
+    try {
+      const tokenizer = selectTokenizer("auto");
 
-    expect(tokenizer.name).toBe("local_heuristic");
-    expect(tokenizer.confidence).toBe("medium");
+      expect(tokenizer.name).toBe("local_heuristic");
+      expect(tokenizer.confidence).toBe("medium");
+    } finally {
+      setTiktokenEncoderFactoryForTesting(undefined);
+    }
   });
 
   test("tiktoken preference reports the actual fallback tokenizer when unavailable", () => {
-    const tokenizer = selectTokenizer("tiktoken");
-    const report = createReport([
-      message("m1", "user", "目标：验证 tokenizer fallback。", 1)
-    ], "session.jsonl");
+    setTiktokenEncoderFactoryForTesting(() => undefined);
+    try {
+      const tokenizer = selectTokenizer("tiktoken");
+      const report = createReport([
+        message("m1", "user", "目标：验证 tokenizer fallback。", 1)
+      ], "session.jsonl");
 
-    expect(tokenizer.name).toBe("local_heuristic");
-    expect(report.tokenization.tokenizer).toBe("local_heuristic");
-    expect(report.summary.token_estimation).toMatchObject({
-      estimator: "local_heuristic",
-      estimated: true,
-      note: "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
-    });
+      expect(tokenizer.name).toBe("local_heuristic");
+      expect(report.tokenization.tokenizer).toBe("local_heuristic");
+      expect(report.summary.token_estimation).toMatchObject({
+        estimator: "local_heuristic",
+        estimated: true,
+        note: "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
+      });
+    } finally {
+      setTiktokenEncoderFactoryForTesting(undefined);
+    }
   });
 
   test("uses an injected tiktoken encoder for exact counts when available", async () => {
