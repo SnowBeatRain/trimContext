@@ -1,9 +1,10 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { findLatestSession, analyzeFile } from "./session.js";
+import { analyzeFile } from "./session.js";
 import { formatContextState, injectContextStateSection } from "./context-state.js";
 
 interface HookInput {
+  session_id?: string;
   stop_hook_active?: boolean;
   transcript_path?: string;
 }
@@ -37,10 +38,35 @@ async function readExistingClaudeMd(): Promise<string | undefined> {
   }
 }
 
+export async function writeSessionEnvBinding(): Promise<{ updated: boolean; message: string }> {
+  const input = await readStdinJson<HookInput>();
+  if (!input.transcript_path) {
+    throw new Error("Claude SessionStart hook input transcript_path is required");
+  }
+  const envFile = process.env.CLAUDE_ENV_FILE;
+  if (!envFile) {
+    throw new Error("CLAUDE_ENV_FILE is required to persist current Claude session bindings");
+  }
+
+  const lines = [
+    `export TRIMCTX_TRANSCRIPT_PATH=${shellQuote(input.transcript_path)}`
+  ];
+  if (input.session_id) {
+    lines.push(`export TRIMCTX_SESSION_ID=${shellQuote(input.session_id)}`);
+  }
+
+  await mkdir(dirname(envFile), { recursive: true });
+  await appendFile(envFile, `${lines.join("\n")}\n`, "utf8");
+  return { updated: true, message: "updated trimctx current Claude session binding" };
+}
+
 export async function runHook(options: { dryRun?: boolean } = {}): Promise<HookResult> {
   const input = await readStdinJson<HookInput>();
 
-  const sessionFile = input.transcript_path ?? await findLatestSession("claude");
+  if (!input.transcript_path) {
+    throw new Error("Claude hook input transcript_path is required");
+  }
+  const sessionFile = input.transcript_path;
   const report = await analyzeFile(sessionFile);
   const pressure = report.summary.context_pressure.pressure_level;
   const rotCount = report.summary.remove_candidates + report.summary.compress_candidates;
@@ -75,4 +101,8 @@ export async function runHook(options: { dryRun?: boolean } = {}): Promise<HookR
     updated: true,
     message: `已更新 CLAUDE.md 上下文状态：${pressure} / ${rotCount} rot candidates`
   };
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }

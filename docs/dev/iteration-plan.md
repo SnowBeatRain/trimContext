@@ -50,7 +50,7 @@ The immediate value is not maximum token savings. The immediate value is helping
 - `analyze` is the front door and should stay short, readable, and actionable.
 - `report` and `analyze --json` should remain the automation and audit paths.
 - Error messages should tell users what was detected, where parsing failed, and what to do next.
-- `resume` should be documented as Claude Code focused until broader discovery is proven necessary.
+- `current --source claude` should be documented as the Claude Code focused discovery path until broader discovery is proven necessary.
 
 ## North Star
 
@@ -186,7 +186,7 @@ Goal: reduce the need to manually find JSONL files without broad scanning.
 
 Tasks:
 
-- Keep `resume` Claude Code focused.
+- Keep `current --source claude` as the explicit Claude Code focused discovery path.
 - Keep `current --source codex` discovery explicit and opt-in.
 - Prefer explicit input paths or documented environment variables over broad home-directory scans.
 - Keep discovery code outside core parser/scorer/compressor modules.

@@ -104,6 +104,7 @@ export interface AnalysisReport {
   input: {
     file: string;
     source: NormalizedMessage["source"];
+    session_id?: string;
   };
   summary: AnalysisSummary;
   tokenization: TokenizationSummary;

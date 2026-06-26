@@ -27,9 +27,8 @@
 
 - `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
 - `trimctx current` — 自动发现最新会话，支持 `--source auto|claude|codex`
-- `trimctx resume` — 快捷分析最新 Claude Code 会话
 - `trimctx handoff` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
-- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress`
+- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:compress`
 - Codex skill（`codex/skills/trimctx/SKILL.md`）
 - GitHub 安装脚本（`install.sh` / `install.ps1`）
 - `report` 中的 `score_diagnostics`（max/p90/near_threshold/protected_high_rot/decision_ranges）
@@ -185,7 +184,7 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 - `analyze` 默认输出短摘要
 - `report` 输出完整 JSON
 - `analyze --json` 输出完整 JSON
-- `resume` 可分析最近 Claude Code session
+- `current --source claude` 可分析最近 Claude Code session
 - `current --source codex` 可分析最近 Codex session
 - `handoff` 可生成 deterministic Markdown 交接材料
 
@@ -231,7 +230,7 @@ reports/phase0/validation-summary.md
 - `trimctx analyze <file> --json`
 - `trimctx report <file> -o <report.json>`
 - `trimctx compress <file> -o <output.jsonl>`
-- `trimctx resume`
+- `trimctx current`
 - `trimctx current --source codex`
 - `trimctx handoff <file>`
 

@@ -53,7 +53,7 @@ npx trimctx@latest install claude-code
    - 当前主线：`trimctx analyze <file> --json`
    - 当前主线：`trimctx report <file> -o report.json`
    - 当前主线：`trimctx compress <file> -o output.jsonl`
-   - 当前主线：`trimctx resume`
+   - 当前主线：`trimctx current`
    - 非近期主线：额外 session discovery / diagnostics 命令，等 Phase 0 验证完成后再评估
 
 3. AI Integrations
@@ -92,7 +92,7 @@ npx trimctx@latest install claude-code
 
 - `analyze` 默认短摘要
 - `analyze --json`
-- `trimctx resume`
+- `trimctx current`
 - report top reasons 和 warnings
 - 更好的 JSONL 解析诊断与 unsafe output path 护栏
 - Phase 0 多样本验证报告

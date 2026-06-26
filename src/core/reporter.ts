@@ -17,7 +17,8 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
     schema_version: "trimctx.report.v1" as const,
     input: {
       file,
-      source: messages[0]?.source ?? "openai-jsonl"
+      source: messages[0]?.source ?? "openai-jsonl",
+      session_id: firstSessionId(messages)
     },
     summary: {
       total_messages: analyzedMessages.length,
@@ -52,6 +53,10 @@ export function createReport(messages: NormalizedMessage[], file: string): Analy
     ...reportWithoutResume,
     resume: extractResumeState(reportWithoutResume)
   };
+}
+
+function firstSessionId(messages: NormalizedMessage[]): string | undefined {
+  return messages.find((message) => typeof message.sessionId === "string" && message.sessionId.length > 0)?.sessionId;
 }
 
 function createTokenizationSummary(messages: AnalyzedMessage[]): TokenizationSummary {

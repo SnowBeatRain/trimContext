@@ -30,7 +30,7 @@ For the team-reviewed iteration priorities and quality gates, see `docs/dev/iter
    - Write compressed copies.
 
 2. CLI
-   - Expose stable commands for analyze, report, compress, resume, current-session discovery, and deterministic handoff artifacts.
+   - Expose stable commands for analyze, report, compress, current-session discovery, and deterministic handoff artifacts.
    - Keep default output readable for humans.
    - Keep full JSON available for automation.
    - Treat diagnostics, active-session mutation, hooks, Web UI, and MCP as post-Phase-0 candidates, not the current mainline.
@@ -108,7 +108,7 @@ Make the CLI comfortable for real users, not just internal validation.
 - Human-readable default output for `trimctx analyze <file>`.
 - `trimctx analyze <file> --json` for full JSON output.
 - `trimctx report <file> -o <report.json>` remains the full machine-readable report path.
-- `trimctx resume` analyzes the most recent Claude Code transcript.
+- `trimctx current --source claude` analyzes the most recent Claude Code transcript.
 - `trimctx current --source codex` analyzes the latest Codex session from the documented local path.
 - `trimctx handoff <file>` writes deterministic UID-based continuation packages without LLM calls.
 - Better error messages for unsupported JSONL, unreadable files, and unsafe output paths.
@@ -147,7 +147,7 @@ next:
 
 - `analyze` output fits in a terminal screen for large sessions.
 - `analyze --json` preserves current full JSON behavior.
-- `resume` works for the latest Claude Code session.
+- `current --source claude` works for the latest Claude Code session.
 - Tests cover human summary output and JSON output separately.
 - Threshold/options validation is covered for invalid values and unsafe combinations.
 - Phase 0 validation records manual review metrics for critical false deletion count, protected recall, and remove candidate precision.
@@ -293,7 +293,7 @@ The next project phase should finish Phase 0 validation and stabilize the curren
 1. Complete multi-sample private real-session validation.
 2. Produce a validation summary with protected/remove/compress ratios, top reasons, and manual review notes.
 3. Re-run real-session validation after each scoring/safety change.
-4. Keep `analyze`, `analyze --json`, `report`, `compress`, and `resume` as the active CLI surface.
+4. Keep `analyze`, `analyze --json`, `report`, `compress`, `current`, and `handoff` as the active CLI surface.
 5. Re-evaluate additional session discovery or diagnostics commands only after Phase 0 evidence shows they are necessary.
 
 Only after this should v0.3 installation work begin.

@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { access, mkdir, readFile, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,19 +9,25 @@ const execFileAsync = promisify(execFile);
 
 
 describe("hook commands", () => {
-  test("install-hooks writes Stop hook to settings.json", async () => {
+  test("install-hooks writes SessionStart env hook and Stop hook to settings.json", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-hooks-"));
     const settingsPath = join(dir, ".claude", "settings.json");
 
     const result = await runCli(["install-hooks", "--dir", dir]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("installed experimental Stop hook");
+    expect(result.stdout).toContain("installed experimental Claude hooks");
     expect(await fileExists(settingsPath)).toBe(true);
 
     const settings = JSON.parse(await readFile(settingsPath, "utf8")) as {
-      hooks: { Stop: Array<{ hooks: Array<{ type: string; command: string }> }> };
+      hooks: {
+        SessionStart: Array<{ hooks: Array<{ type: string; command: string }> }>;
+        Stop: Array<{ hooks: Array<{ type: string; command: string }> }>;
+      };
     };
+    expect(settings.hooks.SessionStart).toBeDefined();
+    expect(settings.hooks.SessionStart[0].hooks[0].type).toBe("command");
+    expect(settings.hooks.SessionStart[0].hooks[0].command).toBe("trimctx hook --session-start");
     expect(settings.hooks.Stop).toBeDefined();
     expect(settings.hooks.Stop[0].hooks[0].type).toBe("command");
     expect(settings.hooks.Stop[0].hooks[0].command).toBe("trimctx hook");
@@ -35,6 +41,7 @@ describe("hook commands", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("dry-run");
+    expect(result.stdout).toContain("trimctx hook --session-start");
     expect(result.stdout).toContain("trimctx hook");
     expect(await fileExists(settingsPath)).toBe(false);
   });
@@ -74,10 +81,10 @@ describe("hook commands", () => {
     const forced = await runCli(["install-hooks", "--dir", dir, "--force"]);
 
     expect(forced.code).toBe(0);
-    expect(forced.stdout).toContain("installed experimental Stop hook");
+    expect(forced.stdout).toContain("installed experimental Claude hooks");
   });
 
-  test("hook --dry-run runs analysis without modifying files", async () => {
+  test("hook --dry-run requires Claude hook transcript_path instead of falling back to latest", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-hook-home-"));
     const projectDir = join(home, ".claude", "projects", "project-a");
     await mkdir(projectDir, { recursive: true });
@@ -90,23 +97,27 @@ describe("hook commands", () => {
     ];
     await writeFile(sessionFile, `${lines.join("\n")}\n`, "utf8");
 
-    const effectiveEnv = { ...process.env, HOME: home, USERPROFILE: home };
-    const shellCmd = process.platform === "win32"
-      ? `printf "{}" | node --import tsx src/cli.ts hook --dry-run`
-      : `printf '{}' | node --import tsx src/cli.ts hook --dry-run`;
+    const result = await runCliWithInput(["hook", "--dry-run"], "{}\n", { HOME: home });
 
-    const result = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
-      execFile(shellCmd, { cwd: process.cwd(), env: effectiveEnv, shell: true }, (error, stdout, stderr) => {
-        resolve({
-          code: error ? (error as { code?: number }).code ?? 1 : 0,
-          stdout: stdout ?? "",
-          stderr: stderr ?? ""
-        });
-      });
-    });
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("Claude hook input transcript_path is required");
+  });
+
+  test("hook --session-start writes the current Claude transcript binding to CLAUDE_ENV_FILE", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-session-env-"));
+    const envFile = join(dir, "claude-env.sh");
+    const transcriptPath = join(dir, "session with spaces.jsonl");
+
+    const result = await runCliWithInput(
+      ["hook", "--session-start"],
+      `${JSON.stringify({ session_id: "sess-hook-1", transcript_path: transcriptPath })}\n`,
+      { CLAUDE_ENV_FILE: envFile }
+    );
 
     expect(result.code).toBe(0);
-    expect(result.stdout.trim().length).toBeGreaterThan(0);
+    const content = await readFile(envFile, "utf8");
+    expect(content).toContain(`export TRIMCTX_TRANSCRIPT_PATH='${transcriptPath}'`);
+    expect(content).toContain("export TRIMCTX_SESSION_ID='sess-hook-1'");
   });
 });
 
@@ -140,6 +151,32 @@ async function runCli(
       stderr: result.stderr ?? ""
     };
   }
+}
+
+async function runCliWithInput(
+  args: string[],
+  input: string,
+  env: NodeJS.ProcessEnv = {}
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  const effectiveEnv = env.HOME
+    ? { ...process.env, ...env, USERPROFILE: env.HOME }
+    : { ...process.env, ...env };
+
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--import", "tsx", "src/cli.ts", ...args], {
+      cwd: process.cwd(),
+      env: effectiveEnv,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", chunk => stdout += chunk);
+    child.stderr.on("data", chunk => stderr += chunk);
+    child.on("close", code => resolve({ code: code ?? 1, stdout, stderr }));
+    child.stdin.end(input);
+  });
 }
 
 

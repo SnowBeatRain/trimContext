@@ -3,11 +3,13 @@ import { access, mkdir, readFile, mkdtemp, utimes, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
 import type { AnalysisReport } from "../src/types/report.js";
 
 const execFileAsync = promisify(execFile);
+const tsxLoaderPath = pathToFileURL(join(process.cwd(), "node_modules", "tsx", "dist", "loader.mjs")).href;
 
 
 describe("CLI commands", () => {
@@ -18,6 +20,14 @@ describe("CLI commands", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout.trim()).toBe(packageJson.version);
+  });
+
+  test("--help no longer lists the removed resume command", async () => {
+    const result = await runCli(["--help"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("current [options]");
+    expect(result.stdout).not.toContain("resume [options]");
   });
 
   test("init installs Claude plugin and Codex skill into a user base directory", async () => {
@@ -34,37 +44,67 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("install-hooks");
   });
 
-  test("init installs Claude hooks only when explicitly requested", async () => {
+  test("init installs Claude hooks when --with-hooks is supplied", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-hooks-home-"));
 
     const result = await runCli(["init", "--target", "user", "--dir", home, "--with-hooks"]);
 
     expect(result.code).toBe(0);
     const settings = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8")) as {
-      hooks?: { Stop?: Array<{ hooks?: Array<{ command?: string }> }> };
+      hooks?: {
+        SessionStart?: Array<{ hooks?: Array<{ command?: string }> }>;
+        Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
+      };
     };
+    expect(settings.hooks?.SessionStart?.some(group =>
+      group.hooks?.some(hook => hook.command === "trimctx hook --session-start")
+    )).toBe(true);
     expect(settings.hooks?.Stop?.some(group =>
       group.hooks?.some(hook => hook.command === "trimctx hook")
     )).toBe(true);
-    expect(result.stdout).toContain("experimental Stop hook");
+    expect(result.stdout).toContain("experimental Claude hooks");
   });
 
-  test("init prompts for user/global install target when target is omitted", async () => {
+  test("interactive init prompts for target and installs Claude hooks by default", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-prompt-home-"));
 
-    const result = await runCliWithInput(["init", "--dir", home], "1\n");
+    const result = await runCliWithInput(["init", "--dir", home], "1\n\n");
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("Where should trimctx install AI-client assets?");
+    expect(result.stdout).toContain("Enable Claude current-window hooks?");
     expect(result.stdout).toContain("installed all assets for user");
     expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
+    const settings = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8")) as {
+      hooks?: {
+        SessionStart?: Array<{ hooks?: Array<{ command?: string }> }>;
+        Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
+      };
+    };
+    expect(settings.hooks?.SessionStart?.some(group =>
+      group.hooks?.some(hook => hook.command === "trimctx hook --session-start")
+    )).toBe(true);
+    expect(settings.hooks?.Stop?.some(group =>
+      group.hooks?.some(hook => hook.command === "trimctx hook")
+    )).toBe(true);
+  });
+
+  test("interactive init can skip Claude hooks", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-no-hooks-"));
+
+    const result = await runCliWithInput(["init", "--client", "claude", "--dir", home], "1\nn\n");
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("installed claude assets for user");
+    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
+    expect(await fileExists(join(home, ".claude", "settings.json"))).toBe(false);
   });
 
   test("init prompts for project install target when target is omitted", async () => {
     const project = await mkdtemp(join(tmpdir(), "trimctx-init-prompt-project-"));
 
-    const result = await runCliWithInput(["init", "--client", "claude", "--dir", project], "2\n");
+    const result = await runCliWithInput(["init", "--client", "claude", "--dir", project], "2\nn\n");
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("installed claude assets for project");
@@ -116,6 +156,17 @@ describe("CLI commands", () => {
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(false);
   });
 
+  test("init --no-hooks skips Claude hook installation explicitly", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-init-explicit-no-hooks-"));
+
+    const result = await runCli(["init", "--client", "claude", "--target", "user", "--dir", home, "--no-hooks"]);
+
+    expect(result.code).toBe(0);
+    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
+    expect(await fileExists(join(home, ".claude", "settings.json"))).toBe(false);
+    expect(result.stdout).toContain("hooks not installed");
+  });
+
   test("init rejects unknown clients and targets", async () => {
     const badClient = await runCli(["init", "--client", "vim", "--target", "user"]);
     const badTarget = await runCli(["init", "--target", "global"]);
@@ -130,7 +181,7 @@ describe("CLI commands", () => {
     const { file, dir } = await writeSessionFixture();
     const output = join(dir, "report.json");
 
-    await execFileAsync("node", ["--import", "tsx", "src/cli.ts", "report", file, "-o", output], {
+    await execFileAsync("node", ["--import", tsxLoaderPath, "src/cli.ts", "report", file, "-o", output], {
       cwd: process.cwd()
     });
 
@@ -146,7 +197,7 @@ describe("CLI commands", () => {
     const output = join(dir, "session.trimmed.jsonl");
     const originalBefore = await sha256(file);
 
-    const { stdout } = await execFileAsync("node", ["--import", "tsx", "src/cli.ts", "compress", file, "-o", output], {
+    const { stdout } = await execFileAsync("node", ["--import", tsxLoaderPath, "src/cli.ts", "compress", file, "-o", output], {
       cwd: process.cwd()
     });
 
@@ -203,39 +254,6 @@ describe("CLI commands", () => {
 
     expect(result.code).not.toBe(0);
     expect(result.stderr).toContain("Next context file must be different from handoff output file");
-  });
-
-  test("resume analyzes the most recent Claude Code session under HOME", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
-    const projectDir = join(home, ".claude", "projects", "project-a");
-    const { file } = await writeSessionFixture(projectDir);
-
-    const { stdout } = await execFileAsync("node", ["--import", "tsx", "src/cli.ts", "resume", "--json"], {
-      cwd: process.cwd(),
-      env: { ...process.env, HOME: home, USERPROFILE: home }
-    });
-
-    const report = JSON.parse(stdout) as AnalysisReport;
-    expect(report.input.file).toBe(file);
-    expect(report.schema_version).toBe("trimctx.report.v1");
-    expect(report.tokenization.tokenizer).toBe("local_heuristic");
-    expect(report.resume.readiness.level).toBe("blocked");
-  });
-
-  test("resume compresses the most recent Claude Code session", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-resume-compress-home-"));
-    const projectDir = join(home, ".claude", "projects", "project-a");
-    const { dir } = await writeSessionFixture(projectDir);
-    const output = join(dir, "resume.trimmed.jsonl");
-
-    const result = await runCli(["resume", "--compress", output], { HOME: home });
-
-    expect(result.code).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      output,
-      summary: { total_messages: expect.any(Number) }
-    });
-    expect(await readFile(output, "utf8")).toContain("padding 34");
   });
 
   test("current analyzes the most recent Claude Code session under HOME", async () => {
@@ -297,7 +315,7 @@ describe("CLI commands", () => {
     expect(report.resume.decisions.some((decision) => decision.text.includes("Correction"))).toBe(true);
   });
 
-  test("hook analyzes the transcript_path provided on stdin before falling back to latest", async () => {
+  test("hook analyzes only the transcript_path provided on stdin", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-hook-home-"));
     const project = await mkdtemp(join(tmpdir(), "trimctx-hook-project-"));
     const olderSession = await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
@@ -316,6 +334,36 @@ describe("CLI commands", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("rot candidates");
+  });
+
+  test("analyze uses TRIMCTX_TRANSCRIPT_PATH when no file argument is provided", async () => {
+    const { file } = await writeSessionFixture();
+
+    const result = await runCli(["analyze", "--json"], { TRIMCTX_TRANSCRIPT_PATH: file });
+
+    expect(result.code).toBe(0);
+    const report = JSON.parse(result.stdout) as AnalysisReport;
+    expect(report.input.file).toBe(file);
+  });
+
+  test("handoff uses TRIMCTX_TRANSCRIPT_PATH when no file argument is provided", async () => {
+    const { file, dir } = await writeSessionFixture();
+
+    const result = await runCli(["handoff", "--out", join(dir, "handoffs")], { TRIMCTX_TRANSCRIPT_PATH: file });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("copyable uid: ctx_");
+    expect(result.stdout).toContain("handoff:");
+  });
+
+  test("analyze and handoff reject missing file when no current transcript binding exists", async () => {
+    const analyze = await runCli(["analyze", "--json"], { TRIMCTX_TRANSCRIPT_PATH: "" });
+    const handoff = await runCli(["handoff"], { TRIMCTX_TRANSCRIPT_PATH: "" });
+
+    expect(analyze.code).not.toBe(0);
+    expect(analyze.stderr).toContain("file argument is required");
+    expect(handoff.code).not.toBe(0);
+    expect(handoff.stderr).toContain("file argument is required");
   });
 
   test("current rejects unknown sources", async () => {
@@ -429,7 +477,7 @@ describe("CLI commands", () => {
       files: Record<string, string>;
       files_relative: Record<string, string>;
       warnings: string[];
-      input: { file: string; sha256: string; source: string };
+      input: { file: string; sha256: string; source: string; session_id?: string };
       summary: { total_messages: number; remove_candidates: number; protected_messages: number };
     };
 
@@ -441,6 +489,7 @@ describe("CLI commands", () => {
     expect(manifest.input.file).toBe(file);
     expect(manifest.input.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(manifest.input.source).toBe("claude-code-jsonl");
+    expect(manifest.input.session_id).toBe("sess-cli-1");
     expect(manifest.summary.total_messages).toBeGreaterThan(0);
     expect(manifest.summary.protected_messages).toBeGreaterThan(0);
     expect(manifest.files.handoff).toBe(handoffPath);
@@ -486,7 +535,7 @@ describe("CLI commands", () => {
       files: Record<string, string>;
       files_relative: Record<string, string>;
       warnings: string[];
-      input: { file: string; sha256: string; source: string };
+      input: { file: string; sha256: string; source: string; session_id?: string };
       summary: { total_messages: number; remove_candidates: number; protected_messages: number };
     };
 
@@ -498,6 +547,7 @@ describe("CLI commands", () => {
     expect(manifest.input.file).toBe(file);
     expect(manifest.input.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(manifest.input.source).toBe("claude-code-jsonl");
+    expect(manifest.input.session_id).toBe("sess-cli-1");
     expect(manifest.summary.total_messages).toBeGreaterThan(0);
     expect(manifest.summary.protected_messages).toBeGreaterThan(0);
     expect(manifest.files.handoff).toBe(handoffPath);
@@ -597,13 +647,13 @@ async function writeSessionFixture(dir = ""): Promise<{ dir: string; file: strin
   await mkdir(targetDir, { recursive: true });
   const file = join(targetDir, "session.jsonl");
   const lines = [
-    '{"type":"assistant","uuid":"old-1","message":{"role":"assistant","content":"Use old payment endpoint legacy charge api"}}',
-    '{"type":"assistant","uuid":"old-2","message":{"role":"assistant","content":"Use old payment endpoint legacy charge api"}}',
-    '{"type":"user","uuid":"new-1","message":{"role":"user","content":"Correction: instead use new billing endpoint"}}',
-    '{"type":"assistant","uuid":"new-2","message":{"role":"assistant","content":"Okay use new billing endpoint"}}',
-    '{"type":"system","uuid":"sys-1","message":{"role":"system","content":"System stays"}}',
+    '{"type":"assistant","uuid":"old-1","sessionId":"sess-cli-1","message":{"role":"assistant","content":"Use old payment endpoint legacy charge api"}}',
+    '{"type":"assistant","uuid":"old-2","sessionId":"sess-cli-1","message":{"role":"assistant","content":"Use old payment endpoint legacy charge api"}}',
+    '{"type":"user","uuid":"new-1","sessionId":"sess-cli-1","message":{"role":"user","content":"Correction: instead use new billing endpoint"}}',
+    '{"type":"assistant","uuid":"new-2","sessionId":"sess-cli-1","message":{"role":"assistant","content":"Okay use new billing endpoint"}}',
+    '{"type":"system","uuid":"sys-1","sessionId":"sess-cli-1","message":{"role":"system","content":"System stays"}}',
     ...Array.from({ length: 35 }, (_, index) =>
-      `{"type":"${index % 2 === 0 ? "user" : "assistant"}","uuid":"pad-${index}","message":{"role":"${index % 2 === 0 ? "user" : "assistant"}","content":"padding ${index}"}}`
+      `{"type":"${index % 2 === 0 ? "user" : "assistant"}","uuid":"pad-${index}","sessionId":"sess-cli-1","message":{"role":"${index % 2 === 0 ? "user" : "assistant"}","content":"padding ${index}"}}`
     )
   ];
   await writeFile(file, `${lines.join("\n")}\n`, "utf8");
@@ -645,7 +695,7 @@ async function runCli(
     ? { ...process.env, ...env, USERPROFILE: env.HOME }
     : { ...process.env, ...env };
   try {
-    const { stdout, stderr } = await execFileAsync("node", ["--import", "tsx", "src/cli.ts", ...args], {
+    const { stdout, stderr } = await execFileAsync("node", ["--import", tsxLoaderPath, "src/cli.ts", ...args], {
       cwd: process.cwd(),
       env: effectiveEnv
     });
@@ -667,28 +717,42 @@ async function runCliWithInput(
   cwd = process.cwd()
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const cliPath = join(process.cwd(), "src", "cli.ts");
-  const tsxLoaderPath = join(process.cwd(), "node_modules", "tsx", "dist", "loader.mjs");
+  const effectiveEnv = env.HOME
+    ? { ...process.env, TRIMCTX_FORCE_INTERACTIVE: "1", ...env, USERPROFILE: env.HOME }
+    : { ...process.env, TRIMCTX_FORCE_INTERACTIVE: "1", ...env };
   const script = [
     "import { spawn } from 'node:child_process';",
     "import { PassThrough } from 'node:stream';",
     `const cliPath = ${JSON.stringify(cliPath)};`,
     `const runCwd = ${JSON.stringify(cwd)};`,
     `const tsxLoaderPath = ${JSON.stringify(tsxLoaderPath)};`,
-    "const child = spawn(process.execPath, ['--import', tsxLoaderPath, cliPath, ...process.argv.slice(1)], { cwd: runCwd, stdio: ['pipe', 'pipe', 'pipe'] });",
+    `const childEnv = ${JSON.stringify(effectiveEnv)};`,
+    `const inputChunks = ${JSON.stringify(splitInputChunks(input))};`,
+    "const child = spawn(process.execPath, ['--import', tsxLoaderPath, cliPath, ...process.argv.slice(1)], { cwd: runCwd, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'] });",
     "const stdout = new PassThrough();",
     "stdout.isTTY = true;",
     "stdout.pipe(process.stdout);",
-    "child.stdout.pipe(stdout);",
     "child.stderr.pipe(process.stderr);",
     "child.stdin.isTTY = true;",
-    `child.stdin.end(${JSON.stringify(input)});`,
+    "let inputIndex = 0;",
+    "let outputBuffer = '';",
+    "function writeNextInputChunk() {",
+    "  if (inputIndex >= inputChunks.length) return;",
+    "  child.stdin.write(inputChunks[inputIndex++]);",
+    "}",
+    "function maybeWriteInput() {",
+    "  if (inputIndex === 0 && outputBuffer.includes('Choose 1 or 2 [1]:')) writeNextInputChunk();",
+    "  if (inputIndex === 1 && outputBuffer.includes('Choose Y or n [Y]:')) { writeNextInputChunk(); setTimeout(() => child.stdin.end(), 20); }",
+    "}",
+    "child.stdout.on('data', chunk => { outputBuffer += String(chunk); stdout.write(chunk); maybeWriteInput(); });",
+    "setTimeout(() => { if (inputIndex === 0) { for (const chunk of inputChunks) child.stdin.write(chunk); inputIndex = inputChunks.length; child.stdin.end(); } }, 50);",
     "child.on('exit', code => process.exit(code ?? 1));"
   ].join("\n");
 
   try {
     const { stdout, stderr } = await execFileAsync("node", ["--input-type=module", "-e", script, ...args], {
       cwd,
-      env: { ...process.env, TRIMCTX_FORCE_INTERACTIVE: "1", ...env }
+      env: effectiveEnv
     });
     return { code: 0, stdout, stderr };
   } catch (error) {
@@ -699,4 +763,9 @@ async function runCliWithInput(
       stderr: result.stderr ?? ""
     };
   }
+}
+
+function splitInputChunks(input: string): string[] {
+  const chunks = input.match(/[^\n]*\n|[^\n]+$/g);
+  return chunks ?? [];
 }

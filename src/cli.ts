@@ -3,14 +3,14 @@ import { Command } from "commander";
 import { constants as fsConstants, readFileSync } from "node:fs";
 import { access, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createHash, randomBytes } from "node:crypto";
-import { createInterface } from "node:readline/promises";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { compressFile } from "./core/compressor.js";
 import { formatHandoff, formatNextContext } from "./core/handoff.js";
 import { formatAnalysisSummary } from "./cli/format-summary.js";
-import { runHook } from "./core/hook.js";
+import { runHook, writeSessionEnvBinding } from "./core/hook.js";
 import {
   findLatestSession,
   parseSessionSource,
@@ -36,37 +36,14 @@ program
   .option("--dir <directory>", "Project directory for --target project, or base home directory for --target user.")
   .option("--force", "Overwrite existing installed trimctx assets.")
   .option("--dry-run", "Print planned installation paths without writing files.")
-  .option("--with-hooks", "Also install the experimental Claude Code Stop hook.")
+  .option("--with-hooks", "Also install experimental Claude Code current-window hooks.")
+  .option("--no-hooks", "Do not install Claude Code hooks.")
   .description("Install AI-client command files and skills for Claude Code and Codex.")
   .action(async (options: InitOptions) => {
     const result = await initClientAssets(options);
     for (const line of result.lines) {
       process.stdout.write(`${line}\n`);
     }
-  });
-
-program
-  .command("resume")
-  .option("--json", "Print the full JSON analysis report.")
-  .option("--color", "Colorize output for terminal.")
-  .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-  .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-  .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-  .option("--compress <output.jsonl>", "Compress the latest session to a file.")
-  .description("Analyze the most recent Claude Code session.")
-  .action(async (options: CliAnalysisOptions & { json?: boolean; color?: boolean; compress?: string }) => {
-    const file = await findLatestSession("claude");
-    const analysisOptions = parseAnalysisOptions(options);
-    if (options.compress) {
-      await writeCompressionResult(file, options.compress, analysisOptions);
-      return;
-    }
-    const report = await analyzeFile(file, analysisOptions);
-    if (options.json) {
-      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-      return;
-    }
-    process.stdout.write(formatAnalysisSummary(report, { color: options.color }));
   });
 
 program
@@ -97,15 +74,16 @@ program
 
 program
   .command("analyze")
-  .argument("<file>")
+  .argument("[file]")
   .option("--json", "Print the full JSON analysis report.")
   .option("--color", "Colorize output for terminal.")
   .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
   .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
   .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
   .description("Analyze a Claude Code, OpenAI, or Codex/Hermes JSONL conversation.")
-  .action(async (file: string, options: CliAnalysisOptions & { json?: boolean; color?: boolean }) => {
-    const report = await analyzeFile(file, parseAnalysisOptions(options));
+  .action(async (file: string | undefined, options: CliAnalysisOptions & { json?: boolean; color?: boolean }) => {
+    const inputFile = resolveInputFile(file);
+    const report = await analyzeFile(inputFile, parseAnalysisOptions(options));
     if (options.json) {
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
       return;
@@ -141,7 +119,7 @@ program
 
 program
   .command("handoff")
-  .argument("<file>")
+  .argument("[file]")
   .option("-o, --output <handoff.md>", "Write a legacy single handoff markdown file.")
   .option("--next-context <next-context.md>", "Also write a compact next-context markdown file with --output.")
   .option("--out, --out-dir <directory>", "Write a uid-based handoff package under this directory.")
@@ -149,25 +127,32 @@ program
   .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
   .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
   .description("Write markdown handoff artifacts for continuing a long conversation safely.")
-  .action(async (file: string, options: CliAnalysisOptions & { output?: string; nextContext?: string; outDir?: string }) => {
+  .action(async (file: string | undefined, options: CliAnalysisOptions & { output?: string; nextContext?: string; outDir?: string }) => {
+    const inputFile = resolveInputFile(file);
     if (options.outDir && (options.output || options.nextContext)) {
       throw new Error("--out cannot be combined with -o/--output or --next-context");
     }
     if (options.output) {
-      await writeLegacyHandoff(file, { ...options, output: options.output });
+      await writeLegacyHandoff(inputFile, { ...options, output: options.output });
       return;
     }
     if (options.nextContext) {
       throw new Error("--next-context requires -o/--output; omit both to create a handoff package");
     }
-    await writeHandoffPackage(file, options);
+    await writeHandoffPackage(inputFile, options);
   });
 
 program
   .command("hook")
   .option("--dry-run", "Print analysis result without modifying CLAUDE.md.")
+  .option("--session-start", "Run as a Claude Code SessionStart hook and persist current transcript binding.")
   .description("Run as a Claude Code Stop hook: analyze session and update CLAUDE.md context state.")
-  .action(async (options: { dryRun?: boolean }) => {
+  .action(async (options: { dryRun?: boolean; sessionStart?: boolean }) => {
+    if (options.sessionStart) {
+      const result = await writeSessionEnvBinding();
+      process.stdout.write(`${result.message}\n`);
+      return;
+    }
     const result = await runHook({ dryRun: options.dryRun });
     process.stdout.write(`${result.message}\n`);
   });
@@ -178,7 +163,7 @@ program
   .option("--dir <directory>", "Override the base directory.")
   .option("--force", "Overwrite existing trimctx hook configuration.")
   .option("--dry-run", "Print planned configuration without writing.")
-  .description("Install experimental Claude Code Stop hook into settings.json.")
+  .description("Install experimental Claude Code hooks into settings.json.")
   .action(async (options: { target?: string; dir?: string; force?: boolean; dryRun?: boolean }) => {
     const target = parseInitTarget(options.target);
     const baseDir = options.dir ? resolve(options.dir) : (target === "user" ? homedir() : process.cwd());
@@ -188,12 +173,6 @@ program
       process.stdout.write(`${line}\n`);
     }
   });
-
-program.parseAsync().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`trimctx: ${message}\n`);
-  process.exitCode = 1;
-});
 
 type InitClient = "all" | "claude" | "codex";
 type InitTarget = "user" | "project";
@@ -205,6 +184,7 @@ interface InitOptions {
   force?: boolean;
   dryRun?: boolean;
   withHooks?: boolean;
+  hooks?: boolean;
 }
 
 interface InitAsset {
@@ -218,41 +198,86 @@ interface InitResult {
   lines: string[];
 }
 
+class PromptSession {
+  private readonly readline = createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+  private readonly pendingResolvers: Array<(line: string) => void> = [];
+  private readonly lines: string[] = [];
+  private ended = false;
+
+  constructor() {
+    this.readline.on("line", line => {
+      const resolveNext = this.pendingResolvers.shift();
+      if (resolveNext) {
+        resolveNext(line);
+      } else {
+        this.lines.push(line);
+      }
+    });
+    this.readline.on("close", () => {
+      this.ended = true;
+      while (this.pendingResolvers.length > 0) {
+        this.pendingResolvers.shift()?.("");
+      }
+    });
+  }
+
+  async question(prompt: string): Promise<string> {
+    process.stdout.write(prompt);
+    const line = this.lines.shift();
+    if (line !== undefined || this.ended) {
+      return line ?? "";
+    }
+    return await new Promise(resolve => this.pendingResolvers.push(resolve));
+  }
+
+  close(): void {
+    this.readline.close();
+  }
+}
+
 async function initClientAssets(options: InitOptions): Promise<InitResult> {
   const client = parseInitClient(options.client);
-  const target = await resolveInitTarget(options.target);
-  const baseDir = resolve(options.dir ?? (target === "user" ? homedir() : process.cwd()));
-  const assets = initAssetsFor(client, target, baseDir);
-  const lines = [`trimctx init: ${options.dryRun ? "planned" : "installed"} ${client} assets for ${target}`];
+  const readline = options.target === undefined && isInteractiveInput()
+    ? new PromptSession()
+    : undefined;
+  try {
+    const target = await resolveInitTarget(options.target, readline);
+    const baseDir = resolve(options.dir ?? (target === "user" ? homedir() : process.cwd()));
+    const assets = initAssetsFor(client, target, baseDir);
+    const lines = [`trimctx init: ${options.dryRun ? "planned" : "installed"} ${client} assets for ${target}`];
+    const shouldInstallHooks = await resolveInitHooks(options, client, readline);
 
-  for (const asset of assets) {
-    await assertTemplateExists(asset.source, asset.label);
-    if (options.dryRun) {
-      lines.push(`- ${asset.label}: ${asset.destination}`);
-      continue;
-    }
-    if (await pathExists(asset.destination)) {
-      if (!options.force) {
-        throw new Error(`${asset.destination} already exists; rerun with --force to overwrite trimctx ${asset.client} assets`);
+    for (const asset of assets) {
+      await assertTemplateExists(asset.source, asset.label);
+      if (options.dryRun) {
+        lines.push(`- ${asset.label}: ${asset.destination}`);
+        continue;
       }
-      await replaceInstalledAsset(asset);
-    } else {
-      await mkdir(dirname(asset.destination), { recursive: true });
-      await cp(asset.source, asset.destination, { recursive: true });
+      if (await pathExists(asset.destination)) {
+        if (!options.force) {
+          throw new Error(`${asset.destination} already exists; rerun with --force to overwrite trimctx ${asset.client} assets`);
+        }
+        await replaceInstalledAsset(asset);
+      } else {
+        await mkdir(dirname(asset.destination), { recursive: true });
+        await cp(asset.source, asset.destination, { recursive: true });
+      }
+      lines.push(`- ${asset.label}: ${asset.destination}`);
     }
-    lines.push(`- ${asset.label}: ${asset.destination}`);
-  }
 
-  if (options.withHooks && (client === "all" || client === "claude")) {
-    const settingsPath = join(baseDir, ".claude", "settings.json");
-    const hookLines = await installHooks(settingsPath, { force: options.force, dryRun: options.dryRun });
-    lines.push(...hookLines.map(l => `- ${l}`));
-  } else if (client === "all" || client === "claude") {
-    lines.push("- hooks not installed by default; run `trimctx install-hooks` or `trimctx init --with-hooks` to enable experimental Stop-hook automation.");
-  }
+    if (shouldInstallHooks) {
+      const settingsPath = join(baseDir, ".claude", "settings.json");
+      const hookLines = await installHooks(settingsPath, { force: options.force, dryRun: options.dryRun });
+      lines.push(...hookLines.map(l => `- ${l}`));
+    } else if (client === "all" || client === "claude") {
+      lines.push("- hooks not installed; run `trimctx install-hooks` or `trimctx init --with-hooks` to enable Claude current-window binding later.");
+    }
 
-  lines.push("Restart the AI client, then run /trimctx in Claude Code or use the trimctx Codex skill.");
-  return { lines };
+    lines.push("Restart the AI client, then run /trimctx in Claude Code or use the trimctx Codex skill.");
+    return { lines };
+  } finally {
+    readline?.close();
+  }
 }
 
 function initAssetsFor(client: InitClient, target: InitTarget, baseDir: string): InitAsset[] {
@@ -294,7 +319,7 @@ function parseInitTarget(value: string | undefined): InitTarget {
   throw new Error("target must be one of: user, project");
 }
 
-async function resolveInitTarget(value: string | undefined): Promise<InitTarget> {
+async function resolveInitTarget(value: string | undefined, readline?: PromptSession): Promise<InitTarget> {
   if (value !== undefined) {
     return parseInitTarget(value);
   }
@@ -302,10 +327,11 @@ async function resolveInitTarget(value: string | undefined): Promise<InitTarget>
     throw new Error("target is required in non-interactive mode; pass --target user or --target project");
   }
 
-  const readline = createInterface({ input: process.stdin, output: process.stdout });
+  const ownsReadline = readline === undefined;
+  const prompt = readline ?? new PromptSession();
   try {
     for (;;) {
-      const answer = (await readline.question([
+      const answer = (await prompt.question([
         "Where should trimctx install AI-client assets?",
         "  1) User/global: ~/.claude/plugins/trimctx and ~/.codex/skills/trimctx",
         "  2) Project: ./.claude/plugins/trimctx and ./.codex/skills/trimctx",
@@ -320,7 +346,9 @@ async function resolveInitTarget(value: string | undefined): Promise<InitTarget>
       process.stdout.write("Please choose 1 for user/global or 2 for project.\n");
     }
   } finally {
-    readline.close();
+    if (ownsReadline) {
+      prompt.close();
+    }
   }
 }
 
@@ -420,7 +448,8 @@ async function writeHandoffPackage(
     input: {
       file,
       sha256: inputHash,
-      source: report.input.source
+      source: report.input.source,
+      session_id: report.input.session_id
     },
     files: {
       handoff: handoffPath,
@@ -514,6 +543,52 @@ function parseOptionalNumber(value: string | undefined, flag: string): number | 
   return parsed;
 }
 
+async function resolveInitHooks(options: InitOptions, client: InitClient, readline?: PromptSession): Promise<boolean> {
+  if (client === "codex") {
+    return false;
+  }
+  if (options.hooks === false) {
+    return false;
+  }
+  if (options.withHooks) {
+    return true;
+  }
+  if (options.target !== undefined || !isInteractiveInput()) {
+    return false;
+  }
+
+  const ownsReadline = readline === undefined;
+  const prompt = readline ?? new PromptSession();
+  try {
+    for (;;) {
+      const answer = (await prompt.question([
+        "Enable Claude current-window hooks?",
+        "  This lets /trimctx and /trimctx:handoff bind to the active Claude Code transcript.",
+        "Choose Y or n [Y]: "
+      ].join("\n"))).trim().toLowerCase();
+      if (answer === "" || answer === "y" || answer === "yes") {
+        return true;
+      }
+      if (answer === "n" || answer === "no") {
+        return false;
+      }
+      process.stdout.write("Please choose Y to enable hooks or n to skip.\n");
+    }
+  } finally {
+    if (ownsReadline) {
+      prompt.close();
+    }
+  }
+}
+
+
+function resolveInputFile(file: string | undefined): string {
+  const inputFile = file ?? process.env.TRIMCTX_TRANSCRIPT_PATH;
+  if (!inputFile) {
+    throw new Error("file argument is required unless TRIMCTX_TRANSCRIPT_PATH is set by the current AI client session");
+  }
+  return inputFile;
+}
 
 async function writeCompressionResult(inputFile: string, outputFile: string, options: AnalysisOptions): Promise<void> {
   await assertDifferentFiles(inputFile, outputFile, "Output file must be different from input file");
@@ -544,6 +619,7 @@ async function installHooks(
   options: { force?: boolean; dryRun?: boolean } = {}
 ): Promise<string[]> {
   const TRIMCTX_HOOK_COMMAND = "trimctx hook";
+  const TRIMCTX_SESSION_ENV_COMMAND = "trimctx hook --session-start";
   let settings: Record<string, unknown> = {};
 
   try {
@@ -554,37 +630,59 @@ async function installHooks(
   }
 
   const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
+  const sessionStartHooks = (hooks.SessionStart ?? []) as Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
   const stopHooks = (hooks.Stop ?? []) as Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
 
+  const hasSessionEnvHook = sessionStartHooks.some(group =>
+    (group.hooks ?? []).some(h => h.type === "command" && h.command === TRIMCTX_SESSION_ENV_COMMAND)
+  );
   const hasTrimctxHook = stopHooks.some(group =>
     (group.hooks ?? []).some(h => h.type === "command" && h.command === TRIMCTX_HOOK_COMMAND)
   );
 
-  if (hasTrimctxHook && !options.force) {
-    return [`experimental Stop hook already installed in ${settingsPath}`];
+  if (hasSessionEnvHook && hasTrimctxHook && !options.force) {
+    return [`experimental Claude hooks already installed in ${settingsPath}`];
   }
 
+  const newSessionStartHooks = options.force
+    ? sessionStartHooks.filter(group =>
+        !(group.hooks ?? []).some(h => h.type === "command" && h.command === TRIMCTX_SESSION_ENV_COMMAND)
+      )
+    : [...sessionStartHooks];
   const newStopHooks = options.force
     ? stopHooks.filter(group =>
         !(group.hooks ?? []).some(h => h.type === "command" && h.command === TRIMCTX_HOOK_COMMAND)
       )
     : [...stopHooks];
 
-  newStopHooks.push({
-    hooks: [{ type: "command", command: TRIMCTX_HOOK_COMMAND }]
-  });
+  if (!hasSessionEnvHook || options.force) {
+    newSessionStartHooks.push({
+      hooks: [{ type: "command", command: TRIMCTX_SESSION_ENV_COMMAND }]
+    });
+  }
+  if (!hasTrimctxHook || options.force) {
+    newStopHooks.push({
+      hooks: [{ type: "command", command: TRIMCTX_HOOK_COMMAND }]
+    });
+  }
 
-  const newSettings = { ...settings, hooks: { ...hooks, Stop: newStopHooks } };
+  const newSettings = { ...settings, hooks: { ...hooks, SessionStart: newSessionStartHooks, Stop: newStopHooks } };
   const output = `${JSON.stringify(newSettings, null, 2)}\n`;
 
   if (options.dryRun) {
     return [
-      `dry-run: would write experimental Stop hook to ${settingsPath}`,
+      `dry-run: would write experimental Claude hooks to ${settingsPath}`,
       output.trimEnd()
     ];
   }
 
   await mkdir(dirname(settingsPath), { recursive: true });
   await writeFile(settingsPath, output, "utf8");
-  return [`installed experimental Stop hook in ${settingsPath}`];
+  return [`installed experimental Claude hooks in ${settingsPath}`];
 }
+
+program.parseAsync().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`trimctx: ${message}\n`);
+  process.exitCode = 1;
+});

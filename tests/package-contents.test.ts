@@ -15,12 +15,20 @@ const unsafeInstallPipePatterns = [
 function npmCommandEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.npm_config_dry_run;
+  delete env.npm_config_cache;
+  delete env.NPM_CONFIG_CACHE;
+  env.npm_config_cache = npmCacheDir();
+  env.NPM_CONFIG_CACHE = npmCacheDir();
   return env;
+}
+
+function npmCacheDir(): string {
+  return path.join(tmpdir(), "trimctx-npm-cache", String(process.pid));
 }
 
 async function listPackedFiles(): Promise<string[]> {
   const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
-  const { stdout } = await execFileAsync(npmBin, ["pack", "--dry-run", "--json"], {
+  const { stdout } = await execFileAsync(npmBin, ["pack", "--dry-run", "--json", "--cache", npmCacheDir()], {
     cwd: process.cwd(),
     env: npmCommandEnv(),
     shell: process.platform === "win32"
@@ -32,7 +40,7 @@ async function listPackedFiles(): Promise<string[]> {
 
 async function packTarball(destination: string): Promise<string> {
   const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
-  const { stdout } = await execFileAsync(npmBin, ["pack", "--pack-destination", destination, "--json"], {
+  const { stdout } = await execFileAsync(npmBin, ["pack", "--pack-destination", destination, "--json", "--cache", npmCacheDir()], {
     cwd: process.cwd(),
     env: npmCommandEnv(),
     shell: process.platform === "win32"
@@ -58,10 +66,11 @@ describe("package contents", () => {
     expect(files).toContain("plugins/trimctx/.system");
     expect(files).toContain("plugins/trimctx/commands/trimctx.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/analyze.md");
-    expect(files).toContain("plugins/trimctx/commands/trimctx/resume.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/compress.md");
+    expect(files).toContain("plugins/trimctx/commands/trimctx/handoff.md");
+    expect(files).not.toContain("plugins/trimctx/commands/trimctx/resume.md");
     expect(files).toContain("codex/skills/trimctx/SKILL.md");
-  });
+  }, 30_000);
 
   test("publishes only the bundled CLI, not the source or expanded module tree", async () => {
     const files = await listPackedFiles();
@@ -75,7 +84,7 @@ describe("package contents", () => {
     expect(files.some((file) => file.startsWith("dist/types/"))).toBe(false);
     expect(files.some((file) => file.startsWith("docs/dev/"))).toBe(false);
     expect(files).not.toContain("CONTRIBUTING.md");
-  });
+  }, 30_000);
 
   test("does not publish download-and-execute install pipe examples", async () => {
     const files = await listPackedFiles();
@@ -99,7 +108,7 @@ describe("package contents", () => {
     }
 
     expect(unsafeMatches).toEqual([]);
-  });
+  }, 30_000);
 
   test("packed tarball installs a runnable trimctx binary", async () => {
     const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -110,7 +119,7 @@ describe("package contents", () => {
     try {
       const tarball = await packTarball(tempDir);
       await mkdir(path.join(prefix, "lib"), { recursive: true });
-      await execFileAsync(npmBin, ["install", "--global", "--prefix", prefix, tarball], {
+      await execFileAsync(npmBin, ["install", "--global", "--prefix", prefix, tarball, "--cache", npmCacheDir()], {
         cwd: tempDir,
         env: npmCommandEnv(),
         shell: process.platform === "win32"
@@ -124,7 +133,9 @@ describe("package contents", () => {
       expect(help.stdout).toContain("Usage: trimctx [options] [command]");
       expect(help.stdout).toContain("Commands:");
       expect(help.stdout).toContain("init [options]");
-      expect(help.stdout).toContain("analyze [options] <file>");
+      expect(help.stdout).toContain("analyze [options] [file]");
+      expect(help.stdout).toContain("handoff [options] [file]");
+      expect(help.stdout).not.toContain("session-env");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

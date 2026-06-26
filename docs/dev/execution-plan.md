@@ -140,7 +140,7 @@ trimctx analyze <file>
 trimctx analyze <file> --json
 trimctx report <file> -o <report.json>
 trimctx compress <file> -o <output.jsonl>
-trimctx resume
+trimctx current
 ```
 
 交付物：
@@ -167,7 +167,7 @@ trimctx analyze <file>
 trimctx analyze <file> --json
 trimctx report <file> -o report.json
 trimctx compress <file> -o output.jsonl
-trimctx resume
+trimctx current
 ```
 
 交付物：
@@ -176,7 +176,7 @@ trimctx resume
 - `analyze --json` 输出完整 JSON。
 - `report` 输出完整机器可读报告。
 - `compress` 生成安全压缩副本且拒绝覆盖输入文件。
-- `resume` 分析最近 Claude Code session。
+- `current --source claude` 分析最近 Claude Code session。
 - report top reasons 和 warnings。
 - JSONL 解析错误包含可定位的文件和行号。
 - 阈值参数仅作为高级验证/调参选项，不作为普通用户主路径。
@@ -610,7 +610,7 @@ trimctx analyze <file>
 trimctx analyze <file> --json
 trimctx report <file> -o report.json
 trimctx compress <file> -o output.jsonl
-trimctx resume
+trimctx current
 ```
 
 验收：
@@ -662,7 +662,7 @@ reports/phase0/validation-summary.md
 3. 补齐 5 个真实长对话的私有验证样本。
 4. 做 Phase 0 validation summary。
 5. 基于真实样本验证提出 safety/scorer 调整候选；默认权重、阈值和删除行为必须经过单独评审后再改。
-6. 稳定当前 `resume` / `analyze` / `report` / `compress` 的错误处理和用户说明。
+6. 稳定当前 `current` / `analyze` / `report` / `compress` 的错误处理和用户说明。
 7. 再决定是否需要新增 session discovery / diagnostics 命令或进入 Claude Code hooks/statusline。
 
 ## 19. 最关键判断
