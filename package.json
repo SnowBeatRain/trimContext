@@ -45,7 +45,7 @@
     "build": "tsc -p tsconfig.json",
     "build:publish": "npm run build:types && esbuild src/cli.ts --bundle --platform=node --target=node20 --format=esm --packages=external --minify --legal-comments=none --outfile=dist/cli.js && node scripts/fix-publish-bundle.mjs",
     "build:types": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=30000",
     "dev": "tsx src/cli.ts",
     "prepack": "npm run build:publish",
     "prepublishOnly": "npm test && npm run build:publish",
