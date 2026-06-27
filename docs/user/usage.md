@@ -19,7 +19,7 @@ trimctx is local-only: it does not call an LLM, upload files, or use a database.
 - Node.js 20 or later
 - A JSONL conversation file from Claude Code, an OpenAI-style chat export, or a Codex/Hermes rollout export
 
-trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API. The `0.2.5` release is a packaging and continuation milestone, not a Phase 0 completion claim; keep reviewing reports before relying on compression output.
+trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API. The current `0.2` series is a packaging and continuation milestone, not a Phase 0 completion claim; keep reviewing reports before relying on compression output.
 
 If you install `trimctx` globally and want exact `tiktoken` counts, install `js-tiktoken` in the same resolvable environment as the CLI, or use a project-local `trimctx` install with a project-local `js-tiktoken` dependency.
 

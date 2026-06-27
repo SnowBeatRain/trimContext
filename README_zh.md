@@ -8,7 +8,7 @@ trimctx 读取你的 JSONL 对话文件，识别低价值或过期消息，解�
 
 **安全原则：trimctx 宁可少删，也不要误删。**
 
-**发布里程碑：** `0.2.5` 把续接感知报告、handoff/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数、AI 客户端安装说明，以及 npm 包 smoke 检查整合成一个 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
+**发布里程碑：** 当前 `0.2` 系列把续接感知报告、handoff/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数、AI 客户端安装说明，以及 npm 包 smoke 检查整合成 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
 
 [English](README.md)
 
@@ -66,9 +66,6 @@ trimctx analysis
 ```
 
 ## 安装
-
-发布验收时，请从 npm 或打包出的 tarball 安装到干净 prefix，并先确认安装后的 `trimctx --version` 和 `trimctx --help` 可运行，再执行 `trimctx init`。
-
 
 ```bash
 npm install -g trimctx

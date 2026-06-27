@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -82,8 +82,11 @@ describe("package contents", () => {
     expect(files.some((file) => file.startsWith("dist/core/"))).toBe(false);
     expect(files.some((file) => file.startsWith("dist/adapters/"))).toBe(false);
     expect(files.some((file) => file.startsWith("dist/types/"))).toBe(false);
-    expect(files.some((file) => file.startsWith("docs/dev/"))).toBe(false);
-    expect(files).not.toContain("CONTRIBUTING.md");
+    expect(files.filter((file) => file.startsWith("docs/dev/")).sort()).toEqual([
+      "docs/dev/requirements.md",
+      "docs/dev/roadmap.md"
+    ]);
+    expect(files).toContain("CONTRIBUTING.md");
   }, 30_000);
 
   test("does not publish download-and-execute install pipe examples", async () => {
@@ -126,9 +129,12 @@ describe("package contents", () => {
       });
 
       const trimctxBin = installedTrimctxBinary(prefix);
+      const packageRoot = path.join(prefix, "lib", "node_modules", "trimctx");
       const version = await execFileAsync(trimctxBin, ["--version"], { shell: process.platform === "win32" });
       const help = await execFileAsync(trimctxBin, ["--help"], { shell: process.platform === "win32" });
 
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "handoff.md"))).resolves.toBeUndefined();
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "resume.md"))).rejects.toThrow();
       expect(version.stdout.trim()).toBe(packageJson.version);
       expect(help.stdout).toContain("Usage: trimctx [options] [command]");
       expect(help.stdout).toContain("Commands:");

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.2.8] - 2026-06-27
+
+### Fixed
+
+- Ship the Claude Code `/trimctx:handoff` command asset in the npm package, aligning the plugin README and manifest with the installed files.
+- Keep the package-content smoke test checking that `handoff.md` is installed and the removed `resume.md` command file does not return.
+
+### Changed
+
+- Release documentation now describes the current `0.2` series instead of pinning the milestone text to an older patch version.
+
 ## [0.2.4] - 2026-06-22
 
 ### Added

@@ -8,7 +8,7 @@ trimctx reads your JSONL conversation files, identifies low-value or stale messa
 
 **Safety rule: trimctx prefers missing a deletion over deleting the wrong message.**
 
-**Release milestone:** `0.2.5` packages continuation-aware reports, handoff/next-context artifacts, optional exact `tiktoken` counting for OpenAI/Codex-family inputs, AI-client install guidance, and npm package smoke checks into one npm-ready release. It is still conservative by design: Phase 0 is not complete until broader real-sample validation and manual review metrics are finished.
+**Release milestone:** the current `0.2` series packages continuation-aware reports, handoff/next-context artifacts, optional exact `tiktoken` counting for OpenAI/Codex-family inputs, AI-client install guidance, and npm package smoke checks into npm-ready releases. It is still conservative by design: Phase 0 is not complete until broader real-sample validation and manual review metrics are finished.
 
 [中文说明](README_zh.md)
 
@@ -66,9 +66,6 @@ trimctx analysis
 ```
 
 ## Installation
-
-For release verification, install from npm or a packed tarball in a clean prefix and confirm `trimctx --version` and `trimctx --help` run from the installed binary before running `trimctx init`.
-
 
 ```bash
 npm install -g trimctx
