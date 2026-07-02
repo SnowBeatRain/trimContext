@@ -8,11 +8,21 @@ trimctx reads your JSONL conversation files, identifies low-value or stale messa
 
 **Safety rule: trimctx prefers missing a deletion over deleting the wrong message.**
 
-**Release milestone:** the current `0.2` series packages continuation-aware reports, handoff/next-context artifacts, optional exact `tiktoken` counting for OpenAI/Codex-family inputs, AI-client install guidance, and npm package smoke checks into npm-ready releases. It is still conservative by design: Phase 0 is not complete until broader real-sample validation and manual review metrics are finished.
+**Release milestone:** the current `0.2` series packages continuation-aware reports, new-chat/next-context artifacts, optional exact `tiktoken` counting for OpenAI/Codex-family inputs, AI-client install guidance, and npm package smoke checks into npm-ready releases. It is still conservative by design: Phase 0 is not complete until broader real-sample validation and manual review metrics are finished.
 
 [中文说明](README_zh.md)
 
 ## Quick Start
+
+```bash
+npm install -g trimctx
+trimctx init
+trimctx
+trimctx new-chat
+```
+
+`trimctx` checks the current Claude Code transcript when hooks are available, or the latest local Claude/Codex session otherwise. `trimctx new-chat` writes a local `.trimctx/handoffs/<id>/` package; copy `next-context.md` into a new AI window to continue safely. `trimctx handoff` remains as a compatibility alias.
+
 
 **Requires Node.js 20+.**
 
@@ -20,7 +30,7 @@ Install from npm, then analyze a session and prepare AI-client assets:
 
 ```bash
 npm install -g trimctx
-trimctx analyze path/to/session.jsonl
+trimctx new-chat
 trimctx init
 ```
 
@@ -78,7 +88,7 @@ For release verification, install from npm or a packed tarball in a clean prefix
 
 `trimctx init` asks whether to install globally for the current user or into the current project. User/global install writes Claude Code slash commands under `~/.claude/plugins/trimctx` and a Codex skill under `~/.codex/skills/trimctx`. In the interactive flow it also asks whether to enable Claude current-window hooks, defaulting to yes. Non-interactive installs still require `--with-hooks` to install hooks.
 
-For Claude Code current-window commands such as `/trimctx`, `/trimctx:handoff`, and `/trimctx:compress`, enable hooks during interactive `trimctx init`, run `trimctx init --with-hooks`, or run `trimctx install-hooks`, then restart Claude Code. The hook writes the current `transcript_path` into `TRIMCTX_TRANSCRIPT_PATH` automatically; users do not need to find or copy the JSONL path manually.
+For Claude Code current-window commands such as `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress`, enable hooks during interactive `trimctx init`, run `trimctx init --with-hooks`, or run `trimctx install-hooks`, then restart Claude Code. The hook writes the current `transcript_path` into `TRIMCTX_TRANSCRIPT_PATH` automatically; users do not need to find or copy the JSONL path manually.
 
 Alternative GitHub install path:
 
@@ -148,12 +158,12 @@ Core daily workflow:
 ```bash
 trimctx init
 trimctx current
-trimctx handoff path/to/session.jsonl
+trimctx new-chat
 ```
 
 - `trimctx init` installs the Claude Code plugin and Codex skill files.
 - `trimctx current` analyzes the latest local Claude Code or Codex session by file modification time.
-- `trimctx handoff <file>` creates a UID-based continuation package you can reference later.
+- `trimctx new-chat [file]` creates a UID-based continuation package you can reference later.
 
 Claude Code current-window workflow:
 
@@ -161,7 +171,7 @@ Claude Code current-window workflow:
 trimctx init
 # restart Claude Code, then run these inside Claude Code:
 /trimctx
-/trimctx:handoff
+/trimctx:new-chat
 ```
 
 Need deeper inspection? Use `trimctx analyze <file>` for a direct file summary and `trimctx report <file> -o report.json` for the full JSON audit trail. Use `trimctx compress` only after reviewing the report; compression remains conservative and never modifies the original file.
@@ -175,7 +185,7 @@ The continuation state is a best-effort, heuristic continuation aid after a long
 - `tokenization` records the tokenizer name and confidence used for token estimates. By default trimctx uses the local heuristic tokenizer. When the optional `js-tiktoken` package is installed, OpenAI-style and Codex/Hermes rollout inputs can use exact local `tiktoken` counts with high confidence.
 - `resume.readiness` scores whether the session has enough continuation signals.
 - `resume.currentGoal`, `decisions`, `activeFiles`, `failures`, `testSignals`, and `nextSteps` preserve likely continuation signals after compaction.
-- `trimctx handoff <file>` writes a uid-based package under `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`. In Claude Code with hooks installed, `/trimctx:handoff` calls `trimctx handoff` without a file because `TRIMCTX_TRANSCRIPT_PATH` is injected for the current window.
+- `trimctx new-chat [file]` writes a uid-based package under `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`. In Claude Code with hooks installed, `/trimctx:new-chat` calls `trimctx new-chat` without a file because `TRIMCTX_TRANSCRIPT_PATH` is injected for the current window.
 - The printed `uid` is a copyable reference for follow-up work, but trimctx does not currently provide `resume <uid>` or an equivalent restore command.
 
 The original JSONL session is still read-only. Resume extraction only affects reports and generated Markdown artifacts. Review generated handoffs before sharing or pasting them into another session; rule-based extraction can miss, misclassify, or redact imperfectly.
@@ -203,8 +213,8 @@ trimctx install-hooks        # experimental: install hooks only
 Use it from Claude Code:
 
 - `trimctx init` prompts for user/global or project install; `--target user` installs `plugins/trimctx/` to `~/.claude/plugins/trimctx`.
-- The plugin exposes `/trimctx`, `/trimctx:analyze`, `/trimctx:handoff`, and `/trimctx:compress` command files.
-- `/trimctx`, `/trimctx:handoff`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH`, which is written by the Claude `SessionStart` hook installed through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`.
+- The plugin exposes `/trimctx`, `/trimctx:analyze`, `/trimctx:new-chat`, and `/trimctx:compress` command files.
+- `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH`, which is written by the Claude `SessionStart` hook installed through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`.
 - Safety boundary: current-window commands do not fall back to `trimctx current`. If the hook binding is missing, they stop and ask for hooks to be installed. They do not write back to Claude Code, do not modify the original session, and only compress when explicitly requested.
 
 Use it from Codex:
@@ -273,16 +283,16 @@ trimctx current --source claude
 trimctx current --source codex
 ```
 
-#### `trimctx handoff [file]`
+#### `trimctx new-chat [file]`
 
 Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
 
 ```bash
-trimctx handoff session.jsonl
-trimctx handoff   # only when TRIMCTX_TRANSCRIPT_PATH is set by the current AI client session
+trimctx new-chat session.jsonl
+trimctx new-chat   # uses the current/latest local AI session
 ```
 
-By default, this creates `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` for easy handoff references. `manifest.json` includes absolute file paths for local automation plus relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root; legacy single-file output remains available with `-o handoff.md --next-context next-context.md`. Handoff packages may include original transcript content and secrets in `report.json`; review before sharing. The UID is a reference for follow-up work, not a restore token; trimctx does not currently provide `resume <uid>` or an equivalent command.
+By default, this creates `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json`. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` for easy handoff references. `manifest.json` includes absolute file paths for local automation plus relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root; legacy single-file output remains available with `-o handoff.md --next-context next-context.md`. New-chat packages may include original transcript content and secrets in `report.json`; review before sharing. The UID is a reference for follow-up work, not a restore token; trimctx does not currently provide `resume <uid>` or an equivalent command.
 
 ### Diagnostic commands
 

@@ -7,11 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added a default no-subcommand `trimctx` flow that checks the current or latest local AI session and prints a user-focused continuation recommendation.
+- Added `trimctx new-chat` as the primary user-facing command for creating a new-chat continuation package; `trimctx handoff` remains as a compatibility alias.
+- Added `README.md` to uid-based continuation packages so users know to copy `next-context.md` into a new AI window.
+
+### Changed
+
+- Made `trimctx new-chat` / `trimctx handoff` work without a file argument by resolving the active transcript binding or latest local Claude/Codex session.
+- Improved `trimctx init` completion output with immediate next commands for Claude Code and terminal users.
+- Repositioned new-chat as the recommended default continuation path; compression remains an advanced audited workflow.
+
+
 ## [0.2.8] - 2026-06-27
 
 ### Fixed
 
-- Ship the Claude Code `/trimctx:handoff` command asset in the npm package, aligning the plugin README and manifest with the installed files.
+- Ship the Claude Code `/trimctx:new-chat` command asset in the npm package, aligning the plugin README and manifest with the installed files.
 - Keep the package-content smoke test checking that `handoff.md` is installed and the removed `resume.md` command file does not return.
 
 ### Changed
@@ -35,11 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.3] - 2026-06-22
 
-`0.2.3` is a release milestone for local-first context continuation: it brings resume-aware reports, handoff/next-context artifacts, optional exact token counting for OpenAI/Codex-family inputs, and safer package-visible install guidance into one publishable npm release. It is not a Phase 0 completion marker; real multi-sample validation and compression-strategy tuning continue toward a later release.
+`0.2.3` is a release milestone for local-first context continuation: it brings resume-aware reports, new-chat/next-context artifacts, optional exact token counting for OpenAI/Codex-family inputs, and safer package-visible install guidance into one publishable npm release. It is not a Phase 0 completion marker; real multi-sample validation and compression-strategy tuning continue toward a later release.
 
 ### Added
 
-- Resume-aware report metadata and handoff artifacts that preserve likely continuation signals such as goals, decisions, active files, failures, test signals, and next steps.
+- Resume-aware report metadata and new-chat continuation artifacts that preserve likely continuation signals such as goals, decisions, active files, failures, test signals, and next steps.
 - Optional `js-tiktoken` integration for exact high-confidence token counts when the peer dependency is installed.
 - Tokenizer tests covering exact `tiktoken` metadata and the local heuristic fallback.
 - Package-content regression coverage to prevent unsafe download-and-execute install examples from entering published npm artifacts.
@@ -56,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `trimctx init` 命令，从 npm 包安装 Claude Code 插件和 Codex skill 到用户目录。
 - `trimctx current` 命令，自动发现并分析最新 Claude Code 或 Codex 会话，支持 `--source auto|claude|codex`。
 - `trimctx resume` 命令，快捷分析最新 Claude Code 会话（兼容旧入口）。
-- `trimctx handoff` 命令，生成确定性 Markdown 交接文档和可选的 `--next-context` 上下文包。
+- `trimctx new-chat` 命令，生成确定性 Markdown 交接文档和可选的 `--next-context` 上下文包。
 - Claude Code 插件（`plugins/trimctx/`），提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令。
 - Codex skill（`codex/skills/trimctx/SKILL.md`），通过 skill/CLI 工作流支持 Codex 会话分析。
 - GitHub 安装脚本（`install.sh` / `install.ps1`），支持一条命令安装 CLI 和 AI 客户端资产。

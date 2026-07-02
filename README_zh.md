@@ -8,11 +8,21 @@ trimctx 读取你的 JSONL 对话文件，识别低价值或过期消息，解�
 
 **安全原则：trimctx 宁可少删，也不要误删。**
 
-**发布里程碑：** 当前 `0.2` 系列把续接感知报告、handoff/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数、AI 客户端安装说明，以及 npm 包 smoke 检查整合成 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
+**发布里程碑：** 当前 `0.2` 系列把续接感知报告、new-chat/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数、AI 客户端安装说明，以及 npm 包 smoke 检查整合成 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
 
 [English](README.md)
 
 ## 快速开始
+
+```bash
+npm install -g trimctx
+trimctx init
+trimctx
+trimctx new-chat
+```
+
+`trimctx` 会优先检查当前 Claude Code transcript；没有当前绑定时，会回退到最近的本地 Claude/Codex 会话。`trimctx new-chat` 会生成 `.trimctx/handoffs/<id>/` 本地续聊包，把其中的 `next-context.md` 复制到新 AI 窗口即可续接。`trimctx handoff` 仍保留为兼容别名。
+
 
 **需要 Node.js 20+。**
 
@@ -20,7 +30,7 @@ trimctx 读取你的 JSONL 对话文件，识别低价值或过期消息，解�
 
 ```bash
 npm install -g trimctx
-trimctx analyze path/to/session.jsonl
+trimctx new-chat
 trimctx init
 ```
 
@@ -76,7 +86,7 @@ trimctx init
 
 `trimctx init` 会询问安装到当前用户全局位置，还是安装到当前项目。用户全局安装会把 Claude Code slash commands 写入 `~/.claude/plugins/trimctx`，把 Codex skill 写入 `~/.codex/skills/trimctx`。在交互流程中，它还会询问是否启用 Claude 当前窗口 hooks，默认建议启用。非交互安装仍需要传入 `--with-hooks` 才会安装 hooks。
 
-如果要在 Claude Code 当前会话窗口里使用 `/trimctx`、`/trimctx:handoff` 或 `/trimctx:compress`，请在交互式 `trimctx init` 中启用 hooks，或运行 `trimctx init --with-hooks` / `trimctx install-hooks`，然后重启 Claude Code。hook 会自动把当前窗口的 `transcript_path` 写入 `TRIMCTX_TRANSCRIPT_PATH`，用户不需要手动查找或复制 JSONL 路径。
+如果要在 Claude Code 当前会话窗口里使用 `/trimctx`、`/trimctx:new-chat` 或 `/trimctx:compress`，请在交互式 `trimctx init` 中启用 hooks，或运行 `trimctx init --with-hooks` / `trimctx install-hooks`，然后重启 Claude Code。hook 会自动把当前窗口的 `transcript_path` 写入 `TRIMCTX_TRANSCRIPT_PATH`，用户不需要手动查找或复制 JSONL 路径。
 
 也可以继续使用 GitHub 一条命令安装：
 
@@ -146,12 +156,12 @@ trimctx --help
 ```bash
 trimctx init
 trimctx current
-trimctx handoff path/to/session.jsonl
+trimctx new-chat
 ```
 
 - `trimctx init` 安装 Claude Code 插件和 Codex skill 文件。
 - `trimctx current` 按文件修改时间自动分析最新的本地 Claude Code 或 Codex 会话。
-- `trimctx handoff <file>` 生成可用 UID 引用的继续交接包。
+- `trimctx new-chat [file]` 生成可用 UID 引用的继续交接包。
 
 Claude Code 当前窗口流程：
 
@@ -159,7 +169,7 @@ Claude Code 当前窗口流程：
 trimctx init
 # 重启 Claude Code，然后在 Claude Code 里运行：
 /trimctx
-/trimctx:handoff
+/trimctx:new-chat
 ```
 
 需要更深入排查时，再使用 `trimctx analyze <file>` 查看指定文件摘要，或用 `trimctx report <file> -o report.json` 写出完整 JSON 审计报告。`trimctx compress` 只建议在审查报告后使用；压缩仍保持保守，并且永远不修改原文件。
@@ -173,7 +183,7 @@ trimctx init
 - `tokenization` 记录 token 计算使用的 tokenizer 名称和置信度。默认使用本地启发式 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确 `tiktoken` 计数且不调用厂商 API。
 - `resume.readiness` 评估会话是否包含足够续接信号。
 - `resume.currentGoal`、`decisions`、`activeFiles`、`failures`、`testSignals` 和 `nextSteps` 会保留压缩后可能需要的续接线索。
-- `trimctx handoff <file>` 会在 `.trimctx/handoffs/<uid>/` 下写出基于 UID 的完整交接包，包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。在已安装 hooks 的 Claude Code 中，`/trimctx:handoff` 会直接调用不带文件参数的 `trimctx handoff`，因为当前窗口的路径已注入到 `TRIMCTX_TRANSCRIPT_PATH`。
+- `trimctx new-chat [file]` 会在 `.trimctx/handoffs/<uid>/` 下写出基于 UID 的完整交接包，包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。在已安装 hooks 的 Claude Code 中，`/trimctx:new-chat` 会直接调用不带文件参数的 `trimctx new-chat`，因为当前窗口的路径已注入到 `TRIMCTX_TRANSCRIPT_PATH`。
 - 输出的 `uid` 便于复制引用，但 trimctx 当前没有 `resume <uid>` 或等效恢复命令。
 
 原始 JSONL 会话仍然只读。Resume 提取只影响报告和生成的 Markdown 产物。分享或粘贴到另一个会话前，请人工审查生成的 handoff；规则提取可能遗漏、误分类或脱敏不完美。
@@ -201,8 +211,8 @@ trimctx install-hooks        # 实验性：只安装 hooks
 在 Claude Code 中使用：
 
 - `trimctx init` 会提示选择用户全局或项目级安装；`--target user` 会把 `plugins/trimctx/` 安装到 `~/.claude/plugins/trimctx`。
-- 插件提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:handoff`、`/trimctx:compress` 命令文件。
-- `/trimctx`、`/trimctx:handoff` 和 `/trimctx:compress` 依赖 `TRIMCTX_TRANSCRIPT_PATH`；该变量由交互式 `trimctx init`、`trimctx init --with-hooks` 或 `trimctx install-hooks` 安装的 Claude `SessionStart` hook 写入。
+- 插件提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:new-chat`、`/trimctx:compress` 命令文件。
+- `/trimctx`、`/trimctx:new-chat` 和 `/trimctx:compress` 依赖 `TRIMCTX_TRANSCRIPT_PATH`；该变量由交互式 `trimctx init`、`trimctx init --with-hooks` 或 `trimctx install-hooks` 安装的 Claude `SessionStart` hook 写入。
 - 安全边界：当前窗口命令不会降级执行 `trimctx current`。如果 hook 绑定缺失，命令会停止并提示安装 hooks。它不会写回 Claude Code，不会修改原始会话，只在用户明确触发时压缩。
 
 在 Codex 中使用：
@@ -271,13 +281,13 @@ trimctx current --source claude
 trimctx current --source codex
 ```
 
-#### `trimctx handoff [file]`
+#### `trimctx new-chat [file]`
 
 写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
 
 ```bash
-trimctx handoff session.jsonl
-trimctx handoff   # 仅当当前 AI 客户端已设置 TRIMCTX_TRANSCRIPT_PATH 时使用
+trimctx new-chat session.jsonl
+trimctx new-chat   # 使用当前/最近的本地 AI 会话
 ```
 
 默认会创建 `.trimctx/handoffs/<uid>/`，其中包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。UID 使用 UTC 时间（`ctx_YYYYMMDD_HHMMSS_xxxxxx`）并以 `copyable uid: ...` 输出，方便直接复制引用。`manifest.json` 同时包含本机自动化可用的绝对路径，以及便于移动或归档 package 的相对文件名。可用 `--out <dir>` 指定自定义 package 根目录；旧版单文件输出仍可通过 `-o handoff.md --next-context next-context.md` 使用。交接包可能在 `report.json` 中包含原始会话内容和密钥，分享前请先审查。这里的 UID 目前只是引用标识，不是内置恢复令牌；trimctx 还没有 `resume <uid>` 或等效命令。

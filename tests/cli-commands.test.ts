@@ -42,6 +42,9 @@ describe("CLI commands", () => {
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
     expect(await fileExists(join(home, ".claude", "settings.json"))).toBe(false);
     expect(result.stdout).toContain("install-hooks");
+    expect(result.stdout).toContain("现在你可以这样用：");
+    expect(result.stdout).toContain("/trimctx");
+    expect(result.stdout).toContain("trimctx new-chat");
   });
 
   test("init installs Claude hooks when --with-hooks is supplied", async () => {
@@ -154,6 +157,8 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("planned codex assets for user");
     expect(result.stdout).toContain(join(home, ".codex", "skills", "trimctx"));
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(false);
+    expect(result.stdout).not.toContain("安装好了");
+    expect(result.stdout).not.toContain("现在你可以这样用：");
   });
 
   test("init --no-hooks skips Claude hook installation explicitly", async () => {
@@ -346,6 +351,50 @@ describe("CLI commands", () => {
     expect(report.input.file).toBe(file);
   });
 
+
+  test("root command analyzes TRIMCTX_TRANSCRIPT_PATH with a user summary", async () => {
+    const { file } = await writeSessionFixture();
+
+    const result = await runCli([], { TRIMCTX_TRANSCRIPT_PATH: file });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("trimctx 看了一下当前会话");
+    expect(result.stdout).toContain("状态：");
+    expect(result.stdout).toContain("原因：");
+    expect(result.stdout).toContain("下一步：");
+    expect(result.stdout).toContain("trimctx new-chat");
+    expect(result.stdout).toContain(file);
+    expect(result.stdout).toContain("高级审计：");
+    expect(result.stdout).toContain("本地分析，没有上传文件");
+    expect(result.stdout).not.toContain("phase0:");
+    expect(result.stdout).not.toContain("remove_candidate");
+    expect(() => JSON.parse(result.stdout)).toThrow();
+  });
+
+  test("root command falls back to latest session discovery", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-root-home-"));
+    const projectDir = join(home, ".claude", "projects", "project-a");
+    const { file } = await writeSessionFixture(projectDir);
+
+    const result = await runCli([], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("trimctx 看了一下当前会话");
+    expect(result.stdout).toContain(file);
+    expect(result.stdout).toContain("trimctx new-chat");
+  });
+
+  test("root command prints no-session guidance when discovery fails", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-empty-home-"));
+
+    const result = await runCli([], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("没找到可分析的 Claude/Codex 会话");
+    expect(result.stderr).toContain("trimctx analyze path/to/session.jsonl");
+    expect(result.stderr).toContain("trimctx init");
+  });
+
   test("handoff uses TRIMCTX_TRANSCRIPT_PATH when no file argument is provided", async () => {
     const { file, dir } = await writeSessionFixture();
 
@@ -356,14 +405,30 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("handoff:");
   });
 
-  test("analyze and handoff reject missing file when no current transcript binding exists", async () => {
-    const analyze = await runCli(["analyze", "--json"], { TRIMCTX_TRANSCRIPT_PATH: "" });
-    const handoff = await runCli(["handoff"], { TRIMCTX_TRANSCRIPT_PATH: "" });
+  test("analyze rejects missing file but new-chat falls back to latest session discovery", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-new-chat-fallback-home-"));
+    const projectDir = join(home, ".claude", "projects", "project-a");
+    const { file, dir } = await writeSessionFixture(projectDir);
+
+    const analyze = await runCli(["analyze", "--json"], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
+    const newChat = await runCli(["new-chat", "--out", join(dir, "handoffs")], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
 
     expect(analyze.code).not.toBe(0);
     expect(analyze.stderr).toContain("file argument is required");
-    expect(handoff.code).not.toBe(0);
-    expect(handoff.stderr).toContain("file argument is required");
+    expect(newChat.code).toBe(0);
+    expect(newChat.stdout).toContain("copyable uid: ctx_");
+    expect(newChat.stdout).toContain(file);
+  });
+
+  test("handoff remains a compatibility alias for new-chat", async () => {
+    const { file, dir } = await writeSessionFixture();
+
+    const result = await runCli(["handoff", file, "--out", join(dir, "handoffs-alias")]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("copyable uid: ctx_");
+    expect(result.stdout).toContain("next-context:");
+    expect(result.stdout).toContain("readme:");
   });
 
   test("current rejects unknown sources", async () => {
@@ -459,6 +524,7 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("next-context:");
     expect(result.stdout).toContain("manifest:");
     expect(result.stdout).toContain("report:");
+    expect(result.stdout).toContain("readme:");
 
     const uid = result.stdout.match(/uid: (ctx_[a-z0-9_]+)/)?.[1];
     expect(uid).toBeDefined();
@@ -467,10 +533,12 @@ describe("CLI commands", () => {
     const nextContextPath = join(packageDir, "next-context.md");
     const manifestPath = join(packageDir, "manifest.json");
     const reportPath = join(packageDir, "report.json");
+    const readmePath = join(packageDir, "README.md");
 
     const handoff = await readFile(handoffPath, "utf8");
     const nextContext = await readFile(nextContextPath, "utf8");
     const report = JSON.parse(await readFile(reportPath, "utf8")) as AnalysisReport;
+    const readme = await readFile(readmePath, "utf8");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
       schema_version: string;
       uid: string;
@@ -483,6 +551,9 @@ describe("CLI commands", () => {
 
     expect(handoff).toContain("# trimctx Handoff");
     expect(nextContext).toContain("# Next Context");
+    expect(readme).toContain("# trimctx New Chat Package");
+    expect(readme).toContain("next-context.md");
+    expect(readme).toContain("原始 transcript 没有被修改");
     expect(report.input.source).toBe("claude-code-jsonl");
     expect(manifest.schema_version).toBe("trimctx.handoff_manifest.v1");
     expect(manifest.uid).toBe(uid);
@@ -496,11 +567,13 @@ describe("CLI commands", () => {
     expect(manifest.files.next_context).toBe(nextContextPath);
     expect(manifest.files.manifest).toBe(manifestPath);
     expect(manifest.files.report).toBe(reportPath);
+    expect(manifest.files.readme).toBe(readmePath);
     expect(manifest.files_relative).toEqual({
       handoff: "handoff.md",
       next_context: "next-context.md",
       manifest: "manifest.json",
-      report: "report.json"
+      report: "report.json",
+      readme: "README.md"
     });
     expect(manifest.warnings.join("\n")).toContain("may contain original transcript content and secrets");
   });
@@ -518,6 +591,7 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("next-context:");
     expect(result.stdout).toContain("manifest:");
     expect(result.stdout).toContain("report:");
+    expect(result.stdout).toContain("readme:");
 
     const uid = result.stdout.match(/uid: (ctx_[a-z0-9_]+)/)?.[1];
     expect(uid).toBeDefined();
@@ -526,9 +600,11 @@ describe("CLI commands", () => {
     const nextContextPath = join(packageDir, "next-context.md");
     const manifestPath = join(packageDir, "manifest.json");
     const reportPath = join(packageDir, "report.json");
+    const readmePath = join(packageDir, "README.md");
 
     const handoff = await readFile(handoffPath, "utf8");
     const nextContext = await readFile(nextContextPath, "utf8");
+    const readme = await readFile(readmePath, "utf8");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
       schema_version: string;
       uid: string;
@@ -542,6 +618,9 @@ describe("CLI commands", () => {
     expect(await fileExists(reportPath)).toBe(true);
     expect(handoff).toContain("# trimctx Handoff");
     expect(nextContext).toContain("# Next Context");
+    expect(readme).toContain("# trimctx New Chat Package");
+    expect(readme).toContain("next-context.md");
+    expect(readme).toContain("原始 transcript 没有被修改");
     expect(manifest.schema_version).toBe("trimctx.handoff_manifest.v1");
     expect(manifest.uid).toBe(uid);
     expect(manifest.input.file).toBe(file);
@@ -554,11 +633,13 @@ describe("CLI commands", () => {
     expect(manifest.files.next_context).toBe(nextContextPath);
     expect(manifest.files.manifest).toBe(manifestPath);
     expect(manifest.files.report).toBe(reportPath);
+    expect(manifest.files.readme).toBe(readmePath);
     expect(manifest.files_relative).toEqual({
       handoff: "handoff.md",
       next_context: "next-context.md",
       manifest: "manifest.json",
-      report: "report.json"
+      report: "report.json",
+      readme: "README.md"
     });
     expect(manifest.warnings.join("\n")).toContain("may contain original transcript content and secrets");
   });
@@ -590,6 +671,7 @@ describe("CLI commands", () => {
     expect(await fileExists(join(outputDir, uid!, "next-context.md"))).toBe(true);
     expect(await fileExists(join(outputDir, uid!, "manifest.json"))).toBe(true);
     expect(await fileExists(join(outputDir, uid!, "report.json"))).toBe(true);
+    expect(await fileExists(join(outputDir, uid!, "README.md"))).toBe(true);
   });
 
   test("handoff rejects --next-context without legacy output", async () => {

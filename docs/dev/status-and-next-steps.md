@@ -27,7 +27,7 @@
 
 - `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
 - `trimctx current` — 自动发现最新会话，支持 `--source auto|claude|codex`
-- `trimctx handoff` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
+- `trimctx new-chat` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
 - Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:compress`
 - Codex skill（`codex/skills/trimctx/SKILL.md`）
 - GitHub 安装脚本（`install.sh` / `install.ps1`）
@@ -186,7 +186,7 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 - `analyze --json` 输出完整 JSON
 - `current --source claude` 可分析最近 Claude Code session
 - `current --source codex` 可分析最近 Codex session
-- `handoff` 可生成 deterministic Markdown 交接材料
+- `new-chat` 可生成 deterministic Markdown 交接材料
 
 当前 `reports/phase0/validation-summary.md` 已记录 Claude Code 与 Codex/Hermes rollout 私有样本的聚合验证结果，但 Phase 0 还不能宣称完成：
 
@@ -232,7 +232,7 @@ reports/phase0/validation-summary.md
 - `trimctx compress <file> -o <output.jsonl>`
 - `trimctx current`
 - `trimctx current --source codex`
-- `trimctx handoff <file>`
+- `trimctx new-chat [file]`
 
 ### Step 4：冻结高风险扩展
 

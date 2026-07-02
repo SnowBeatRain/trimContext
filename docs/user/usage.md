@@ -8,7 +8,17 @@ This guide explains how to run trimctx safely against local Claude Code, OpenAI,
 
 ```bash
 npm install -g trimctx
-trimctx analyze path/to/session.jsonl
+trimctx init
+trimctx
+trimctx new-chat
+```
+
+`trimctx` checks the current Claude Code transcript when hooks are available, or the latest local Claude/Codex session otherwise. `trimctx new-chat` writes a local `.trimctx/handoffs/<id>/` package; copy `next-context.md` into a new AI window to continue safely. `trimctx handoff` remains as a compatibility alias.
+
+
+```bash
+npm install -g trimctx
+trimctx new-chat
 trimctx init
 ```
 
@@ -101,21 +111,21 @@ npm install -g trimctx
 trimctx --version
 trimctx --help
 trimctx init
-trimctx analyze path/to/session.jsonl
+trimctx new-chat
 ```
 
 For release verification, install from npm or a packed tarball in a clean prefix and confirm the installed `trimctx --version` and `trimctx --help` commands run before installing AI-client assets.
 
 `trimctx init` installs Claude Code command files and the Codex skill from the npm package. It prompts for user/global versus project install when `--target` is omitted. In that interactive flow it also asks whether to enable Claude current-window hooks, defaulting to yes. Non-interactive installs do not install hooks unless `--with-hooks` is supplied. Use `trimctx init --dry-run` to inspect paths before writing.
 
-Claude Code current-window commands require hooks. The `SessionStart` hook writes the current `transcript_path` to `TRIMCTX_TRANSCRIPT_PATH` through `CLAUDE_ENV_FILE`, so users can run `/trimctx` or `/trimctx:handoff` without finding the JSONL path manually.
+Claude Code current-window commands require hooks. The `SessionStart` hook writes the current `transcript_path` to `TRIMCTX_TRANSCRIPT_PATH` through `CLAUDE_ENV_FILE`, so users can run `/trimctx` or `/trimctx:new-chat` without finding the JSONL path manually.
 
 ## Quick Start
 
 Analyze a file and print a short summary:
 
 ```bash
-trimctx analyze path/to/session.jsonl
+trimctx new-chat
 ```
 
 Typical summary shape:
@@ -154,13 +164,13 @@ Generate a compressed copy only after reviewing the report:
 trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
 
-Generate handoff artifacts for continuing work in a later session:
+Generate new-chat continuation artifacts for continuing work in a later session:
 
 ```bash
-trimctx handoff path/to/session.jsonl
+trimctx new-chat
 ```
 
-From Claude Code with hooks installed, `/trimctx:handoff` calls `trimctx handoff` without a file argument because `TRIMCTX_TRANSCRIPT_PATH` is already bound to the current window.
+From Claude Code with hooks installed, `/trimctx:new-chat` calls `trimctx new-chat` without a file argument because `TRIMCTX_TRANSCRIPT_PATH` is already bound to the current window.
 
 ## Recommended Workflow
 
@@ -275,13 +285,13 @@ If a report contains `compress_candidate` messages but no `remove_candidate` mes
 | `compress_candidate` | Kept; report-only candidate |
 | `remove_candidate` | Removed only if not protected |
 
-### `trimctx handoff [file]`
+### `trimctx new-chat [file]`
 
 Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
 
 ```bash
-trimctx handoff session.jsonl
-trimctx handoff   # only when TRIMCTX_TRANSCRIPT_PATH is set by the current AI client session
+trimctx new-chat session.jsonl
+trimctx new-chat   # uses the current/latest local AI session
 ```
 
 By default, trimctx writes a uid-based package under `.trimctx/handoffs/<uid>/`. The package includes the primary handoff, a shorter continuation context, a machine-readable manifest, and the full JSON report. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` so it can be pasted into follow-up instructions. `manifest.json` stores absolute file paths for local automation and relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root. Legacy single-file output is still available with `-o handoff.md --next-context next-context.md`. Review the package before sharing because `report.json` may include original transcript content and secrets. The UID is a reference for follow-up work, not a restore token; trimctx does not currently provide `resume <uid>` or an equivalent command.
@@ -320,7 +330,7 @@ Example `handoff.md` output:
 - line 301, user, score 0.6500: contains_code_block, old_message
 
 ## Warnings
-- This handoff package may include original transcript content and secrets; review it before sharing or pasting into another system.
+- This new-chat package may include original transcript content and secrets; review it before sharing or pasting into another system.
 - session_compacted: session contains away_summary or compact_boundary markers
 
 ## Commands
@@ -377,7 +387,7 @@ trimctx current --compress session.trimmed.jsonl
 
 The npm package includes `plugins/trimctx/`, which is the supported Claude Code plugin asset source. `trimctx init` installs that plugin into the selected user or project location. These commands call the `trimctx` executable, so install the CLI globally or run `npm link` during local development.
 
-Current-window boundary: `/trimctx`, `/trimctx:handoff`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH`, which is set by the internal `trimctx hook --session-start` executor when Claude Code runs the installed `SessionStart` hook. If that binding is missing, the plugin must stop and ask the user to enable hooks through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`, then restart Claude Code.
+Current-window boundary: `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH`, which is set by the internal `trimctx hook --session-start` executor when Claude Code runs the installed `SessionStart` hook. If that binding is missing, the plugin must stop and ask the user to enable hooks through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`, then restart Claude Code.
 
 Safety boundary: these commands analyze local JSONL files. They do not write back into Claude Code sessions, and they do not compress unless the user chooses `/trimctx:compress` or an explicit CLI compression command.
 

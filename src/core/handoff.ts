@@ -81,7 +81,7 @@ export function formatNextContext(report: AnalysisReport): string {
   lines.push("## Next Commands");
   lines.push(`- \`trimctx analyze ${quotePath(report.input.file)}\``);
   lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.json\``);
-  lines.push(`- \`trimctx handoff ${quotePath(report.input.file)}\``);
+  lines.push(`- \`trimctx new-chat ${quotePath(report.input.file)}\``);
   lines.push("");
   lines.push("## Source");
   lines.push(`- File: ${report.input.file}`);
@@ -100,4 +100,38 @@ function candidateLine(message: AnalyzedMessage): string {
 
 function quotePath(file: string): string {
   return `"${file.replaceAll("\"", "\\\"")}"`;
+}
+
+export function formatHandoffReadme(report: AnalysisReport): string {
+  const lines: string[] = [];
+  lines.push("# trimctx New Chat Package");
+  lines.push("");
+  lines.push("这个目录是 trimctx 为长对话续接生成的本地续聊包。");
+  lines.push("");
+  lines.push("## 下一步");
+  lines.push("");
+  lines.push("1. 打开 `next-context.md`。");
+  lines.push("2. 复制里面的内容到新的 AI 会话窗口。");
+  lines.push("3. 原窗口可以保留；原始 transcript 没有被修改。");
+  lines.push("");
+  lines.push("## 文件说明");
+  lines.push("");
+  lines.push(`- \`next-context.md\`：最适合复制到新窗口的精简上下文。`);
+  lines.push(`- \`handoff.md\`：更完整的交接说明和安全审查线索。`);
+  lines.push(`- \`report.json\`：完整机器可读分析报告，适合高级审计。`);
+  lines.push(`- \`manifest.json\`：本续聊包的元数据和原始文件 hash。`);
+  lines.push("");
+  lines.push("## 安全说明");
+  lines.push("");
+  lines.push("- trimctx 只写入这个续聊包，原始 transcript 没有被修改。");
+  lines.push("- 这个包可能包含原对话内容或敏感信息，分享前请先检查。");
+  lines.push("- 默认建议先用 new-chat 续接；compress 是审计后的高级命令。");
+  lines.push("");
+  lines.push("## 来源");
+  lines.push("");
+  lines.push(`- File: ${report.input.file}`);
+  lines.push(`- Format: ${report.input.source}`);
+  lines.push(`- Messages: ${report.summary.total_messages}`);
+  lines.push(`- Estimated tokens: ${report.summary.total_tokens}`);
+  return `${lines.join("\n")}\n`;
 }

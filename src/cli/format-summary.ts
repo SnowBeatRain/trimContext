@@ -89,6 +89,81 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
   return `${lines.join("\n")}\n`;
 }
 
+
+export function formatUserSummary(report: AnalysisReport, options?: { color?: boolean }): string {
+  const s = report.summary;
+  const rotCount = s.remove_candidates + s.compress_candidates;
+  const decision = userDecision(report);
+  const reasons = userReasons(report, rotCount);
+  const lines: string[] = [];
+
+  lines.push(heading("trimctx 看了一下当前会话：", options?.color ?? false));
+  lines.push("");
+  lines.push(`状态：${decision}`);
+  lines.push(`文件：${report.input.file}`);
+  lines.push("");
+  lines.push("原因：");
+  for (const reason of reasons) {
+    lines.push(`- ${reason}`);
+  }
+  lines.push("");
+  lines.push("下一步：");
+  if (decision === "可以继续当前会话") {
+    lines.push("  继续当前会话即可；如果准备换窗口，再运行 trimctx new-chat");
+  } else {
+    lines.push("  trimctx new-chat");
+    lines.push("  然后把生成包里的 next-context.md 贴到新窗口");
+  }
+  lines.push("");
+  lines.push("高级审计：");
+  lines.push(`  trimctx report ${quotePath(report.input.file)} -o report.json`);
+  lines.push(`  trimctx analyze ${quotePath(report.input.file)} --json`);
+  lines.push("");
+  lines.push("说明：trimctx 只做本地分析，没有上传文件；默认建议先用 new-chat，compress 属于审计后的高级命令。");
+  return `${lines.join("\n")}\n`;
+}
+
+function userDecision(report: AnalysisReport): "可以继续当前会话" | "建议准备 new-chat" | "建议开新窗口续接" {
+  const pressure = report.summary.context_pressure.pressure_level;
+  const totalTokens = report.summary.total_tokens;
+  const rotCount = report.summary.remove_candidates + report.summary.compress_candidates;
+
+  if (pressure === "high" || totalTokens >= 150_000 || rotCount >= 50) {
+    return "建议开新窗口续接";
+  }
+  if (pressure === "medium" || totalTokens >= 80_000 || rotCount > 0 || report.resume.readiness.level !== "blocked") {
+    return "建议准备 new-chat";
+  }
+  return "可以继续当前会话";
+}
+
+function userReasons(report: AnalysisReport, rotCount: number): string[] {
+  const s = report.summary;
+  const reasons: string[] = [];
+  reasons.push(`当前会话约 ${formatTokens(s.total_tokens)}，上下文压力 ${s.context_pressure.pressure_level.toUpperCase()}`);
+
+  if (rotCount > 0) {
+    reasons.push(`发现 ${rotCount} 条可能过时、重复或低价值的上下文信号`);
+  } else {
+    reasons.push("没有发现明显需要处理的旧上下文；保守结果不是失败");
+  }
+
+  if (report.resume.readiness.level === "ready") {
+    reasons.push("最近目标、决策和下一步较完整，适合生成续接上下文");
+  } else if (report.resume.readiness.level === "partial") {
+    reasons.push("已有部分续接线索，可生成 new-chat 后人工确认");
+  } else {
+    reasons.push("续接线索偏少，建议继续当前会话或显式补充目标后再 new-chat");
+  }
+
+  const topReasons = categorizeReasons(report).slice(0, 2);
+  for (const item of topReasons) {
+    reasons.push(`${item.label}: ${item.count}`);
+  }
+
+  return reasons.slice(0, 5);
+}
+
 type HealthLevel = "good" | "moderate" | "heavy";
 
 function healthLevel(rotRate: number): HealthLevel {

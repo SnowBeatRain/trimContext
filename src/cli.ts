@@ -8,14 +8,15 @@ import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { compressFile } from "./core/compressor.js";
-import { formatHandoff, formatNextContext } from "./core/handoff.js";
-import { formatAnalysisSummary } from "./cli/format-summary.js";
+import { formatHandoff, formatHandoffReadme, formatNextContext } from "./core/handoff.js";
+import { formatAnalysisSummary, formatUserSummary } from "./cli/format-summary.js";
 import { runHook, writeSessionEnvBinding } from "./core/hook.js";
 import {
   findLatestSession,
   parseSessionSource,
   prettyHomePath,
-  analyzeFile
+  analyzeFile,
+  resolveCurrentSessionFile
 } from "./core/session.js";
 import type { AnalysisOptions } from "./core/options.js";
 import type { SessionSource } from "./core/session.js";
@@ -28,6 +29,14 @@ program
   .name("trimctx")
   .description("Analyze and safely trim long AI conversation context.")
   .version(PACKAGE_VERSION);
+
+program
+  .option("--color", "Colorize output for terminal.")
+  .action(async (options: { color?: boolean }) => {
+    const file = await resolveCurrentSessionFile("auto");
+    const report = await analyzeFile(file, {});
+    process.stdout.write(formatUserSummary(report, { color: options.color }));
+  });
 
 program
   .command("init")
@@ -117,30 +126,41 @@ program
     await writeCompressionResult(file, options.output, parseAnalysisOptions(options));
   });
 
-program
-  .command("handoff")
-  .argument("[file]")
-  .option("-o, --output <handoff.md>", "Write a legacy single handoff markdown file.")
-  .option("--next-context <next-context.md>", "Also write a compact next-context markdown file with --output.")
-  .option("--out, --out-dir <directory>", "Write a uid-based handoff package under this directory.")
-  .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-  .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-  .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-  .description("Write markdown handoff artifacts for continuing a long conversation safely.")
-  .action(async (file: string | undefined, options: CliAnalysisOptions & { output?: string; nextContext?: string; outDir?: string }) => {
-    const inputFile = resolveInputFile(file);
-    if (options.outDir && (options.output || options.nextContext)) {
-      throw new Error("--out cannot be combined with -o/--output or --next-context");
-    }
-    if (options.output) {
-      await writeLegacyHandoff(inputFile, { ...options, output: options.output });
-      return;
-    }
-    if (options.nextContext) {
-      throw new Error("--next-context requires -o/--output; omit both to create a handoff package");
-    }
-    await writeHandoffPackage(inputFile, options);
-  });
+function configureNewChatCommand(command: Command, description: string): void {
+  command
+    .argument("[file]")
+    .option("-o, --output <handoff.md>", "Write a legacy single handoff markdown file.")
+    .option("--next-context <next-context.md>", "Also write a compact next-context markdown file with --output.")
+    .option("--out, --out-dir <directory>", "Write a uid-based new-chat package under this directory.")
+    .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
+    .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
+    .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
+    .description(description)
+    .action(async (file: string | undefined, options: CliAnalysisOptions & { output?: string; nextContext?: string; outDir?: string }) => {
+      const inputFile = file ? resolveInputFile(file) : await resolveCurrentSessionFile("auto");
+      if (options.outDir && (options.output || options.nextContext)) {
+        throw new Error("--out cannot be combined with -o/--output or --next-context");
+      }
+      if (options.output) {
+        await writeLegacyHandoff(inputFile, { ...options, output: options.output });
+        return;
+      }
+      if (options.nextContext) {
+        throw new Error("--next-context requires -o/--output; omit both to create a new-chat package");
+      }
+      await writeHandoffPackage(inputFile, options);
+    });
+}
+
+configureNewChatCommand(
+  program.command("new-chat"),
+  "Create a new-chat continuation package for a long conversation."
+);
+
+configureNewChatCommand(
+  program.command("handoff"),
+  "Compatibility alias for new-chat: write markdown handoff artifacts for continuing safely."
+);
 
 program
   .command("hook")
@@ -273,11 +293,31 @@ async function initClientAssets(options: InitOptions): Promise<InitResult> {
       lines.push("- hooks not installed; run `trimctx install-hooks` or `trimctx init --with-hooks` to enable Claude current-window binding later.");
     }
 
-    lines.push("Restart the AI client, then run /trimctx in Claude Code or use the trimctx Codex skill.");
+    if (!options.dryRun) {
+      lines.push(...initNextStepLines());
+    }
     return { lines };
   } finally {
     readline?.close();
   }
+}
+
+function initNextStepLines(): string[] {
+  return [
+    "",
+    "安装好了。",
+    "",
+    "现在你可以这样用：",
+    "",
+    "Claude Code 当前窗口：",
+    "  /trimctx",
+    "",
+    "终端里：",
+    "  trimctx",
+    "  trimctx new-chat",
+    "",
+    "如果 /trimctx 找不到当前会话，请重启 Claude Code。"
+  ];
 }
 
 function initAssetsFor(client: InitClient, target: InitTarget, baseDir: string): InitAsset[] {
@@ -429,11 +469,13 @@ async function writeHandoffPackage(
   const nextContextPath = join(packageDir, "next-context.md");
   const manifestPath = join(packageDir, "manifest.json");
   const reportPath = join(packageDir, "report.json");
+  const readmePath = join(packageDir, "README.md");
 
   await assertDifferentFiles(file, handoffPath, "Handoff package must be different from input file");
   await assertDifferentFiles(file, nextContextPath, "Handoff package must be different from input file");
   await assertDifferentFiles(file, manifestPath, "Handoff package must be different from input file");
   await assertDifferentFiles(file, reportPath, "Handoff package must be different from input file");
+  await assertDifferentFiles(file, readmePath, "Handoff package must be different from input file");
   if (await pathExists(packageDir)) {
     throw new Error(`handoff package already exists: ${packageDir}`);
   }
@@ -455,13 +497,15 @@ async function writeHandoffPackage(
       handoff: handoffPath,
       next_context: nextContextPath,
       manifest: manifestPath,
-      report: reportPath
+      report: reportPath,
+      readme: readmePath
     },
     files_relative: {
       handoff: "handoff.md",
       next_context: "next-context.md",
       manifest: "manifest.json",
-      report: "report.json"
+      report: "report.json",
+      readme: "README.md"
     },
     warnings: [
       "This package may contain original transcript content and secrets; review before sharing."
@@ -480,13 +524,16 @@ async function writeHandoffPackage(
   await writeFile(nextContextPath, formatNextContext(report), "utf8");
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await writeFile(readmePath, formatHandoffReadme(report), "utf8");
 
   process.stdout.write(`copyable uid: ${uid}\n`);
   process.stdout.write(`uid: ${uid}\n`);
+  process.stdout.write(`source: ${file}\n`);
   process.stdout.write(`handoff: ${handoffPath}\n`);
   process.stdout.write(`next-context: ${nextContextPath}\n`);
   process.stdout.write(`manifest: ${manifestPath}\n`);
   process.stdout.write(`report: ${reportPath}\n`);
+  process.stdout.write(`readme: ${readmePath}\n`);
 }
 
 function generateHandoffUid(): string {

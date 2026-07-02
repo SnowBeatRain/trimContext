@@ -8,7 +8,17 @@
 
 ```bash
 npm install -g trimctx
-trimctx analyze path/to/session.jsonl
+trimctx init
+trimctx
+trimctx new-chat
+```
+
+`trimctx` 会优先检查当前 Claude Code transcript；没有当前绑定时，会回退到最近的本地 Claude/Codex 会话。`trimctx new-chat` 会生成 `.trimctx/handoffs/<id>/` 本地续聊包，把其中的 `next-context.md` 复制到新 AI 窗口即可续接。`trimctx handoff` 仍保留为兼容别名。
+
+
+```bash
+npm install -g trimctx
+trimctx new-chat
 trimctx init
 ```
 
@@ -101,21 +111,21 @@ npm install -g trimctx
 trimctx --version
 trimctx --help
 trimctx init
-trimctx analyze path/to/session.jsonl
+trimctx new-chat
 ```
 
 发布验收时，请从 npm 或打包出的 tarball 安装到干净 prefix，并先确认安装后的 `trimctx --version` 和 `trimctx --help` 可运行，再安装 AI 客户端资产。
 
 `trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。省略 `--target` 时会询问安装到用户全局位置还是当前项目；在这个交互流程中，它还会询问是否启用 Claude 当前窗口 hooks，默认建议启用。非交互安装不会自动安装 hooks，除非传入 `--with-hooks`。写入前可先用 `trimctx init --dry-run` 查看路径。
 
-Claude Code 当前窗口命令需要 hooks。`SessionStart` hook 会通过 `CLAUDE_ENV_FILE` 把当前 `transcript_path` 写入 `TRIMCTX_TRANSCRIPT_PATH`，所以用户可以直接运行 `/trimctx` 或 `/trimctx:handoff`，不需要手动查找 JSONL 路径。
+Claude Code 当前窗口命令需要 hooks。`SessionStart` hook 会通过 `CLAUDE_ENV_FILE` 把当前 `transcript_path` 写入 `TRIMCTX_TRANSCRIPT_PATH`，所以用户可以直接运行 `/trimctx` 或 `/trimctx:new-chat`，不需要手动查找 JSONL 路径。
 
 ## 快速开始
 
 分析文件并输出短摘要：
 
 ```bash
-trimctx analyze path/to/session.jsonl
+trimctx new-chat
 ```
 
 典型摘要形态：
@@ -157,10 +167,10 @@ trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 生成后续会话使用的交接文档：
 
 ```bash
-trimctx handoff path/to/session.jsonl
+trimctx new-chat
 ```
 
-在已安装 hooks 的 Claude Code 中，`/trimctx:handoff` 会调用不带文件参数的 `trimctx handoff`，因为当前窗口已经绑定到 `TRIMCTX_TRANSCRIPT_PATH`。
+在已安装 hooks 的 Claude Code 中，`/trimctx:new-chat` 会调用不带文件参数的 `trimctx new-chat`，因为当前窗口已经绑定到 `TRIMCTX_TRANSCRIPT_PATH`。
 
 ## 推荐流程
 
@@ -275,13 +285,13 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 | `compress_candidate` | 保留；仅报告候选 |
 | `remove_candidate` | 仅在非 protected 时移除 |
 
-### `trimctx handoff [file]`
+### `trimctx new-chat [file]`
 
 写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
 
 ```bash
-trimctx handoff session.jsonl
-trimctx handoff   # 仅当当前 AI 客户端已设置 TRIMCTX_TRANSCRIPT_PATH 时使用
+trimctx new-chat session.jsonl
+trimctx new-chat   # 使用当前/最近的本地 AI 会话
 ```
 
 默认情况下，trimctx 会在 `.trimctx/handoffs/<uid>/` 下写出基于 UID 的完整交接包。交接包包含主 handoff、较短的续接上下文、机器可读 manifest，以及完整 JSON report。UID 使用 UTC 时间（`ctx_YYYYMMDD_HHMMSS_xxxxxx`）并以 `copyable uid: ...` 输出，方便粘贴到后续指令中。`manifest.json` 同时保存本机自动化可用的绝对路径，以及便于移动或归档 package 的相对文件名。可用 `--out <dir>` 指定自定义 package 根目录；旧版单文件输出仍可通过 `-o handoff.md --next-context next-context.md` 使用。交接包可能在 `report.json` 中包含原始会话内容和密钥，分享前请先审查。这里的 UID 当前只是续接引用标识，不是恢复令牌；trimctx 还没有 `resume <uid>` 或等效命令。
@@ -320,7 +330,7 @@ trimctx handoff   # 仅当当前 AI 客户端已设置 TRIMCTX_TRANSCRIPT_PATH �
 - line 301, user, score 0.6500: contains_code_block, old_message
 
 ## Warnings
-- This handoff package may include original transcript content and secrets; review it before sharing or pasting into another system.
+- This new-chat package may include original transcript content and secrets; review it before sharing or pasting into another system.
 - session_compacted: session contains away_summary or compact_boundary markers
 
 ## Commands
@@ -377,7 +387,7 @@ trimctx current --compress session.trimmed.jsonl
 
 npm 包包含 `plugins/trimctx/`，这是当前受支持的 Claude Code 插件资产来源。`trimctx init` 会把这套插件安装到选定的用户级或项目级位置。这些命令会调用 `trimctx` 可执行文件，所以需要全局安装 CLI，或在本地开发时运行 `npm link`。
 
-当前窗口边界：`/trimctx`、`/trimctx:handoff` 和 `/trimctx:compress` 需要 `TRIMCTX_TRANSCRIPT_PATH`；该变量由 Claude Code 执行已安装的 `SessionStart` hook 时通过内部执行器 `trimctx hook --session-start` 写入。如果缺少这个绑定，插件必须停止并提示用户通过交互式 `trimctx init`、`trimctx init --with-hooks` 或 `trimctx install-hooks` 启用 hooks，然后重启 Claude Code。
+当前窗口边界：`/trimctx`、`/trimctx:new-chat` 和 `/trimctx:compress` 需要 `TRIMCTX_TRANSCRIPT_PATH`；该变量由 Claude Code 执行已安装的 `SessionStart` hook 时通过内部执行器 `trimctx hook --session-start` 写入。如果缺少这个绑定，插件必须停止并提示用户通过交互式 `trimctx init`、`trimctx init --with-hooks` 或 `trimctx install-hooks` 启用 hooks，然后重启 Claude Code。
 
 安全边界：这些命令分析本地 JSONL 文件；不写回 Claude Code 会话，也不会默认压缩。只有用户选择 `/trimctx:compress` 或显式 CLI 压缩命令时才会写出压缩副本。
 

@@ -3,7 +3,7 @@
 This plugin is a thin wrapper around the local `trimctx` CLI.
 
 - Default commands analyze local JSONL session files only; they do not modify original session files.
-- `/trimctx`, `/trimctx:handoff`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH` from the current Claude Code session.
+- `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH` from the current Claude Code session.
 - If `TRIMCTX_TRANSCRIPT_PATH` is missing, ask the user to run `trimctx install-hooks` or `trimctx init --with-hooks` and restart Claude Code.
 - Compression is only allowed through an explicit command that writes a separate output artifact.
 - Never overwrite the active or original session file.

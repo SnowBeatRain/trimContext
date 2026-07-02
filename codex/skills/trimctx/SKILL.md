@@ -79,21 +79,21 @@ npm link
   ```bash
   trimctx compress <file.jsonl> -o trimmed.jsonl
   ```
-- Generate handoff artifacts for continuing work in a later session:
+- Generate new-chat continuation artifacts for continuing work in a later session:
   ```bash
-  trimctx handoff <file.jsonl>
+  trimctx new-chat <file.jsonl>
   ```
   This writes `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json` by default.
 
-- Generate handoff artifacts from a trusted current transcript binding:
+- Generate new-chat continuation artifacts from a trusted current transcript binding:
   ```bash
-  trimctx handoff
+  trimctx new-chat
   ```
   Only use this form when `TRIMCTX_TRANSCRIPT_PATH` is already set by the current AI client session. Do not synthesize that variable from latest-file discovery.
 
 ## Handoff UID Handling
 
-If the user provides a handoff uid in the form `ctx_...`, treat it as a local handoff package reference.
+If the user provides a handoff uid in the form `ctx_...`, treat it as a local new-chat package reference.
 
 Read files in this order:
 
@@ -101,7 +101,7 @@ Read files in this order:
 2. `.trimctx/handoffs/<uid>/next-context.md`
 3. `.trimctx/handoffs/<uid>/handoff.md`
 
-Use `manifest.json` as the source of truth for package metadata and paths. Do not guess another session or fall back to `trimctx current` when the requested uid is missing; tell the user the referenced handoff package was not found.
+Use `manifest.json` as the source of truth for package metadata and paths. Do not guess another session or fall back to `trimctx current` when the requested uid is missing; tell the user the referenced new-chat package was not found.
 
 ## Safety Rules
 

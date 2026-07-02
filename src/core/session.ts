@@ -1,4 +1,5 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { analyzeMessages, parseJsonl } from "./analyzer.js";
@@ -61,6 +62,39 @@ export async function findLatestSession(source: SessionSource): Promise<string> 
     throw new Error(`no ${source} session files found under ${roots.map(prettyHomePath).join(" or ")}`);
   }
   return latestFile;
+}
+
+
+export async function resolveCurrentSessionFile(source: SessionSource = "auto"): Promise<string> {
+  const envFile = process.env.TRIMCTX_TRANSCRIPT_PATH?.trim();
+  if (envFile) {
+    try {
+      await access(envFile, fsConstants.R_OK);
+      return envFile;
+    } catch {
+      throw new Error(`current transcript is not readable: ${envFile}\n\n${formatNoSessionHelp(source)}`);
+    }
+  }
+
+  try {
+    return await findLatestSession(source);
+  } catch {
+    throw new Error(formatNoSessionHelp(source));
+  }
+}
+
+export function formatNoSessionHelp(source: SessionSource = "auto"): string {
+  const roots = sessionRoots(source).map(prettyHomePath).join(" or ");
+  return [
+    "没找到可分析的 Claude/Codex 会话。",
+    "",
+    `已检查：${roots}`,
+    "",
+    "你可以：",
+    "1. 在 Claude Code 里重启窗口后运行 /trimctx",
+    "2. 或显式指定文件：trimctx analyze path/to/session.jsonl",
+    "3. 或安装/刷新客户端资产：trimctx init"
+  ].join("\n");
 }
 
 export function prettyHomePath(file: string): string {

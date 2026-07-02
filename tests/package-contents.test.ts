@@ -67,6 +67,7 @@ describe("package contents", () => {
     expect(files).toContain("plugins/trimctx/commands/trimctx.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/analyze.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/compress.md");
+    expect(files).toContain("plugins/trimctx/commands/trimctx/new-chat.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/handoff.md");
     expect(files).not.toContain("plugins/trimctx/commands/trimctx/resume.md");
     expect(files).toContain("codex/skills/trimctx/SKILL.md");
@@ -133,6 +134,7 @@ describe("package contents", () => {
       const version = await execFileAsync(trimctxBin, ["--version"], { shell: process.platform === "win32" });
       const help = await execFileAsync(trimctxBin, ["--help"], { shell: process.platform === "win32" });
 
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "new-chat.md"))).resolves.toBeUndefined();
       await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "handoff.md"))).resolves.toBeUndefined();
       await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "resume.md"))).rejects.toThrow();
       expect(version.stdout.trim()).toBe(packageJson.version);
@@ -140,6 +142,7 @@ describe("package contents", () => {
       expect(help.stdout).toContain("Commands:");
       expect(help.stdout).toContain("init [options]");
       expect(help.stdout).toContain("analyze [options] [file]");
+      expect(help.stdout).toContain("new-chat [options] [file]");
       expect(help.stdout).toContain("handoff [options] [file]");
       expect(help.stdout).not.toContain("session-env");
     } finally {

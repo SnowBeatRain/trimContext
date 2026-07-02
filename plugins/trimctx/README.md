@@ -6,7 +6,7 @@ Analyze the current Claude Code JSONL conversation from inside Claude Code.
 
 - `/trimctx` - analyze the current Claude Code session when `TRIMCTX_TRANSCRIPT_PATH` is available.
 - `/trimctx:analyze` - analyze an explicitly provided JSONL file path.
-- `/trimctx:handoff` - create a UID-based handoff package for the current Claude Code session.
+- `/trimctx:new-chat` - create a UID-based new-chat package for the current Claude Code session.
 - `/trimctx:compress` - only when the user explicitly asks to write a compressed copy.
 
 ## Safety
