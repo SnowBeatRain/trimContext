@@ -1,6 +1,7 @@
 import { flattenContent, isRecord, normalizeRole } from "./content.js";
+import { normalizeCodexToolResult, normalizeCodexToolUse } from "./codex-tool-items.js";
 import { parseJsonlRecords } from "../core/diagnostics.js";
-import type { NormalizedMessage, MessageRole, MessageToolInfo } from "../types/message.js";
+import type { NormalizedMessage, MessageRole } from "../types/message.js";
 
 /**
  * Parse Codex CLI JSONL (rollout format).
@@ -109,96 +110,20 @@ function normalizeResponseItem(
     };
   }
 
-  // --- function_call → assistant tool_use ---
+  const toolContext = { payload, outerRaw, rawLine, sourceLine, id: buildId(outerRaw, sourceLine, file) };
+
+  // --- function_call / custom_tool_call → assistant tool_use ---
   if (subtype === "function_call") {
-    const toolName = typeof payload.name === "string" ? payload.name : "tool";
-    const callId = typeof payload.call_id === "string" ? payload.call_id : undefined;
-    const args = typeof payload.arguments === "string" ? payload.arguments : safeJson(payload.arguments);
-    const tool: MessageToolInfo = {
-      toolName,
-      toolUseId: callId,
-      isToolUse: true,
-    };
-
-    return {
-      id: buildId(outerRaw, sourceLine, file),
-      role: "assistant",
-      content: `[tool_use ${toolName}${callId ? ` ${callId}` : ""}] ${args}`,
-      source: "codex-jsonl",
-      sourceLine,
-      rawLine,
-      raw: outerRaw,
-      timestamp: typeof outerRaw.timestamp === "string" ? outerRaw.timestamp : undefined,
-      tool,
-    };
+    return normalizeCodexToolUse(toolContext, "tool", "arguments");
   }
 
-  // --- custom_tool_call → assistant tool_use ---
   if (subtype === "custom_tool_call") {
-    const toolName = typeof payload.name === "string" ? payload.name : "custom_tool";
-    const callId = typeof payload.call_id === "string" ? payload.call_id : undefined;
-    const input = typeof payload.input === "string" ? payload.input : safeJson(payload.input);
-    const tool: MessageToolInfo = {
-      toolName,
-      toolUseId: callId,
-      isToolUse: true,
-    };
-
-    return {
-      id: buildId(outerRaw, sourceLine, file),
-      role: "assistant",
-      content: `[tool_use ${toolName}${callId ? ` ${callId}` : ""}] ${input}`,
-      source: "codex-jsonl",
-      sourceLine,
-      rawLine,
-      raw: outerRaw,
-      timestamp: typeof outerRaw.timestamp === "string" ? outerRaw.timestamp : undefined,
-      tool,
-    };
+    return normalizeCodexToolUse(toolContext, "custom_tool", "input");
   }
 
-  // --- function_call_output → tool result ---
-  if (subtype === "function_call_output") {
-    const callId = typeof payload.call_id === "string" ? payload.call_id : undefined;
-    const output = typeof payload.output === "string" ? payload.output : safeJson(payload.output);
-    const tool: MessageToolInfo = {
-      toolResultFor: callId,
-      isToolResult: true,
-    };
-
-    return {
-      id: buildId(outerRaw, sourceLine, file),
-      role: "tool",
-      content: `[tool_result${callId ? ` ${callId}` : ""}] ${output}`,
-      source: "codex-jsonl",
-      sourceLine,
-      rawLine,
-      raw: outerRaw,
-      timestamp: typeof outerRaw.timestamp === "string" ? outerRaw.timestamp : undefined,
-      tool,
-    };
-  }
-
-  // --- custom_tool_call_output → tool result ---
-  if (subtype === "custom_tool_call_output") {
-    const callId = typeof payload.call_id === "string" ? payload.call_id : undefined;
-    const output = typeof payload.output === "string" ? payload.output : safeJson(payload.output);
-    const tool: MessageToolInfo = {
-      toolResultFor: callId,
-      isToolResult: true,
-    };
-
-    return {
-      id: buildId(outerRaw, sourceLine, file),
-      role: "tool",
-      content: `[tool_result${callId ? ` ${callId}` : ""}] ${output}`,
-      source: "codex-jsonl",
-      sourceLine,
-      rawLine,
-      raw: outerRaw,
-      timestamp: typeof outerRaw.timestamp === "string" ? outerRaw.timestamp : undefined,
-      tool,
-    };
+  // --- function_call_output / custom_tool_call_output → tool result ---
+  if (subtype === "function_call_output" || subtype === "custom_tool_call_output") {
+    return normalizeCodexToolResult(toolContext);
   }
 
   // Unknown response_item subtype — skip gracefully
@@ -212,12 +137,4 @@ function buildId(raw: Record<string, unknown>, sourceLine: number, file: string)
     return `${file}:${sourceLine}:${payload.call_id}`;
   }
   return `${file}:${sourceLine}`;
-}
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
 }
