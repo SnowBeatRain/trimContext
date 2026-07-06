@@ -46,6 +46,44 @@ describe("hook commands", () => {
     expect(await fileExists(settingsPath)).toBe(false);
   });
 
+  test("install-hooks dry-run does not print existing sensitive settings", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-hooks-secret-"));
+    const settingsDir = join(dir, ".claude");
+    await mkdir(settingsDir, { recursive: true });
+    const settingsPath = join(settingsDir, "settings.json");
+    const originalSettings = {
+      env: {
+        ANTHROPIC_AUTH_TOKEN: "dummy-secret-value",
+        ANTHROPIC_BASE_URL: "https://internal.example.invalid"
+      },
+      permissions: { allow: ["Bash"] }
+    };
+    await writeFile(settingsPath, JSON.stringify(originalSettings, null, 2), "utf8");
+
+    const result = await runCli(["install-hooks", "--dir", dir, "--dry-run"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("dry-run");
+    expect(result.stdout).toContain("trimctx hook --session-start");
+    expect(result.stdout).not.toContain("dummy-secret-value");
+    expect(result.stdout).not.toContain("ANTHROPIC_AUTH_TOKEN");
+    expect(result.stdout).not.toContain("internal.example.invalid");
+    expect(result.stdout).not.toContain("permissions");
+    expect(JSON.parse(await readFile(settingsPath, "utf8"))).toEqual(originalSettings);
+  });
+
+  test("install-hooks defaults to user target when omitted", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-hooks-home-"));
+    const settingsPath = join(home, ".claude", "settings.json");
+
+    const result = await runCli(["install-hooks", "--dry-run"], { HOME: home });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(settingsPath);
+    expect(result.stdout).toContain("trimctx hook --session-start");
+    expect(await fileExists(settingsPath)).toBe(false);
+  });
+
   test("install-hooks preserves existing settings", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-hooks-merge-"));
     const settingsDir = join(dir, ".claude");

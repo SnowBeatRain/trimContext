@@ -99,17 +99,30 @@ export async function installHooks(
     });
   }
 
-  const newSettings = { ...settings, hooks: { ...hooks, SessionStart: newSessionStartHooks, Stop: newStopHooks } };
-  const output = `${JSON.stringify(newSettings, null, 2)}\n`;
-
   if (options.dryRun) {
     return [
       `dry-run: would write experimental Claude hooks to ${settingsPath}`,
-      output.trimEnd()
+      JSON.stringify(plannedHookSettings(), null, 2)
     ];
   }
+
+  const newSettings = { ...settings, hooks: { ...hooks, SessionStart: newSessionStartHooks, Stop: newStopHooks } };
+  const output = `${JSON.stringify(newSettings, null, 2)}\n`;
 
   await mkdir(dirname(settingsPath), { recursive: true });
   await writeFile(settingsPath, output, "utf8");
   return [`installed experimental Claude hooks in ${settingsPath}`];
+}
+
+function plannedHookSettings(): Record<string, unknown> {
+  return {
+    hooks: {
+      SessionStart: [
+        { hooks: [{ type: "command", command: "trimctx hook --session-start" }] }
+      ],
+      Stop: [
+        { hooks: [{ type: "command", command: "trimctx hook" }] }
+      ]
+    }
+  };
 }
