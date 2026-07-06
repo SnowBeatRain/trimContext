@@ -5,20 +5,22 @@ import { createHash, randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { compressFile } from "../core/compressor.js";
 import { formatHandoff, formatHandoffReadme, formatNextContext } from "../core/handoff.js";
-import { formatAnalysisSummary, formatUserSummary } from "../cli/format-summary.js";
 import { runHook, writeSessionEnvBinding } from "../core/hook.js";
 import {
-  findLatestSession,
-  parseSessionSource,
   prettyHomePath,
   analyzeFile,
   resolveCurrentSessionFile
 } from "../core/session.js";
-import { assertDifferentFiles } from "../platform/files.js";
 import type { AnalysisOptions } from "../core/options.js";
+import { parseAnalysisOptions, resolveInputFile, type CliAnalysisOptions } from "./shared.js";
+import { assertDifferentFiles } from "../platform/files.js";
 import type { SessionSource } from "../core/session.js";
+import { registerDefaultCommand } from "./default.js";
+import { registerCurrentCommand } from "./current.js";
+import { registerAnalyzeCommand } from "./analyze.js";
+import { registerReportCommand } from "./report.js";
+import { registerCompressCommand } from "./compress.js";
 
 export interface RegisterCommandsOptions {
   packageRoot: string;
@@ -32,14 +34,7 @@ export function registerCommands(program: Command, options: RegisterCommandsOpti
   packageRoot = options.packageRoot;
   packageVersion = options.packageVersion;
 
-  program
-    .option("--color", "Colorize output for terminal.")
-    .action(async (options: { color?: boolean }) => {
-      const file = await resolveCurrentSessionFile("auto");
-      const report = await analyzeFile(file, {});
-      process.stdout.write(formatUserSummary(report, { color: options.color }));
-    });
-
+  registerDefaultCommand(program);
   program
     .command("init")
     .option("--client <client>", "Client assets to install: claude, codex, or all.", "all")
@@ -57,76 +52,11 @@ export function registerCommands(program: Command, options: RegisterCommandsOpti
       }
     });
 
-  program
-    .command("current")
-    .option("--source <source>", "Session source to scan: auto, claude, or codex.", "auto")
-    .option("--json", "Print the full JSON analysis report.")
-    .option("--color", "Colorize output for terminal.")
-    .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-    .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-    .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-    .option("--compress <output.jsonl>", "Compress the latest matching session to a file.")
-    .description("Analyze the most recent Claude Code or Codex JSONL session.")
-    .action(async (options: CliAnalysisOptions & { source?: string; json?: boolean; color?: boolean; compress?: string }) => {
-      const source = parseSessionSource(options.source);
-      const file = await findLatestSession(source);
-      const analysisOptions = parseAnalysisOptions(options);
-      if (options.compress) {
-        await writeCompressionResult(file, options.compress, analysisOptions);
-        return;
-      }
-      const report = await analyzeFile(file, analysisOptions);
-      if (options.json) {
-        process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-        return;
-      }
-      process.stdout.write(formatAnalysisSummary(report, { color: options.color }));
-    });
 
-  program
-    .command("analyze")
-    .argument("[file]")
-    .option("--json", "Print the full JSON analysis report.")
-    .option("--color", "Colorize output for terminal.")
-    .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-    .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-    .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-    .description("Analyze a Claude Code, OpenAI, or Codex/Hermes JSONL conversation.")
-    .action(async (file: string | undefined, options: CliAnalysisOptions & { json?: boolean; color?: boolean }) => {
-      const inputFile = resolveInputFile(file);
-      const report = await analyzeFile(inputFile, parseAnalysisOptions(options));
-      if (options.json) {
-        process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-        return;
-      }
-      process.stdout.write(formatAnalysisSummary(report, { color: options.color }));
-    });
-
-  program
-    .command("report")
-    .argument("<file>")
-    .requiredOption("-o, --output <report.json>")
-    .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-    .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-    .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-    .description("Write a JSON analysis report.")
-    .action(async (file: string, options: CliAnalysisOptions & { output: string }) => {
-      await assertDifferentFiles(file, options.output, "Output file must be different from input file");
-      const report = await analyzeFile(file, parseAnalysisOptions(options));
-      await writeFile(options.output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-    });
-
-  program
-    .command("compress")
-    .argument("<file>")
-    .requiredOption("-o, --output <output.jsonl>")
-    .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-    .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-    .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-    .description("Write a safe compressed JSONL copy without modifying the original.")
-    .action(async (file: string, options: CliAnalysisOptions & { output: string }) => {
-      await writeCompressionResult(file, options.output, parseAnalysisOptions(options));
-    });
+  registerCurrentCommand(program);
+  registerAnalyzeCommand(program);
+  registerReportCommand(program);
+  registerCompressCommand(program);
 
   function configureNewChatCommand(command: Command, description: string): void {
     command
@@ -543,44 +473,6 @@ function generateHandoffUid(): string {
 
 
 
-interface CliAnalysisOptions {
-  recentWindow?: string;
-  removeThreshold?: string;
-  compressThreshold?: string;
-}
-
-function parseAnalysisOptions(options: CliAnalysisOptions): AnalysisOptions {
-  return {
-    recentWindow: parseOptionalInteger(options.recentWindow, "recent-window"),
-    removeThreshold: parseOptionalNumber(options.removeThreshold, "remove-threshold"),
-    compressThreshold: parseOptionalNumber(options.compressThreshold, "compress-threshold")
-  };
-}
-
-function parseOptionalInteger(value: string | undefined, flag: string): number | undefined {
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) {
-    throw new Error(`${flag} must be an integer`);
-  }
-  if (parsed < 0) {
-    throw new Error(`${flag} must be a non-negative integer`);
-  }
-  return parsed;
-}
-
-function parseOptionalNumber(value: string | undefined, flag: string): number | undefined {
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`${flag} must be a number`);
-  }
-  if (parsed < 0 || parsed > 1) {
-    throw new Error(`${flag} must be between 0 and 1`);
-  }
-  return parsed;
-}
-
 async function resolveInitHooks(options: InitOptions, client: InitClient, readline?: PromptSession): Promise<boolean> {
   if (client === "codex") {
     return false;
@@ -619,20 +511,6 @@ async function resolveInitHooks(options: InitOptions, client: InitClient, readli
   }
 }
 
-
-function resolveInputFile(file: string | undefined): string {
-  const inputFile = file ?? process.env.TRIMCTX_TRANSCRIPT_PATH;
-  if (!inputFile) {
-    throw new Error("file argument is required unless TRIMCTX_TRANSCRIPT_PATH is set by the current AI client session");
-  }
-  return inputFile;
-}
-
-async function writeCompressionResult(inputFile: string, outputFile: string, options: AnalysisOptions): Promise<void> {
-  await assertDifferentFiles(inputFile, outputFile, "Output file must be different from input file");
-  const result = await compressFile(inputFile, outputFile, options);
-  process.stdout.write(`${JSON.stringify({ output: outputFile, summary: result.report.summary }, null, 2)}\n`);
-}
 
 async function installHooks(
   settingsPath: string,
