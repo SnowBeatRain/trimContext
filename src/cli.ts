@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { constants as fsConstants, readFileSync } from "node:fs";
-import { access, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash, randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,7 @@ import {
   analyzeFile,
   resolveCurrentSessionFile
 } from "./core/session.js";
+import { assertDifferentFiles } from "./platform/files.js";
 import type { AnalysisOptions } from "./core/options.js";
 import type { SessionSource } from "./core/session.js";
 
@@ -641,24 +642,6 @@ async function writeCompressionResult(inputFile: string, outputFile: string, opt
   await assertDifferentFiles(inputFile, outputFile, "Output file must be different from input file");
   const result = await compressFile(inputFile, outputFile, options);
   process.stdout.write(`${JSON.stringify({ output: outputFile, summary: result.report.summary }, null, 2)}\n`);
-}
-
-async function assertDifferentFiles(leftFile: string, rightFile: string, message: string): Promise<void> {
-  if (await sameFile(leftFile, rightFile)) {
-    throw new Error(message);
-  }
-}
-
-async function sameFile(leftFile: string, rightFile: string): Promise<boolean> {
-  if (resolve(leftFile) === resolve(rightFile)) {
-    return true;
-  }
-  try {
-    const [leftStat, rightStat] = await Promise.all([stat(leftFile), stat(rightFile)]);
-    return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
-  } catch {
-    return false;
-  }
 }
 
 async function installHooks(

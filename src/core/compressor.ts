@@ -1,9 +1,10 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { analyzeMessages, parseJsonl } from "./analyzer.js";
 import { createReport } from "./reporter.js";
 import type { AnalysisOptions } from "./options.js";
 import type { AnalysisReport } from "../types/report.js";
 import type { NormalizedMessage } from "../types/message.js";
+import { sameFile } from "../platform/files.js";
 
 export interface CompressResult {
   removedMessages: number;
@@ -80,13 +81,4 @@ function messagesBySourceLine(analyzed: NormalizedMessage[]): Map<number, Normal
     byLine.set(message.sourceLine, list);
   }
   return byLine;
-}
-
-async function sameFile(inputFile: string, outputFile: string): Promise<boolean> {
-  try {
-    const [inputStat, outputStat] = await Promise.all([stat(inputFile), stat(outputFile)]);
-    return inputStat.dev === outputStat.dev && inputStat.ino === outputStat.ino;
-  } catch {
-    return inputFile === outputFile;
-  }
 }
