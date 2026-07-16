@@ -21,14 +21,16 @@ trimctx 是一个本地 AI 长对话上下文精简工具。目标是读取 Clau
 - `docs/dev/execution-plan.md`
 - `docs/dev/status-and-next-steps.md`
 
-当前主线不是做 Web UI、MCP 或安装器，而是先完成 v0.2 CLI 可用性和 Phase 0 多样本验证：
+当前主线不是做 Web UI、MCP 或新安装器，而是稳定已验证可行的 v0.2 CLI 和现有集成：
 
-- 改善 `analyze` 的默认短摘要输出，完整 JSON 交给 `report`。
-- 增加 `analyze --json`。
-- 增加 top reasons。
-- 补齐真实 Claude Code 多样本验证。
-- 不再把 `latest` / `sessions` / `doctor` 作为近期主线；若未来确实需要，等 Phase 0 验证完成后重新评估。
+- 保持 `analyze` 短摘要、`report` 完整 JSON 和 `analyze --json` 的现有契约。
+- 修复 Windows/package 发布质量门并保持 npm fresh-install smoke。
+- 明确 SessionStart/Stop hooks 的写入范围，原始 transcript 始终只读。
+- 渐进拆分 CLI、pipeline、session discovery 和共享工具，不调整 scorer/threshold。
+- `latest` / `sessions` / `doctor` 仍不作为近期主线。
 - 保持“宁可少删，也不要误删”的安全原则。
+
+项目负责人已确认现有工作流可行，因此样本数量不阻塞本轮稳定化与重构；这不等同于宣称 `phase0_trust` 已锁定。若要对外承诺无需人工审查的压缩安全性，仍需满足 `docs/dev/phase0/phase0-plan.md` 的正式发布门槛。
 
 ## Technical Constraints
 
@@ -60,11 +62,12 @@ npx tsx src/cli.ts analyze <file>
 npx tsx src/cli.ts report <file> -o report.json
 npx tsx src/cli.ts compress <file> -o output.jsonl
 
-# 会话发现命令
-npx tsx src/cli.ts current                    # 自动发现最新 Claude Code 或 Codex 会话
-npx tsx src/cli.ts current --source claude    # 只扫描 Claude Code
-npx tsx src/cli.ts current --source codex     # 只扫描 Codex
-npx tsx src/cli.ts resume                     # 快捷分析最新 Claude Code 会话
+# 会话定位命令
+npx tsx src/cli.ts current                         # 只分析 hooks 绑定的当前窗口
+npx tsx src/cli.ts analyze --select                # 交互选择本地会话
+npx tsx src/cli.ts analyze --latest                # 显式分析最近的 Claude Code 或 Codex 会话
+npx tsx src/cli.ts analyze --latest --source claude
+npx tsx src/cli.ts analyze --latest --source codex
 
 # 交接文档命令
 npx tsx src/cli.ts handoff <file> -o handoff.md --next-context next-context.md
@@ -94,7 +97,8 @@ C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-museum\5c574dba-0f62-406b-980b
 
 ## Current Known Issue
 
-真实长会话已经可以解析，safety/scorer 也已经能产生可信候选。当前主要问题：
+真实工作流已经由项目负责人确认可行。当前主要问题：
 
-- Phase 0 还缺 5 个多样本验证和人工标注。
-- 近期工作应收敛现有 `resume` / `analyze` / `report` / `compress`，不新增 `latest` / `sessions` / `doctor`。
+- Windows packed-install 测试必须使用平台正确的 npm 全局目录。
+- CLI 入口和集成代码职责过多，需要在行为测试保护下渐进拆分。
+- hooks 文档必须明确 Stop hook 可能更新 `.claude/CLAUDE.md` 的受管区块。

@@ -13,7 +13,7 @@ trimctx
 trimctx new-chat
 ```
 
-`trimctx` 会优先检查当前 Claude Code transcript；没有当前绑定时，会回退到最近的本地 Claude/Codex 会话。`trimctx new-chat` 会生成 `.trimctx/handoffs/<id>/` 本地续聊包，把其中的 `next-context.md` 复制到新 AI 窗口即可续接。`trimctx handoff` 仍保留为兼容别名。
+`trimctx` 会优先分析 hooks 绑定的当前 Claude Code transcript；没有当前绑定时，交互式终端会打开本地会话选择器，非交互环境则会失败并要求显式指定文件或使用 `trimctx analyze --latest`。选择本地 transcript 只会分析文件，不会恢复或切换 AI 客户端窗口。`trimctx new-chat` 会生成 `.trimctx/handoffs/<id>/` 本地续聊包，把其中的 `next-context.md` 复制到新 AI 窗口即可续接。`trimctx handoff` 仍保留为兼容别名。
 
 
 ```bash
@@ -118,7 +118,7 @@ trimctx new-chat
 
 `trimctx init` 会从 npm 包安装 Claude Code 命令文件和 Codex skill。省略 `--target` 时会询问安装到用户全局位置还是当前项目；在这个交互流程中，它还会询问是否启用 Claude 当前窗口 hooks，默认建议启用。非交互安装不会自动安装 hooks，除非传入 `--with-hooks`。写入前可先用 `trimctx init --dry-run` 查看路径。
 
-Claude Code 当前窗口命令需要 hooks。`SessionStart` hook 会通过 `CLAUDE_ENV_FILE` 把当前 `transcript_path` 写入 `TRIMCTX_TRANSCRIPT_PATH`，所以用户可以直接运行 `/trimctx` 或 `/trimctx:new-chat`，不需要手动查找 JSONL 路径。
+Claude Code 当前窗口命令需要 hooks。`SessionStart` hook 会通过 `CLAUDE_ENV_FILE` 把当前 `transcript_path` 写入 `TRIMCTX_TRANSCRIPT_PATH`；同时安装的 Stop hook 可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块。
 
 ## 快速开始
 
@@ -228,6 +228,8 @@ trimctx init --dry-run
 ```bash
 trimctx analyze session.jsonl
 trimctx analyze   # 仅当当前 AI 客户端已设置 TRIMCTX_TRANSCRIPT_PATH 时使用
+trimctx analyze --select
+trimctx analyze --latest --source codex
 ```
 
 选项：
@@ -236,6 +238,9 @@ trimctx analyze   # 仅当当前 AI 客户端已设置 TRIMCTX_TRANSCRIPT_PATH �
 |---|---|
 | `--json` | 输出完整 JSON 报告，而不是短摘要 |
 | `--color` | 给终端摘要加颜色 |
+| `--select` | 交互选择已知的本地 Claude/Codex 会话 |
+| `--latest` | 分析已知本地目录中最近修改的会话 |
+| `--source <source>` | 过滤 `--select` 或 `--latest`：`auto`、`claude`、`codex` |
 | `--recent-window <count>` | 硬保护最近 N 条消息，默认 `30` |
 | `--remove-threshold <score>` | `remove_candidate` 的 `rot_score` 阈值，默认 `0.80` |
 | `--compress-threshold <score>` | `compress_candidate` 的 `rot_score` 阈值，默认 `0.60` |
@@ -366,20 +371,25 @@ Use this as the compact handoff for the next agent or session.
 
 ### `trimctx current`
 
-分析本地客户端会话目录中最近修改的 Claude Code 或 Codex `.jsonl` 会话。
+只分析通过 `TRIMCTX_TRANSCRIPT_PATH` 绑定到当前 AI 客户端窗口的 transcript。
 
 ```bash
 trimctx current
-trimctx current --source auto
-trimctx current --source claude
-trimctx current --source codex
 trimctx current --json
-trimctx current --compress session.trimmed.jsonl
 ```
 
-`--source auto` 会扫描 Claude Code 项目会话根目录与 Codex 会话根目录，并选择最新 JSONL 文件。`--source claude` 只扫描 `~/.claude/projects/`；`--source codex` 只扫描 `~/.codex/sessions/`。
+路径必须存在且可读。如果存在 `TRIMCTX_SESSION_ID`，trimctx 还会校验它是否匹配 transcript 文件名。绑定缺失或无效时会提示修复 hooks；`current` 永远不会扫描最近文件。
 
-`trimctx current` 是 latest-file discovery，不是当前窗口 API。需要当前活动 transcript 的 Claude Code slash command 不应把它作为 fallback。
+本地会话发现使用：
+
+```bash
+trimctx analyze --select
+trimctx analyze --latest
+trimctx analyze --latest --source claude
+trimctx analyze --latest --source codex
+```
+
+选择器只读取轻量文件元数据，选中后才分析 transcript。它不会执行 `/resume`，也不会恢复或切换 AI 客户端窗口。
 
 ## 客户端集成
 
@@ -389,19 +399,19 @@ npm 包包含 `plugins/trimctx/`，这是当前受支持的 Claude Code 插件�
 
 当前窗口边界：`/trimctx`、`/trimctx:new-chat` 和 `/trimctx:compress` 需要 `TRIMCTX_TRANSCRIPT_PATH`；该变量由 Claude Code 执行已安装的 `SessionStart` hook 时通过内部执行器 `trimctx hook --session-start` 写入。如果缺少这个绑定，插件必须停止并提示用户通过交互式 `trimctx init`、`trimctx init --with-hooks` 或 `trimctx install-hooks` 启用 hooks，然后重启 Claude Code。
 
-安全边界：这些命令分析本地 JSONL 文件；不写回 Claude Code 会话，也不会默认压缩。只有用户选择 `/trimctx:compress` 或显式 CLI 压缩命令时才会写出压缩副本。
+安全边界：这些命令永远不修改原始 JSONL。SessionStart 写环境绑定；Stop 只可能更新 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块。只有用户选择 `/trimctx:compress` 或显式 CLI 压缩命令时才会写出压缩副本。
 
 ### `trimctx hook`
 
-作为 Claude Code hook 执行器运行。这个命令是安装 hook 后由 Claude Code 调用的执行器，不是主要的用户分析入口。作为 Stop hook 时，它要求 Claude hook 输入包含 `transcript_path`，不会降级扫描最新文件。作为内部 SessionStart hook 时，`trimctx hook --session-start` 会通过 `CLAUDE_ENV_FILE` 把 `transcript_path` 和 `session_id` 持久化为 `TRIMCTX_TRANSCRIPT_PATH` 与 `TRIMCTX_SESSION_ID`。
+作为 Claude Code hook 执行器运行。这个命令是安装 hook 后由 Claude Code 调用的执行器，不是主要的用户分析入口。作为 Stop hook 时，它要求 Claude hook 输入包含 `transcript_path`，不会降级扫描最新文件，并可能更新 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块；`--dry-run` 不写文件。作为内部 SessionStart hook 时，`trimctx hook --session-start` 会通过 `CLAUDE_ENV_FILE` 把 `transcript_path` 和 `session_id` 持久化为 `TRIMCTX_TRANSCRIPT_PATH` 与 `TRIMCTX_SESSION_ID`。
 
 ### `trimctx install-hooks`
 
-把实验性的 Claude Code SessionStart 和 Stop hooks 安装到 `settings.json`。当 AI 客户端资产已经安装、只需要补装或修复 hooks 时使用它。交互式 `trimctx init` 可在安装流程中安装同一套 hooks；非交互 init 需要传入 `--with-hooks`。
+把实验性的 Claude Code SessionStart 和 Stop hooks 安装到 `settings.json`。SessionStart 通过 `CLAUDE_ENV_FILE` 写会话绑定；Stop 可能维护 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块。当 AI 客户端资产已经安装、只需要补装或修复 hooks 时使用它。交互式 `trimctx init` 可在安装流程中安装同一套 hooks；非交互 init 需要传入 `--with-hooks`。
 
 ### Codex
 
-包内包含 `codex/skills/trimctx/SKILL.md`，提供 Codex 支持的 skill 入口来调用同一套 CLI 工作流。这里不把它宣传为已验证的 Codex `/trimctx` slash command；请使用 skill，或直接运行 `trimctx current --source codex`。Codex 发现逻辑当前只扫描 `~/.codex/sessions/`。除非某个集成明确提供可信的 `TRIMCTX_TRANSCRIPT_PATH`，否则不要宣称 Codex 具备当前窗口 transcript 绑定能力。
+包内包含 `codex/skills/trimctx/SKILL.md`，提供 Codex 支持的 skill 入口来调用同一套 CLI 工作流。这里不把它宣传为已验证的 Codex `/trimctx` slash command；请使用 skill，或运行 `trimctx analyze --latest --source codex`。Codex 发现逻辑只扫描 `~/.codex/sessions/`。除非某个集成明确提供可信的 `TRIMCTX_TRANSCRIPT_PATH`，否则不要宣称 Codex 具备当前窗口 transcript 绑定能力。
 
 ## 支持的输入格式
 
@@ -470,5 +480,5 @@ otherwise => keep
 - `compress_candidate` 不会被改写成摘要。
 - token 数是本地估算，不是特定模型 tokenizer 的精确计数。
 - 当前不包含 Web UI、MCP server 或独立安装器。Claude Code 命令/plugin 包装已包含；Codex 支持是 skill/CLI 形式，而不是已验证的 slash command。
-- 当前窗口定位只通过 Claude Code hook 注入的 `TRIMCTX_TRANSCRIPT_PATH` 实现。`trimctx current` 仍然只是最新文件发现。
-- 真实长会话验证仍在进行中，因此建议先审查报告，再把压缩输出当作替代上下文使用。
+- 当前窗口定位通过 hook 注入的 `TRIMCTX_TRANSCRIPT_PATH` 实现；`trimctx current` 是严格当前窗口命令，绝不 fallback。Codex 本地发现使用 `analyze --select/--latest`。
+- 已支持工作流已经过真实项目使用验证。压缩仍是显式审计流程，因此建议先审查报告，再把压缩输出当作替代上下文使用。

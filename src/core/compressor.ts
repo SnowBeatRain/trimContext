@@ -1,6 +1,7 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { analyzeMessages, parseJsonl } from "./analyzer.js";
 import { createReport } from "./reporter.js";
+import { assertDifferentFiles, writeFileDistinctFromInput } from "../platform/files.js";
 import type { AnalysisOptions } from "./options.js";
 import type { AnalysisReport } from "../types/report.js";
 import type { NormalizedMessage } from "../types/message.js";
@@ -9,29 +10,35 @@ export interface CompressResult {
   removedMessages: number;
   report: AnalysisReport;
 }
-
 export async function compressFile(inputFile: string, outputFile: string, options: AnalysisOptions = {}): Promise<CompressResult> {
-  if (await sameFile(inputFile, outputFile)) {
-    throw new Error("Output file must be different from input file");
+  await assertDifferentFiles(inputFile, outputFile, "Output file must be different from input file");
+  const inputHandle = await open(inputFile, "r");
+  try {
+    const input = await inputHandle.readFile("utf8");
+    const parsed = parseJsonl(input, inputFile);
+    const analyzed = analyzeMessages(parsed, options);
+    const report = createReport(analyzed, inputFile);
+    // Only non-protected remove candidates are eligible for physical deletion in the output copy.
+    const removeIds = new Set(
+      analyzed
+        .filter((message) => message.decision === "remove_candidate" && !message.protected)
+        .map((message) => message.id)
+    );
+
+    const output = parsed[0]?.source === "openai-jsonl"
+      ? compressOpenAiLines(input, analyzed, removeIds)
+      : compressJsonlLines(input, analyzed, removeIds);
+
+    await writeFileDistinctFromInput(
+      inputHandle,
+      outputFile,
+      output,
+      "Output file must be different from input file"
+    );
+    return { removedMessages: removeIds.size, report };
+  } finally {
+    await inputHandle.close();
   }
-
-  const input = await readFile(inputFile, "utf8");
-  const parsed = parseJsonl(input, inputFile);
-  const analyzed = analyzeMessages(parsed, options);
-  const report = createReport(analyzed, inputFile);
-  // Only non-protected remove candidates are eligible for physical deletion in the output copy.
-  const removeIds = new Set(
-    analyzed
-      .filter((message) => message.decision === "remove_candidate" && !message.protected)
-      .map((message) => message.id)
-  );
-
-  const output = parsed[0]?.source === "openai-jsonl"
-    ? compressOpenAiLines(input, analyzed, removeIds)
-    : compressJsonlLines(input, analyzed, removeIds);
-
-  await writeFile(outputFile, output, "utf8");
-  return { removedMessages: removeIds.size, report };
 }
 
 function compressJsonlLines(input: string, analyzed: NormalizedMessage[], removeIds: Set<string>): string {
@@ -80,13 +87,4 @@ function messagesBySourceLine(analyzed: NormalizedMessage[]): Map<number, Normal
     byLine.set(message.sourceLine, list);
   }
   return byLine;
-}
-
-async function sameFile(inputFile: string, outputFile: string): Promise<boolean> {
-  try {
-    const [inputStat, outputStat] = await Promise.all([stat(inputFile), stat(outputFile)]);
-    return inputStat.dev === outputStat.dev && inputStat.ino === outputStat.ino;
-  } catch {
-    return inputFile === outputFile;
-  }
 }

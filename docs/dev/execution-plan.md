@@ -176,7 +176,7 @@ trimctx current
 - `analyze --json` 输出完整 JSON。
 - `report` 输出完整机器可读报告。
 - `compress` 生成安全压缩副本且拒绝覆盖输入文件。
-- `current --source claude` 分析最近 Claude Code session。
+- `current` 严格分析 hooks 绑定的当前窗口；`analyze --latest --source claude` 显式分析最近 Claude Code session。
 - report top reasons 和 warnings。
 - JSONL 解析错误包含可定位的文件和行号。
 - 阈值参数仅作为高级验证/调参选项，不作为普通用户主路径。
@@ -657,13 +657,15 @@ reports/phase0/validation-summary.md
 
 不要同时开很多方向。按这个顺序走：
 
-1. 完成 `analyze` 默认短摘要和 `--json`。
-2. 补 report top reasons 和 warnings。
-3. 补齐 5 个真实长对话的私有验证样本。
-4. 做 Phase 0 validation summary。
-5. 基于真实样本验证提出 safety/scorer 调整候选；默认权重、阈值和删除行为必须经过单独评审后再改。
-6. 稳定当前 `current` / `analyze` / `report` / `compress` 的错误处理和用户说明。
-7. 再决定是否需要新增 session discovery / diagnostics 命令或进入 Claude Code hooks/statusline。
+本轮结构重构不以样本数量为阻塞；若未来要宣称压缩可免人工审查，仍按 Phase 0 的正式安全门执行。
+
+1. 修复 Windows packed-install 路径并恢复发布质量门。
+2. 抽取文件安全和 CLI 分析参数解析。
+3. 拆分 analysis pipeline 与 session discovery，并保留兼容 facade。
+4. 拆分核心分析、new-chat 和客户端集成命令注册。
+5. 统一 hooks 写入范围、严格 `current` 与显式会话选择的文档说明。
+6. 保持 safety/scorer 默认权重、阈值和删除行为不变。
+7. 质量门稳定后再决定是否新增 diagnostics、后台监控、Web UI 或 MCP。
 
 ## 19. 最关键判断
 

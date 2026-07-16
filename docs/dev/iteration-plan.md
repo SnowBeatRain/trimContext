@@ -4,7 +4,7 @@
 
 This plan records the team review after the first real Codex/Hermes validation pass and the `score_diagnostics` implementation.
 
-The next iteration should not chase aggressive deletion, installers, hooks, MCP, Web UI, or LLM summarization. The next iteration should make trimctx a trustworthy local context health checker first, then expand toward workflow integration only after safety evidence is strong.
+The next iteration should not chase aggressive deletion, new installer surfaces, additional hook automation, MCP, Web UI, or LLM summarization. Existing packaged integrations should be stabilized and documented without expanding their behavior.
 
 ## Product Positioning
 
@@ -43,14 +43,14 @@ The immediate value is not maximum token savings. The immediate value is helping
 - Any critical false deletion blocks release.
 - Original transcript hashes must remain unchanged after compression.
 - Real transcripts, private reports, and generated validation output must not enter git or npm packages.
-- Hooks, install commands, MCP, Web UI, LLM summarization, and automatic compression should remain deferred.
+- Further hook/install automation, MCP, Web UI, LLM summarization, and automatic compression should remain deferred.
 
 ### Developer Experience Lead
 
 - `analyze` is the front door and should stay short, readable, and actionable.
 - `report` and `analyze --json` should remain the automation and audit paths.
 - Error messages should tell users what was detected, where parsing failed, and what to do next.
-- `current --source claude` should be documented as the Claude Code focused discovery path until broader discovery is proven necessary.
+- `current` should remain strict current-window analysis; local discovery should be explicit through `analyze --select/--latest`.
 
 ## North Star
 
@@ -129,8 +129,8 @@ Goal: keep the project focused until safety evidence is stronger.
 
 Deferred until after Phase 0 manual review metrics and real private OpenAI export validation are recorded:
 
-- packaged Claude Code install command
-- hooks and status line
+- additional packaged installation modes
+- background hooks and status line expansion
 - MCP server
 - REST API
 - Web UI
@@ -145,7 +145,7 @@ Acceptance:
 - Roadmap and docs consistently state these are later-stage candidates.
 - New work during this phase improves trust, reports, tests, validation, or documentation.
 
-Repository-local Claude Code command/plugin files and the Codex skill wrapper may exist as integration artifacts, but packaged installation, hooks, status line, MCP, Web UI, and automatic active-session compression remain deferred.
+The npm package already contains Claude Code command/plugin files, a Codex skill wrapper, `trimctx init`, and experimental hooks. Stabilize those existing surfaces and disclose that the Stop hook may update the managed section in `.claude/CLAUDE.md`; status line, broader automation, MCP, Web UI, and automatic active-session compression remain deferred.
 
 ## Next: v0.3 Handoff and Integration Design
 
@@ -186,8 +186,8 @@ Goal: reduce the need to manually find JSONL files without broad scanning.
 
 Tasks:
 
-- Keep `current --source claude` as the explicit Claude Code focused discovery path.
-- Keep `current --source codex` discovery explicit and opt-in.
+- Keep `analyze --latest --source claude` as the explicit Claude Code discovery path.
+- Keep `analyze --latest --source codex` discovery explicit and opt-in.
 - Prefer explicit input paths or documented environment variables over broad home-directory scans.
 - Keep discovery code outside core parser/scorer/compressor modules.
 
@@ -272,16 +272,16 @@ Block completion if any of these happen:
 
 ## Immediate Task Queue
 
-1. Add the manual review rubric and validation summary template improvements.
-2. Refresh the private Phase 0 validation summary with current Claude Code and Codex/Hermes evidence.
-3. Add targeted tests for human summary trust signals and error messages.
-4. Decide whether handoff output should be a new command or a report artifact.
-5. Draft the handoff schema before implementation.
+1. Keep the Windows packed-install smoke platform-correct and green.
+2. Extract shared file safety and analysis option parsing.
+3. Separate the analysis pipeline from session discovery with a compatibility facade.
+4. Split CLI command registration without changing help, flags, output, or package-root behavior.
+5. Align hook side-effect and advanced compression documentation.
 
 ## Current Recommendation
 
-The next implementation task should be documentation and validation infrastructure, not scoring-weight changes:
+The current implementation focus is cross-platform stability and behavior-preserving modularization, not scoring-weight changes:
 
-1. Add a review rubric for candidates.
-2. Strengthen Phase 0 validation reporting.
-3. Then design `handoff.md` / `next-context.md` as the first user-visible expansion after trust is established.
+1. Restore and preserve release quality gates.
+2. Reduce CLI, pipeline, session, and integration coupling behind existing tests.
+3. Keep existing integrations experimental and explicit about file writes; defer new product surfaces.

@@ -16,7 +16,7 @@ Analyze the current Claude Code JSONL conversation from inside Claude Code.
 - Does not modify original session files.
 - Compression requires explicit user action and writes a separate output file.
 - Current-window commands require Claude hooks. Enable them during interactive `trimctx init`, or install/repair them later with `trimctx init --with-hooks` or `trimctx install-hooks`.
-- `trimctx current` remains a latest-file discovery command and is not used as a current-window fallback.
+- `trimctx current` requires the current-window hook binding and never falls back to latest-file discovery.
 
 ## Requirements
 

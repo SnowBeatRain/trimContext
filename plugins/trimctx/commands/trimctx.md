@@ -1,8 +1,8 @@
 # /trimctx — Analyze the current Claude Code conversation context
 
-Run `trimctx analyze --color` to analyze the current Claude Code transcript from `TRIMCTX_TRANSCRIPT_PATH`, then show the result to the user.
+Run `trimctx current --color` to analyze the current Claude Code transcript from `TRIMCTX_TRANSCRIPT_PATH`, then show the result to the user.
 
-If `TRIMCTX_TRANSCRIPT_PATH` is missing, stop and tell the user that current-window analysis requires Claude hooks enabled through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`, then restart Claude Code. Do not run `trimctx current` as a fallback because it only selects the latest local JSONL file by modification time.
+If `TRIMCTX_TRANSCRIPT_PATH` is missing, stop and tell the user that current-window analysis requires Claude hooks enabled through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`, then restart Claude Code. `trimctx current` is strict: it fails when that current-window binding is unavailable and never falls back to a latest local file.
 
 If the user provides a handoff uid in the form `ctx_...`, treat it as a local trimctx handoff reference instead of running analysis.
 

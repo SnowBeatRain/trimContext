@@ -200,13 +200,15 @@ Phase 0 至少需要 5 个真实 Claude Code 长会话私有样本：
 
 ## 10. 当前优先级
 
-1. `analyze` 默认短摘要。
-2. `analyze --json`。
-3. report top reasons 和 warnings。
-4. JSONL 解析诊断与 unsafe output path 护栏。
-5. Phase 0 多样本验证和 validation summary。
-6. 基于真实样本结果调整 safety/scorer 默认值。
-7. 等 Phase 0 完成后再评估是否需要额外 session discovery / diagnostics 命令。
+现有功能验证不阻塞本轮稳定化与重构；Phase 0 指标仍作为未来对外宣称自动压缩安全性的正式发布门槛。
+
+1. 保持 `analyze`、`analyze --json`、`report`、`compress` 的现有行为契约。
+2. 恢复 Windows packed-install 与 npm 包体质量门。
+3. 统一 hooks、严格 `current` 和 `analyze --select/--latest` 的会话定位说明。
+4. 抽取文件安全、CLI 参数、pipeline 和 session discovery 边界。
+5. 拆分 CLI 命令注册，保持 help、参数、输出和 package root 行为兼容。
+6. 不调整 safety/scorer 默认值，不扩大自动删除范围。
+7. 暂不新增 session discovery / diagnostics 命令、Web UI 或 MCP。
 
 ## 11. 文档关系
 

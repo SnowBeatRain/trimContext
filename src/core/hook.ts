@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { analyzeFile } from "./session.js";
+import { analyzeFile } from "./pipeline.js";
 import { formatContextState, injectContextStateSection } from "./context-state.js";
 
 interface HookInput {

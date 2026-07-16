@@ -53,19 +53,23 @@ npm link
 
 ## Common Commands
 
-`trimctx current` is latest-file discovery, not a verified current Codex window API. For current-window safety, use an explicit JSONL file path unless the AI client provides a trusted transcript binding such as `TRIMCTX_TRANSCRIPT_PATH`.
+`trimctx current` only analyzes a trusted current-window binding such as `TRIMCTX_TRANSCRIPT_PATH`; it never guesses from file modification time. Codex current-window binding is not documented as verified support, so use an explicit file, `--select`, or `--latest` unless an integration provides that binding.
 
 - Analyze the latest Claude Code or Codex session:
   ```bash
-  trimctx current --source auto --color
+  trimctx analyze --latest --source auto --color
   ```
 - Analyze the latest Claude Code session only:
   ```bash
-  trimctx current --source claude --color
+  trimctx analyze --latest --source claude --color
   ```
 - Analyze the latest Codex session only:
   ```bash
-  trimctx current --source codex --color
+  trimctx analyze --latest --source codex --color
+  ```
+- Choose a local Claude Code or Codex session interactively:
+  ```bash
+  trimctx analyze --select --color
   ```
 - Analyze a specific JSONL file:
   ```bash
@@ -101,7 +105,7 @@ Read files in this order:
 2. `.trimctx/handoffs/<uid>/next-context.md`
 3. `.trimctx/handoffs/<uid>/handoff.md`
 
-Use `manifest.json` as the source of truth for package metadata and paths. Do not guess another session or fall back to `trimctx current` when the requested uid is missing; tell the user the referenced new-chat package was not found.
+Use `manifest.json` as the source of truth for package metadata and paths. Do not guess another session when the requested uid is missing; tell the user the referenced new-chat package was not found.
 
 ## Safety Rules
 

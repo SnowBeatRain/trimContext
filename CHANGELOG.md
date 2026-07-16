@@ -7,17 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.2.10] - 2026-07-16
+
 ### Added
 
-- Added a default no-subcommand `trimctx` flow that checks the current or latest local AI session and prints a user-focused continuation recommendation.
-- Added `trimctx new-chat` as the primary user-facing command for creating a new-chat continuation package; `trimctx handoff` remains as a compatibility alias.
-- Added `README.md` to uid-based continuation packages so users know to copy `next-context.md` into a new AI window.
+- Added explicit local session discovery through `trimctx analyze --select` and `trimctx analyze --latest`, with optional Claude/Codex source filtering.
+- Added an interactive session picker for the no-subcommand workflow when no current-window binding is available.
 
 ### Changed
 
-- Made `trimctx new-chat` / `trimctx handoff` work without a file argument by resolving the active transcript binding or latest local Claude/Codex session.
-- Improved `trimctx init` completion output with immediate next commands for Claude Code and terminal users.
-- Repositioned new-chat as the recommended default continuation path; compression remains an advanced audited workflow.
+- Made `trimctx current` strict: it analyzes only the transcript bound to the current AI client window and never falls back to latest-file discovery.
+- Split CLI registration, analysis pipeline, session discovery, option parsing, and platform file helpers into focused modules without changing scoring thresholds.
+- Aligned Claude Code hooks, packaged assets, Codex guidance, and user documentation with the strict current-window contract and documented Stop-hook write scope.
+
+### Fixed
+
+- Made the packed-install smoke test resolve the platform-correct npm global directory on Windows.
+- Bound transcript reads and derived-output writes to the same open input handle, preventing hard-link and path-replacement races from overwriting the original transcript.
+- Tightened SessionStart bindings and `current` validation so missing, unreadable, directory, or session-id-mismatched transcript paths fail with actionable guidance.
 
 
 ## [0.2.8] - 2026-06-27

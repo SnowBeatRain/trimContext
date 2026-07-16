@@ -2,7 +2,7 @@
 
 Run `trimctx compress "$TRIMCTX_TRANSCRIPT_PATH" -o trimmed.jsonl` to write a compressed copy of the current Claude Code transcript.
 
-If `TRIMCTX_TRANSCRIPT_PATH` is missing, stop and tell the user that current-window compression requires Claude hooks enabled through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`, then restart Claude Code. Do not run `trimctx current` as a fallback because it may select another session.
+If `TRIMCTX_TRANSCRIPT_PATH` is missing, stop and tell the user that current-window compression requires Claude hooks enabled through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`, then restart Claude Code. Do not replace this flow with `trimctx current`; it is an analysis-only command that requires the same current-window binding.
 
 After the command finishes, tell the user:
 1. How many messages were removed

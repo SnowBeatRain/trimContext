@@ -9,4 +9,5 @@ This plugin is a thin wrapper around the local `trimctx` CLI.
 - Never overwrite the active or original session file.
 - Do not claim secrets are redacted automatically; local reports and compressed artifacts may contain original conversation content.
 - Do not upload, paste, or transmit generated artifacts unless the user explicitly asks after reviewing them.
-- `trimctx current --source auto` selects the latest local JSONL file by modification time; it must not be used as a current-window fallback.
+- `trimctx current` analyzes only the transcript bound by `TRIMCTX_TRANSCRIPT_PATH`; it never scans recent files or falls back when the binding is unavailable.
+- Use `trimctx analyze --latest` for explicit latest-session discovery, or `trimctx analyze --select` to choose a local transcript interactively.

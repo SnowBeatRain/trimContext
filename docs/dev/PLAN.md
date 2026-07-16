@@ -141,10 +141,11 @@ protected 消息永不删除。
 
 ## 当前问题
 
-v0.1 核心已经可运行，真实长会话验证也能产出一批可解释候选；当前主线问题是：
+核心 CLI 和真实工作流已经确认可行；当前主线问题是：
 
-- Phase 0 还缺 5 个多样本验证和人工标注。
-- 近期应继续打磨当前已实现 CLI，不新增额外 discovery/diagnostics 命令。
-- 安装器和 slash command 应等 CLI 与验证结果稳定后再做。
+- Windows/package 发布质量门需要保持跨平台稳定。
+- `src/cli.ts`、pipeline、session discovery 和集成代码需要渐进拆分。
+- 已实现的 `init`、Claude Code command 和实验性 hooks 必须明确副作用边界。
+- 近期不新增额外 discovery/diagnostics 命令，也不调整 scorer/threshold。
 
-下一步应该先补齐多样本验证、确认 safety/scorer 的误删风险，并把现有命令的用户体验稳定下来，而不是马上做安装器。
+下一步应该保持现有命令契约与原始 JSONL 只读原则，先完成跨平台稳定化和行为不变的结构重构，而不是扩展新的产品面。

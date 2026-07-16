@@ -30,6 +30,36 @@ describe("CLI commands", () => {
     expect(result.stdout).not.toContain("resume [options]");
   });
 
+  test("current help exposes only current-window output options", async () => {
+    const result = await runCli(["current", "--help"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("--json");
+    expect(result.stdout).toContain("--color");
+    expect(result.stdout).not.toContain("--source");
+    expect(result.stdout).not.toContain("--compress");
+    expect(result.stdout).not.toContain("--remove-threshold");
+  });
+
+  test("keeps the public command order stable in help output", async () => {
+    const result = await runCli(["--help"]);
+    const commands = [
+      "init [options]",
+      "current [options]",
+      "analyze [options] [file]",
+      "report [options] <file>",
+      "compress [options] <file>",
+      "new-chat [options] [file]",
+      "handoff [options] [file]",
+      "hook [options]",
+      "install-hooks [options]"
+    ];
+    const positions = commands.map(command => result.stdout.indexOf(command));
+
+    expect(positions.every(position => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+  });
+
   test("init installs Claude plugin and Codex skill into a user base directory", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-home-"));
 
@@ -261,63 +291,70 @@ describe("CLI commands", () => {
     expect(result.stderr).toContain("Next context file must be different from handoff output file");
   });
 
-  test("current analyzes the most recent Claude Code session under HOME", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
-    const projectDir = join(home, ".claude", "projects", "project-a");
-    const { file } = await writeSessionFixture(projectDir);
+  test("current analyzes only the transcript bound by the current AI window", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-current-bound-home-"));
+    const { file } = await writeSessionFixture();
 
-    const result = await runCli(["current", "--source", "claude", "--json"], { HOME: home });
-
-    expect(result.code).toBe(0);
-    const report = JSON.parse(result.stdout) as AnalysisReport;
-    expect(report.input.file).toBe(file);
-    expect(report.tokenization.confidence).toBe("medium");
-    expect(report.resume.readiness.score).toBeGreaterThan(0);
-  });
-
-  test("current compresses the most recent session and prints output metadata", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-current-compress-home-"));
-    const projectDir = join(home, ".claude", "projects", "project-a");
-    const { dir } = await writeSessionFixture(projectDir);
-    const output = join(dir, "current.trimmed.jsonl");
-
-    const result = await runCli(["current", "--source", "claude", "--compress", output], { HOME: home });
-
-    expect(result.code).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      output,
-      summary: { total_messages: expect.any(Number) }
+    const result = await runCli(["current", "--json"], {
+      HOME: home,
+      TRIMCTX_TRANSCRIPT_PATH: file,
+      TRIMCTX_SESSION_ID: "session"
     });
-    expect(await readFile(output, "utf8")).toContain("padding 34");
-  });
-
-  test("current analyzes nested Codex sessions under HOME", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
-    const sessionDir = join(home, ".codex", "sessions", "2026", "06", "12");
-    const { file } = await writeSessionFixture(sessionDir);
-
-    const result = await runCli(["current", "--source", "codex", "--json"], { HOME: home });
 
     expect(result.code).toBe(0);
     const report = JSON.parse(result.stdout) as AnalysisReport;
     expect(report.input.file).toBe(file);
   });
 
-  test("current auto selects the newest Claude or Codex session", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-home-"));
+  test("current does not fall back to the latest local session", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-current-strict-home-"));
+    await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
+
+    const result = await runCli(["current", "--json"], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("当前窗口尚未绑定 transcript");
+    expect(result.stderr).toContain("trimctx analyze --latest");
+  });
+
+  test("analyze --latest filters local sessions by source", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-analyze-latest-home-"));
+    const claude = await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
+    const codex = await writeSessionFixture(join(home, ".codex", "sessions", "2026", "06", "12"));
+
+    const claudeResult = await runCli(["analyze", "--latest", "--source", "claude", "--json"], { HOME: home });
+    const codexResult = await runCli(["analyze", "--latest", "--source", "codex", "--json"], { HOME: home });
+
+    expect(claudeResult.code).toBe(0);
+    expect((JSON.parse(claudeResult.stdout) as AnalysisReport).input.file).toBe(claude.file);
+    expect(codexResult.code).toBe(0);
+    expect((JSON.parse(codexResult.stdout) as AnalysisReport).input.file).toBe(codex.file);
+  });
+
+  test("analyze --latest gives an actionable error when no local session exists", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-analyze-latest-empty-home-"));
+
+    const result = await runCli(["analyze", "--latest"], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("trimctx analyze <file>");
+    expect(result.stderr).toContain("trimctx init --with-hooks");
+  });
+
+  test("analyze --select analyzes the chosen local session without polluting JSON stdout", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-analyze-select-home-"));
     const claude = await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
     const codex = await writeSessionFixture(join(home, ".codex", "sessions", "2026", "06", "12"));
     const older = new Date("2026-01-01T00:00:00.000Z");
     const newer = new Date("2026-01-02T00:00:00.000Z");
-    await utimes(claude.file, older, older);
-    await utimes(codex.file, newer, newer);
+    await utimes(claude.file, newer, newer);
+    await utimes(codex.file, older, older);
 
-    const result = await runCli(["current", "--json"], { HOME: home });
+    const result = await runCliWithInput(["analyze", "--select", "--json"], "2\n", { HOME: home });
 
     expect(result.code).toBe(0);
-    const report = JSON.parse(result.stdout) as AnalysisReport;
-    expect(report.input.file).toBe(codex.file);
-    expect(report.resume.decisions.some((decision) => decision.text.includes("Correction"))).toBe(true);
+    expect((JSON.parse(result.stdout) as AnalysisReport).input.file).toBe(codex.file);
+    expect(result.stderr).toContain("不会恢复或切换 AI 客户端窗口");
   });
 
   test("hook analyzes only the transcript_path provided on stdin", async () => {
@@ -371,28 +408,30 @@ describe("CLI commands", () => {
     expect(() => JSON.parse(result.stdout)).toThrow();
   });
 
-  test("root command falls back to latest session discovery", async () => {
+  test("root command opens the local session picker in an interactive terminal", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-root-home-"));
     const projectDir = join(home, ".claude", "projects", "project-a");
     const { file } = await writeSessionFixture(projectDir);
 
-    const result = await runCli([], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
+    const result = await runCliWithInput([], "1\n", { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("trimctx 看了一下当前会话");
     expect(result.stdout).toContain(file);
     expect(result.stdout).toContain("trimctx new-chat");
+    expect(result.stderr).toContain("不会恢复或切换 AI 客户端窗口");
   });
 
-  test("root command prints no-session guidance when discovery fails", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-empty-home-"));
+  test("root command requires an explicit file or --latest outside an interactive terminal", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-root-noninteractive-home-"));
+    await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
 
     const result = await runCli([], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
 
     expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("没找到可分析的 Claude/Codex 会话");
-    expect(result.stderr).toContain("trimctx analyze path/to/session.jsonl");
-    expect(result.stderr).toContain("trimctx init");
+    expect(result.stderr).toContain("非交互环境");
+    expect(result.stderr).toContain("trimctx analyze <file>");
+    expect(result.stderr).toContain("trimctx analyze --latest");
   });
 
   test("handoff uses TRIMCTX_TRANSCRIPT_PATH when no file argument is provided", async () => {
@@ -414,7 +453,7 @@ describe("CLI commands", () => {
     const newChat = await runCli(["new-chat", "--out", join(dir, "handoffs")], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
 
     expect(analyze.code).not.toBe(0);
-    expect(analyze.stderr).toContain("file argument is required");
+    expect(analyze.stderr).toContain("当前窗口尚未绑定 transcript");
     expect(newChat.code).toBe(0);
     expect(newChat.stdout).toContain("copyable uid: ctx_");
     expect(newChat.stdout).toContain(file);
@@ -431,11 +470,29 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("readme:");
   });
 
-  test("current rejects unknown sources", async () => {
-    const result = await runCli(["current", "--source", "unknown"]);
+  test("analyze rejects conflicting session selection modes", async () => {
+    const { file } = await writeSessionFixture();
+    const fileAndSelect = await runCli(["analyze", file, "--select"]);
+    const fileAndLatest = await runCli(["analyze", file, "--latest"]);
+    const selectAndLatest = await runCli(["analyze", "--select", "--latest"]);
+    const sourceOnly = await runCli(["analyze", "--source", "claude"]);
+    const nonInteractiveSelect = await runCli(["analyze", "--select"]);
 
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("source must be one of: auto, claude, codex");
+    expect(fileAndSelect.stderr).toContain("file cannot be used with --select or --latest");
+    expect(fileAndLatest.stderr).toContain("file cannot be used with --select or --latest");
+    expect(selectAndLatest.stderr).toContain("--select cannot be used with --latest");
+    expect(sourceOnly.stderr).toContain("--source requires --select or --latest");
+    expect(nonInteractiveSelect.stderr).toContain("--select requires an interactive terminal");
+  });
+
+  test("current rejects former discovery and compression flags", async () => {
+    const source = await runCli(["current", "--source", "claude"]);
+    const compress = await runCli(["current", "--compress", "output.jsonl"]);
+
+    expect(source.code).not.toBe(0);
+    expect(source.stderr).toContain("unknown option '--source'");
+    expect(compress.code).not.toBe(0);
+    expect(compress.stderr).toContain("unknown option '--compress'");
   });
 
   test("applies analysis tuning flags to report output", async () => {

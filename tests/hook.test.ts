@@ -106,7 +106,8 @@ describe("hook commands", () => {
   test("hook --session-start writes the current Claude transcript binding to CLAUDE_ENV_FILE", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-session-env-"));
     const envFile = join(dir, "claude-env.sh");
-    const transcriptPath = join(dir, "session with spaces.jsonl");
+    const transcriptPath = join(dir, "sess-hook-1.jsonl");
+    await writeFile(transcriptPath, await readFile(join("tests", "fixtures", "claude-code-realistic.jsonl"), "utf8"), "utf8");
 
     const result = await runCliWithInput(
       ["hook", "--session-start"],
@@ -118,6 +119,10 @@ describe("hook commands", () => {
     const content = await readFile(envFile, "utf8");
     expect(content).toContain(`export TRIMCTX_TRANSCRIPT_PATH='${transcriptPath}'`);
     expect(content).toContain("export TRIMCTX_SESSION_ID='sess-hook-1'");
+
+    const current = await runCli(["current", "--json"], parseEnvBindings(content));
+    expect(current.code).toBe(0);
+    expect((JSON.parse(current.stdout) as { input: { file: string } }).input.file).toBe(transcriptPath);
   });
 });
 
@@ -151,6 +156,15 @@ async function runCli(
       stderr: result.stderr ?? ""
     };
   }
+}
+
+function parseEnvBindings(content: string): NodeJS.ProcessEnv {
+  const bindings: NodeJS.ProcessEnv = {};
+  for (const line of content.split(/\r?\n/)) {
+    const match = /^export ([A-Z0-9_]+)='(.*)'$/.exec(line);
+    if (match) bindings[match[1]!] = match[2]!.replace(/'\\''/g, "'");
+  }
+  return bindings;
 }
 
 async function runCliWithInput(

@@ -13,7 +13,7 @@ trimctx
 trimctx new-chat
 ```
 
-`trimctx` checks the current Claude Code transcript when hooks are available, or the latest local Claude/Codex session otherwise. `trimctx new-chat` writes a local `.trimctx/handoffs/<id>/` package; copy `next-context.md` into a new AI window to continue safely. `trimctx handoff` remains as a compatibility alias.
+`trimctx` checks the hook-bound current transcript when available; without a binding, an interactive terminal opens a local Claude/Codex session picker. Non-interactive callers must use a file path or `trimctx analyze --latest`. `trimctx new-chat` writes a local `.trimctx/handoffs/<id>/` package; copy `next-context.md` into a new AI window to continue safely. `trimctx handoff` remains as a compatibility alias.
 
 
 ```bash
@@ -118,7 +118,7 @@ For release verification, install from npm or a packed tarball in a clean prefix
 
 `trimctx init` installs Claude Code command files and the Codex skill from the npm package. It prompts for user/global versus project install when `--target` is omitted. In that interactive flow it also asks whether to enable Claude current-window hooks, defaulting to yes. Non-interactive installs do not install hooks unless `--with-hooks` is supplied. Use `trimctx init --dry-run` to inspect paths before writing.
 
-Claude Code current-window commands require hooks. The `SessionStart` hook writes the current `transcript_path` to `TRIMCTX_TRANSCRIPT_PATH` through `CLAUDE_ENV_FILE`, so users can run `/trimctx` or `/trimctx:new-chat` without finding the JSONL path manually.
+Claude Code current-window commands require hooks. The `SessionStart` hook writes the current `transcript_path` to `TRIMCTX_TRANSCRIPT_PATH` through `CLAUDE_ENV_FILE`; the installed Stop hook may update the managed trimctx context-state section in the project's `.claude/CLAUDE.md`.
 
 ## Quick Start
 
@@ -228,6 +228,8 @@ Analyze a Claude Code, OpenAI, or Codex/Hermes rollout JSONL conversation and pr
 ```bash
 trimctx analyze session.jsonl
 trimctx analyze   # only when TRIMCTX_TRANSCRIPT_PATH is set by the current AI client session
+trimctx analyze --select
+trimctx analyze --latest --source codex
 ```
 
 Options:
@@ -236,6 +238,9 @@ Options:
 |---|---|
 | `--json` | Print the full JSON report instead of the short summary |
 | `--color` | Colorize the terminal summary |
+| `--select` | Choose a known local Claude/Codex session interactively |
+| `--latest` | Analyze the most recently modified known local session |
+| `--source <source>` | Filter `--select` or `--latest`: `auto`, `claude`, or `codex` |
 | `--recent-window <count>` | Hard-protect the most recent N messages; default `30` |
 | `--remove-threshold <score>` | `rot_score` threshold for `remove_candidate`; default `0.80` |
 | `--compress-threshold <score>` | `rot_score` threshold for `compress_candidate`; default `0.60` |
@@ -366,20 +371,25 @@ Use this as the compact handoff for the next agent or session.
 
 ### `trimctx current`
 
-Analyze the most recently modified Claude Code or Codex `.jsonl` session under local client session directories.
+Analyze only the transcript bound to the current AI client window through `TRIMCTX_TRANSCRIPT_PATH`.
 
 ```bash
 trimctx current
-trimctx current --source auto
-trimctx current --source claude
-trimctx current --source codex
 trimctx current --json
-trimctx current --compress session.trimmed.jsonl
 ```
 
-`--source auto` scans the Claude Code project session root and the Codex session root, then chooses the newest JSONL file. `--source claude` scans only `~/.claude/projects/`; `--source codex` scans only `~/.codex/sessions/`.
+The path must exist and be readable. When `TRIMCTX_SESSION_ID` is available, trimctx also checks that it matches the transcript file name. Missing or invalid bindings fail with hook repair guidance; `current` never scans for a latest file.
 
-`trimctx current` is latest-file discovery. It is not a current-window API and should not be used as a fallback for Claude Code slash commands that need the active transcript.
+For local discovery, use:
+
+```bash
+trimctx analyze --select
+trimctx analyze --latest
+trimctx analyze --latest --source claude
+trimctx analyze --latest --source codex
+```
+
+The picker reads lightweight file metadata and only analyzes the selected transcript. It does not run `/resume`, restore a session, or switch an AI client window.
 
 ## Client Integrations
 
@@ -389,19 +399,19 @@ The npm package includes `plugins/trimctx/`, which is the supported Claude Code 
 
 Current-window boundary: `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH`, which is set by the internal `trimctx hook --session-start` executor when Claude Code runs the installed `SessionStart` hook. If that binding is missing, the plugin must stop and ask the user to enable hooks through interactive `trimctx init`, `trimctx init --with-hooks`, or `trimctx install-hooks`, then restart Claude Code.
 
-Safety boundary: these commands analyze local JSONL files. They do not write back into Claude Code sessions, and they do not compress unless the user chooses `/trimctx:compress` or an explicit CLI compression command.
+Safety boundary: these commands never modify the original JSONL. SessionStart writes environment bindings, while Stop may update only the managed trimctx context-state section in `.claude/CLAUDE.md`; compression still requires `/trimctx:compress` or an explicit CLI compression command.
 
 ### `trimctx hook`
 
-Run as a Claude Code hook executor. This is the command Claude Code calls after hook installation, not a primary user-facing analysis command. As a Stop hook, it requires `transcript_path` from Claude hook input and does not fall back to latest-file discovery. As an internal SessionStart hook, `trimctx hook --session-start` persists `transcript_path` and `session_id` into `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` using `CLAUDE_ENV_FILE`.
+Run as a Claude Code hook executor. This is the command Claude Code calls after hook installation, not a primary user-facing analysis command. As a Stop hook, it requires `transcript_path`, does not fall back to latest-file discovery, and may update the managed context-state section in `.claude/CLAUDE.md`; `--dry-run` suppresses that write. As an internal SessionStart hook, `trimctx hook --session-start` persists `transcript_path` and `session_id` into `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` using `CLAUDE_ENV_FILE`.
 
 ### `trimctx install-hooks`
 
-Install the experimental Claude Code SessionStart and Stop hooks into `settings.json`. Use it when AI-client assets are already installed and you only need to add or repair hooks. Interactive `trimctx init` can install the same hooks during setup; non-interactive init requires `--with-hooks`.
+Install the experimental Claude Code SessionStart and Stop hooks into `settings.json`. SessionStart writes bindings through `CLAUDE_ENV_FILE`; Stop may maintain a trimctx-owned section in `.claude/CLAUDE.md`. Use it when AI-client assets are already installed and you only need to add or repair hooks. Interactive `trimctx init` can install the same hooks during setup; non-interactive init requires `--with-hooks`.
 
 ### Codex
 
-The package includes `codex/skills/trimctx/SKILL.md`, which provides a Codex-supported skill entry point for the CLI workflow. This is not documented as a verified Codex `/trimctx` slash command; use the skill or run `trimctx current --source codex` directly. Codex discovery currently scans `~/.codex/sessions/` only. Do not claim Codex current-window transcript binding unless an integration explicitly provides a trusted `TRIMCTX_TRANSCRIPT_PATH`.
+The package includes `codex/skills/trimctx/SKILL.md`, which provides a Codex-supported skill entry point for the CLI workflow. This is not documented as a verified Codex `/trimctx` slash command; use the skill or run `trimctx analyze --latest --source codex`. Codex discovery scans `~/.codex/sessions/` only. Do not claim Codex current-window transcript binding unless an integration explicitly provides a trusted `TRIMCTX_TRANSCRIPT_PATH`.
 
 ## Supported Input Formats
 
@@ -470,5 +480,5 @@ Use `summary.score_diagnostics` before changing thresholds or scoring weights. I
 - `compress_candidate` does not rewrite messages into summaries.
 - Token counts are local estimates, not exact model-tokenizer counts.
 - No Web UI, MCP server, or standalone installer is included. Claude Code command/plugin wrappers are included; Codex support is skill/CLI based rather than a verified slash command.
-- Current-window targeting is only implemented for Claude Code through hook-provided `TRIMCTX_TRANSCRIPT_PATH`. `trimctx current` remains latest-file discovery.
-- Real long-session validation is still ongoing, so review reports before using compressed output as a replacement context.
+- Current-window targeting is implemented through hook-provided `TRIMCTX_TRANSCRIPT_PATH`; `trimctx current` is strict and never falls back. Codex discovery uses `analyze --select/--latest` unless an integration provides a trusted binding.
+- Supported workflows have been verified in real project use. Continue reviewing reports before using compressed output as replacement context because compression remains an explicit audited workflow.

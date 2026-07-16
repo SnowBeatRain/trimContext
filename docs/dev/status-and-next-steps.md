@@ -26,7 +26,7 @@
 ### v0.2 CLI 可用性与集成
 
 - `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
-- `trimctx current` — 自动发现最新会话，支持 `--source auto|claude|codex`
+- `trimctx current` — 严格分析 hooks 绑定的当前窗口；本地发现使用 `analyze --select/--latest`
 - `trimctx new-chat` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
 - Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:compress`
 - Codex skill（`codex/skills/trimctx/SKILL.md`）
@@ -55,7 +55,7 @@ npm run build
 - 总 compress candidates：245
 - 所有样本压缩前后原始文件 hash 均未变化
 
-人工评审尚未完成（precision、protected recall、critical false deletion count 待确认）。真实私有 OpenAI 和 Codex/Hermes 样本验证仍待补充。
+项目负责人已经确认现有功能在真实工作流中可行；后续私有验证作为回归记录，不再作为继续 CLI 稳定化和结构重构的前置条件。这不等同于宣称 `phase0_trust` 已锁定；未来若对外承诺无需人工审查的压缩安全性，仍需满足正式 Phase 0 发布门槛。
 
 ## 已修复的问题
 
@@ -177,75 +177,54 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 
 ## 当前主要问题
 
-### 1. Phase 0 证据记录已扩展，但人工评审闭环仍未完成
+### 1. 发布测试存在 Windows 路径假设
 
-当前 CLI 输出体验已经进入 v0.2 形态：
+packed-install smoke 曾把全局包目录固定为 Unix 的 `prefix/lib/node_modules`，导致 Windows 上误报客户端资产缺失。测试需要按平台解析 npm 全局目录。
 
-- `analyze` 默认输出短摘要
-- `report` 输出完整 JSON
-- `analyze --json` 输出完整 JSON
-- `current --source claude` 可分析最近 Claude Code session
-- `current --source codex` 可分析最近 Codex session
-- `new-chat` 可生成 deterministic Markdown 交接材料
+### 2. CLI 入口职责过多
 
-当前 `reports/phase0/validation-summary.md` 已记录 Claude Code 与 Codex/Hermes rollout 私有样本的聚合验证结果，但 Phase 0 还不能宣称完成：
+`src/cli.ts` 同时承担命令注册、参数解析、handoff package、资产安装、hook 配置和文件安全逻辑。下一步采用兼容 facade 和小模块渐进迁移，不改变命令契约。
 
-- 真实私有 OpenAI JSONL export 仍未提供验证
-- 删除候选 precision、protected recall、critical false deletion count 仍需要人工评审指标
-- 零 `remove_candidate` 批次只能证明默认行为保守，不能证明删除候选 precision
+### 3. 集成副作用文档不一致
+
+SessionStart hook 通过 `CLAUDE_ENV_FILE` 写当前会话绑定；Stop hook 可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块。README、usage、roadmap 和 iteration plan 必须统一披露这一边界。
 
 ## 下一步执行顺序
 
-### Step 1：完成 Phase 0 人工评审指标
+### Step 1：恢复跨平台发布质量门
 
-按 `docs/dev/manual-review-rubric.md` 对私有验证结果进行人工评审，并只把聚合指标写入：
+- 修复 Windows packed-install 路径。
+- 保持 tarball 资产清单和 fresh install smoke 覆盖。
+- 运行 `npm test`、`npm run build`、`npm pack --dry-run --json`。
 
-```text
-reports/phase0/validation-summary.md
-```
+### Step 2：抽取低风险共享边界
 
-目标：
+- 文件同路径保护与存在性检查。
+- CLI 分析参数解析。
+- parser -> analyzer -> report pipeline。
+- Claude/Codex session discovery。
 
-- 记录 remove candidate precision
-- 记录 protected recall
-- 确认 critical false deletion = 0
-- 标记 `questionable_remove`、`over_protected` 和 `missed_low_value_noise` 作为后续调参证据
+### Step 3：拆分 CLI 命令注册
 
-### Step 2：补真实私有 OpenAI export 验证
+- 核心分析命令。
+- `new-chat` / `handoff`。
+- `init` / `hook` / `install-hooks`。
+- `src/cli.ts` 只保留程序入口、版本读取和统一错误出口。
 
-在用户提供真实 OpenAI JSONL export 后，将其加入 Phase 0 私有验证批次。只发布聚合统计，不提交原始 transcript、私有 report 或 `phase0-results.json`。
+### Step 4：统一产品文档
 
-期望：
+- 已有 packaged integrations 标记为已实现但实验性。
+- `current` 不再承载压缩；压缩继续要求显式 `trimctx compress <file> -o <output>`。
+- 明确 hooks 写入范围，继续保证原始 JSONL 只读。
 
-- 能自动识别 OpenAI JSONL
-- `analyze`、`report`、`compress` 都能跑通
-- `compress` 不修改原文件
-- 人工评审指标能覆盖 OpenAI 样本
+### Step 5：冻结高风险扩展
 
-### Step 3：收敛当前 CLI 信任信号
-
-先维持默认保守行为，不调整 scorer/compress 行为。当前阶段继续打磨：
-
-- `trimctx analyze <file>`
-- `trimctx analyze <file> --json`
-- `trimctx report <file> -o <report.json>`
-- `trimctx compress <file> -o <output.jsonl>`
-- `trimctx current`
-- `trimctx current --source codex`
-- `trimctx new-chat [file]`
-
-### Step 4：冻结高风险扩展
-
-Phase 0 人工指标闭环前，不推进 Web UI、MCP、hooks、自动压缩、LLM summarization 或更激进删除阈值。
-
-### Step 5：准备发布前证据检查
-
-在声称阶段完成前运行质量门，并检查文档不得宣称未验证能力已完成。
+暂不推进 Web UI、MCP、后台监控、自动压缩、LLM summarization 或更激进删除阈值。
 
 ## 当前结论
 
-项目现在已经不是“不能跑”的阶段，而是进入“验证信任信号是否足够”的阶段。
+项目已进入“保持现有可用行为，同时降低结构和集成维护风险”的阶段。
 
 当前最重要任务：
 
-**补齐 Phase 0 人工评审指标和真实私有 OpenAI export 验证，确认当前 CLI 的安全性和可用性，再决定是否调整 scorer/compress 或推进更高风险集成。**
+**恢复跨平台质量门，统一集成副作用文档，并在行为测试保护下完成 CLI、pipeline 和 session discovery 的渐进拆分。**
