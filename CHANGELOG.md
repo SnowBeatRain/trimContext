@@ -18,10 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Made `trimctx current` strict: it analyzes only the transcript bound to the current AI client window and never falls back to latest-file discovery.
 - Split CLI registration, analysis pipeline, session discovery, option parsing, and platform file helpers into focused modules without changing scoring thresholds.
+- Extracted report summaries, Codex tool-item normalization, and ROT metric computation into focused helpers without changing public CLI behavior or scoring thresholds.
 - Aligned Claude Code hooks, packaged assets, Codex guidance, and user documentation with the strict current-window contract and documented Stop-hook write scope.
 
 ### Fixed
 
+- Prevented `install-hooks --dry-run` from printing existing Claude settings, including environment values and permissions.
 - Made the packed-install smoke test resolve the platform-correct npm global directory on Windows.
 - Bound transcript reads and derived-output writes to the same open input handle, preventing hard-link and path-replacement races from overwriting the original transcript.
 - Tightened SessionStart bindings and `current` validation so missing, unreadable, directory, or session-id-mismatched transcript paths fail with actionable guidance.

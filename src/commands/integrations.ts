@@ -280,8 +280,19 @@ async function installHooks(settingsPath: string, options: { force?: boolean; dr
   if (!hasSessionEnvHook || options.force) newSessionStartHooks.push({ hooks: [{ type: "command", command: sessionEnvCommand }] });
   if (!hasTrimctxHook || options.force) newStopHooks.push({ hooks: [{ type: "command", command: trimctxHookCommand }] });
 
+  if (options.dryRun) {
+    return [
+      `dry-run: would write experimental Claude hooks to ${settingsPath}`,
+      JSON.stringify({
+        hooks: {
+          SessionStart: [{ hooks: [{ type: "command", command: sessionEnvCommand }] }],
+          Stop: [{ hooks: [{ type: "command", command: trimctxHookCommand }] }]
+        }
+      }, null, 2)
+    ];
+  }
+
   const output = `${JSON.stringify({ ...settings, hooks: { ...hooks, SessionStart: newSessionStartHooks, Stop: newStopHooks } }, null, 2)}\n`;
-  if (options.dryRun) return [`dry-run: would write experimental Claude hooks to ${settingsPath}`, output.trimEnd()];
   await mkdir(dirname(settingsPath), { recursive: true });
   await writeFile(settingsPath, output, "utf8");
   return [`installed experimental Claude hooks in ${settingsPath}`];
