@@ -13,7 +13,8 @@
 
 - `refactor/full-command-optimization` 保留在远端作为历史参考，不删除、不继续作为发布分支开发。
 - 该分支已被 `main` 上的选择性整合方案取代：报告摘要、Codex tool item 归一化、ROT 指标计算三个低耦合抽取已进入主线；Hook dry-run 防泄漏修复已按当前 `0.2.10` 架构重写并进入主线。
-- 不直接完整合并该分支：以精确 SHA 重演时，`src/cli.ts`、`src/commands/new-chat.ts`、`src/core/compressor.ts`、`src/platform/files.ts` 存在核心语义冲突，且旧分支仍基于 `0.2.9`。
+- 相对整合前发布基线 `origin/main@80aeae5`，该分支的独有提交计数为 `2 / 12`，精确合并重演在 `src/cli.ts`、`src/commands/new-chat.ts`、`src/core/compressor.ts`、`src/platform/files.ts` 产生 4 个核心语义冲突。相对已完成选择性整合的当前 `main@0598895`，计数为 `7 / 12`，并因两边都调整 Hook 回归覆盖而新增 `tests/hook.test.ts` 冲突。
+- 这些冲突涉及命令架构、当前会话、压缩安全、文件写边界和 Hook 回归契约，且旧分支仍基于 `0.2.9`，因此不采用完整合并或简单的 `ours` / `theirs` 消解。
 - 后续发布以 `main` 为唯一候选；除非明确开展历史代码研究，否则不要从该分支继续提交或发布。
 
 ## 当前已经完成
