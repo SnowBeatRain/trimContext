@@ -9,6 +9,13 @@
 - `docs/dev/execution-plan.md`：执行任务、数据集和 Phase 0 验收。
 - `docs/dev/iteration-plan.md`：团队评审后的当前迭代计划、优先级和质量门。
 
+## 分支整理状态（2026-07-18）
+
+- `refactor/full-command-optimization` 保留在远端作为历史参考，不删除、不继续作为发布分支开发。
+- 该分支已被 `main` 上的选择性整合方案取代：报告摘要、Codex tool item 归一化、ROT 指标计算三个低耦合抽取已进入主线；Hook dry-run 防泄漏修复已按当前 `0.2.10` 架构重写并进入主线。
+- 不直接完整合并该分支：以精确 SHA 重演时，`src/cli.ts`、`src/commands/new-chat.ts`、`src/core/compressor.ts`、`src/platform/files.ts` 存在核心语义冲突，且旧分支仍基于 `0.2.9`。
+- 后续发布以 `main` 为唯一候选；除非明确开展历史代码研究，否则不要从该分支继续提交或发布。
+
 ## 当前已经完成
 
 ### v0.1 核心 CLI
