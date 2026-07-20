@@ -22,10 +22,13 @@ npm install
 ## Commands
 
 ```bash
-npm test              # Run all tests
-npm run build         # Compile TypeScript to dist/
+npm test              # Run all tests with the repository timeout
+npm run build         # Compile TypeScript modules
+npm run build:publish # Build the bundled CLI used by the npm package
 npx tsx src/cli.ts    # Run CLI from source
 ```
+
+For behavior-preserving refactors, run `npm run build`, `npm test`, and `git diff --check` before committing. When changing package contents, integration files, or install docs, also run `npm run build:publish` and `npx vitest run tests/package-contents.test.ts`.
 
 ## Code Guidelines
 

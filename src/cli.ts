@@ -3,9 +3,7 @@ import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { registerAnalysisCommands, registerDefaultAction } from "./commands/analysis.js";
-import { registerHookCommands, registerInitCommand } from "./commands/integrations.js";
-import { registerNewChatCommands } from "./commands/new-chat.js";
+import { registerCommands } from "./commands/index.js";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageVersion = readPackageVersion(packageRoot);
@@ -16,11 +14,7 @@ program
   .description("Analyze and safely trim long AI conversation context.")
   .version(packageVersion);
 
-registerDefaultAction(program);
-registerInitCommand(program, packageRoot);
-registerAnalysisCommands(program);
-registerNewChatCommands(program, packageVersion);
-registerHookCommands(program);
+registerCommands(program, { packageRoot, packageVersion });
 
 program.parseAsync().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);

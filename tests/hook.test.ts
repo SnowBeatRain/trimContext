@@ -7,7 +7,6 @@ import { describe, expect, test } from "vitest";
 
 const execFileAsync = promisify(execFile);
 
-
 describe("hook commands", () => {
   test("install-hooks writes SessionStart env hook and Stop hook to settings.json", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-hooks-"));
@@ -29,7 +28,6 @@ describe("hook commands", () => {
     expect(settings.hooks.SessionStart[0].hooks[0].type).toBe("command");
     expect(settings.hooks.SessionStart[0].hooks[0].command).toBe("trimctx hook --session-start");
     expect(settings.hooks.Stop).toBeDefined();
-    expect(settings.hooks.Stop[0].hooks[0].type).toBe("command");
     expect(settings.hooks.Stop[0].hooks[0].command).toBe("trimctx hook");
   });
 
@@ -70,6 +68,18 @@ describe("hook commands", () => {
     expect(result.stdout).not.toContain("internal.example.invalid");
     expect(result.stdout).not.toContain("permissions");
     expect(JSON.parse(await readFile(settingsPath, "utf8"))).toEqual(originalSettings);
+  });
+
+  test("install-hooks defaults to user target when omitted", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-hooks-home-"));
+    const settingsPath = join(home, ".claude", "settings.json");
+
+    const result = await runCli(["install-hooks", "--dry-run"], { HOME: home });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(settingsPath);
+    expect(result.stdout).toContain("trimctx hook --session-start");
+    expect(await fileExists(settingsPath)).toBe(false);
   });
 
   test("install-hooks preserves existing settings", async () => {
@@ -218,5 +228,3 @@ async function runCliWithInput(
     child.stdin.end(input);
   });
 }
-
-

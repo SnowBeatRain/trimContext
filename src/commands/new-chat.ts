@@ -11,14 +11,30 @@ import {
   writeFilesDistinctFromInput
 } from "../platform/files.js";
 import { resolveCurrentSessionFile } from "../sessions/discovery.js";
-import { parseAnalysisOptions, resolveInputFile, type CliAnalysisOptions } from "./shared/analysis-options.js";
+import { parseAnalysisOptions, resolveInputFile, type CliAnalysisOptions } from "./shared.js";
 
-export function registerNewChatCommands(program: Command, version: string): void {
-  configureNewChatCommand(program.command("new-chat"), "Create a new-chat continuation package for a long conversation.", version);
-  configureNewChatCommand(program.command("handoff"), "Compatibility alias for new-chat: write markdown handoff artifacts for continuing safely.", version);
+export interface RegisterNewChatOptions {
+  packageVersion: string;
 }
 
-function configureNewChatCommand(command: Command, description: string, version: string): void {
+export function registerNewChatCommands(program: Command, options: RegisterNewChatOptions): void {
+  configureNewChatCommand(
+    program.command("new-chat"),
+    "Create a new-chat continuation package for a long conversation.",
+    options
+  );
+  configureNewChatCommand(
+    program.command("handoff"),
+    "Compatibility alias for new-chat: write markdown handoff artifacts for continuing safely.",
+    options
+  );
+}
+
+function configureNewChatCommand(
+  command: Command,
+  description: string,
+  registerOptions: RegisterNewChatOptions
+): void {
   command
     .argument("[file]")
     .option("-o, --output <handoff.md>", "Write a legacy single handoff markdown file.")
@@ -40,16 +56,20 @@ function configureNewChatCommand(command: Command, description: string, version:
       if (options.nextContext) {
         throw new Error("--next-context requires -o/--output; omit both to create a new-chat package");
       }
-      await writeHandoffPackage(inputFile, options, version);
+      await writeHandoffPackage(inputFile, options, registerOptions.packageVersion);
     });
 }
 
-async function writeLegacyHandoff(file: string, options: CliAnalysisOptions & { output: string; nextContext?: string }): Promise<void> {
+async function writeLegacyHandoff(
+  file: string,
+  options: CliAnalysisOptions & { output: string; nextContext?: string }
+): Promise<void> {
   await assertDifferentFiles(file, options.output, "Output file must be different from input file");
   if (options.nextContext) {
     await assertDifferentFiles(file, options.nextContext, "Next context file must be different from input file");
     await assertDifferentFiles(options.output, options.nextContext, "Next context file must be different from handoff output file");
   }
+
   const inputHandle = await open(file, "r");
   try {
     const report = analyzeInput(
@@ -86,7 +106,11 @@ async function writeLegacyHandoff(file: string, options: CliAnalysisOptions & { 
   if (options.nextContext) process.stdout.write(`next-context: ${options.nextContext}\n`);
 }
 
-async function writeHandoffPackage(file: string, options: CliAnalysisOptions & { outDir?: string }, version: string): Promise<void> {
+async function writeHandoffPackage(
+  file: string,
+  options: CliAnalysisOptions & { outDir?: string },
+  packageVersion: string
+): Promise<void> {
   const uid = generateHandoffUid();
   const rootDir = resolve(options.outDir ?? join(".trimctx", "handoffs"));
   const packageDir = join(rootDir, uid);
@@ -99,7 +123,9 @@ async function writeHandoffPackage(file: string, options: CliAnalysisOptions & {
   for (const outputPath of [handoffPath, nextContextPath, manifestPath, reportPath, readmePath]) {
     await assertDifferentFiles(file, outputPath, "Handoff package must be different from input file");
   }
-  if (await pathExists(packageDir)) throw new Error(`handoff package already exists: ${packageDir}`);
+  if (await pathExists(packageDir)) {
+    throw new Error(`handoff package already exists: ${packageDir}`);
+  }
 
   const inputHandle = await open(file, "r");
   try {
@@ -110,10 +136,27 @@ async function writeHandoffPackage(file: string, options: CliAnalysisOptions & {
       schema_version: "trimctx.handoff_manifest.v1",
       uid,
       created_at: new Date().toISOString(),
-      trimctx_version: version,
-      input: { file, sha256: inputHash, source: report.input.source, session_id: report.input.session_id },
-      files: { handoff: handoffPath, next_context: nextContextPath, manifest: manifestPath, report: reportPath, readme: readmePath },
-      files_relative: { handoff: "handoff.md", next_context: "next-context.md", manifest: "manifest.json", report: "report.json", readme: "README.md" },
+      trimctx_version: packageVersion,
+      input: {
+        file,
+        sha256: inputHash,
+        source: report.input.source,
+        session_id: report.input.session_id
+      },
+      files: {
+        handoff: handoffPath,
+        next_context: nextContextPath,
+        manifest: manifestPath,
+        report: reportPath,
+        readme: readmePath
+      },
+      files_relative: {
+        handoff: "handoff.md",
+        next_context: "next-context.md",
+        manifest: "manifest.json",
+        report: "report.json",
+        readme: "README.md"
+      },
       warnings: ["This package may contain original transcript content and secrets; review before sharing."],
       summary: {
         total_messages: report.summary.total_messages,
@@ -150,8 +193,13 @@ async function writeHandoffPackage(file: string, options: CliAnalysisOptions & {
 function generateHandoffUid(): string {
   const now = new Date();
   const timestamp = [
-    now.getUTCFullYear(), String(now.getUTCMonth() + 1).padStart(2, "0"), String(now.getUTCDate()).padStart(2, "0"), "_",
-    String(now.getUTCHours()).padStart(2, "0"), String(now.getUTCMinutes()).padStart(2, "0"), String(now.getUTCSeconds()).padStart(2, "0")
+    now.getUTCFullYear(),
+    String(now.getUTCMonth() + 1).padStart(2, "0"),
+    String(now.getUTCDate()).padStart(2, "0"),
+    "_",
+    String(now.getUTCHours()).padStart(2, "0"),
+    String(now.getUTCMinutes()).padStart(2, "0"),
+    String(now.getUTCSeconds()).padStart(2, "0")
   ].join("");
   return `ctx_${timestamp}_${randomBytes(3).toString("hex")}`;
 }

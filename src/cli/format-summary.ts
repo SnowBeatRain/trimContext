@@ -1,4 +1,6 @@
 import type { AnalysisReport } from "../types/report.js";
+import { formatRatio, formatTokens as formatTokenCount } from "../core/format.js";
+import { reasonLabel } from "../core/reason-labels.js";
 
 export function formatAnalysisSummary(report: AnalysisReport, options?: { color?: boolean }): string {
   const s = report.summary;
@@ -186,34 +188,11 @@ function heading(text: string, color: boolean): string {
   return color ? `\x1b[1m${text}\x1b[0m` : text;
 }
 
-const REASON_LABELS: Record<string, string> = {
-  low_value_metadata: "metadata noise",
-  old_message: "old content",
-  superseded_by_later_instruction: "superseded",
-  low_reference_in_later_context: "low reference",
-  duplicate_nearby_message: "duplicate",
-  orphan_tool_result: "orphan tool result",
-  large_low_value_tool_output: "large tool output",
-  contains_file_path: "file path",
-  contains_architecture_or_api_decision: "architecture",
-  recent_message: "recent",
-  contains_code_block: "code block",
-  contains_test_failure: "test failure",
-  system_or_developer_message: "system message",
-  contains_user_decision: "user decision",
-  contains_memory_instruction: "memory instruction",
-  contains_error_stack: "error stack",
-  contains_shell_command: "shell command",
-  contains_git_diff: "git diff",
-  tool_result_referenced_later: "referenced tool",
-  references_tool_result: "references tool"
-};
-
 function categorizeReasons(report: AnalysisReport): { label: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const msg of report.remove_candidates) {
     for (const reason of msg.reasons) {
-      const label = REASON_LABELS[reason] ?? reason;
+      const label = reasonLabel(reason);
       counts.set(label, (counts.get(label) ?? 0) + 1);
     }
   }
@@ -224,13 +203,7 @@ function categorizeReasons(report: AnalysisReport): { label: string; count: numb
 }
 
 function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tokens`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K tokens`;
-  return `${tokens} tokens`;
-}
-
-function formatRatio(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
+  return formatTokenCount(tokens, { includeUnit: true });
 }
 
 function formatEvidenceText(text: string | undefined): string {

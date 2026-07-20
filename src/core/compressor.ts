@@ -10,7 +10,12 @@ export interface CompressResult {
   removedMessages: number;
   report: AnalysisReport;
 }
-export async function compressFile(inputFile: string, outputFile: string, options: AnalysisOptions = {}): Promise<CompressResult> {
+
+export async function compressFile(
+  inputFile: string,
+  outputFile: string,
+  options: AnalysisOptions = {}
+): Promise<CompressResult> {
   await assertDifferentFiles(inputFile, outputFile, "Output file must be different from input file");
   const inputHandle = await open(inputFile, "r");
   try {
@@ -44,6 +49,7 @@ export async function compressFile(inputFile: string, outputFile: string, option
 function compressJsonlLines(input: string, analyzed: NormalizedMessage[], removeIds: Set<string>): string {
   const byLine = messagesBySourceLine(analyzed);
   // Claude/Codex records map one normalized message to a line, so dropping a candidate drops that line.
+  // Unrecognized non-empty rows are kept byte-for-byte because they have no normalized messages.
   return input
     .split(/\r?\n/)
     .map((line, index) => ({ line, sourceLine: index + 1 }))
