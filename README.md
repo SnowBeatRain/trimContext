@@ -78,6 +78,8 @@ This writes `.trimctx/handoffs/<uid>/` containing `handoff.md`, `next-context.md
 
 Review `next-context.md` before pasting it into a new AI window. The UID is a local reference, not a restore token.
 
+With multiple windows open, prefer an explicit JSONL path. After Claude Code hooks are installed, `/trimctx:new-chat` uses the current window's `TRIMCTX_TRANSCRIPT_PATH`. Codex does not yet have a verified current-window binding, so do not use file-less `new-chat` or `--latest` to guess the current Codex window. After generation, verify `input.file`, `session_id`, and `sha256` in `manifest.json`.
+
 ### Compress
 
 ```bash
@@ -116,6 +118,8 @@ trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color
 
 If the binding is missing, the command stops instead of guessing another session.
 
+When several Claude Code windows are open, each window's SessionStart hook writes `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` through that window's own `CLAUDE_ENV_FILE`. Restart every open window after installing hooks, and do not replace current-window commands with `--latest`. Windows in the same project share `.claude/CLAUDE.md`, so its managed status block may reflect whichever window ran the Stop hook last; this does not change per-window transcript bindings.
+
 Hook write scope is explicit:
 
 - SessionStart writes the current `transcript_path` through `CLAUDE_ENV_FILE` so `TRIMCTX_TRANSCRIPT_PATH` is available.
@@ -124,7 +128,7 @@ Hook write scope is explicit:
 
 ## Codex
 
-The package installs a Codex skill/CLI workflow. Use an explicit file, `--select`, or `--latest --source codex`. This project does not claim a verified Codex `/trimctx` slash command or verified current-window transcript binding.
+The package installs a Codex skill/CLI workflow. For single-window discovery, use `--select` or `--latest --source codex`. With multiple windows, neither mode proves which window is current; pass the confirmed JSONL path explicitly to `analyze`, `report`, `new-chat`, or `compress`. This project does not claim a verified Codex `/trimctx` slash command or verified current-window transcript binding.
 
 ## Supported Inputs
 

@@ -99,6 +99,16 @@ npm link
   ```
   Only use this form when `TRIMCTX_TRANSCRIPT_PATH` is already set by the current AI client session. Do not synthesize that variable from latest-file discovery.
 
+## Multiple Codex Windows
+
+Codex current-window transcript binding is not verified. When multiple Codex windows are open:
+
+- `--latest --source codex` means the newest local Codex session file, not necessarily the current window.
+- `--select --source codex` is a manual choice, not proof of the current window.
+- Never run file-less `trimctx new-chat` unless an integration has explicitly supplied a trusted `TRIMCTX_TRANSCRIPT_PATH` for this window.
+- Pass the confirmed JSONL path explicitly to `analyze`, `report`, `new-chat`, and `compress` whenever exact window identity matters.
+- After `new-chat`, verify `input.file`, `session_id`, and `sha256` in `.trimctx/handoffs/<uid>/manifest.json` before continuing from the package.
+
 ## New-chat UID Handling
 
 If the user provides a new-chat uid in the form `ctx_...`, treat it as a local new-chat package reference.

@@ -86,6 +86,29 @@ trimctx new-chat session.jsonl --out custom-root
 
 分享或粘贴到新窗口前必须审查。包内可能包含原始 transcript 内容和密钥。UID 只是本地包引用，不是恢复令牌。
 
+## 多窗口与当前会话
+
+显式传入的 `<file>` 始终是命令的数据来源。多窗口环境不要把“最近修改的 session”当成“当前窗口”。
+
+Claude Code 安装 hooks 后，SessionStart 会把该窗口的 `transcript_path` 和 `session_id` 写入该窗口自己的 `CLAUDE_ENV_FILE`，形成 `TRIMCTX_TRANSCRIPT_PATH` / `TRIMCTX_SESSION_ID` 绑定。安装后应重启每个已经打开的 Claude Code 窗口。`/trimctx`、`/trimctx:new-chat` 和 `/trimctx:compress` 都使用绑定路径；缺少绑定时停止，不回退到其他 session。无文件参数的 `trimctx analyze` 还会检查绑定路径可读、确实是文件，并在存在 session ID 时校验它与 transcript 文件名一致。
+
+同一项目的多个 Claude Code 窗口共享 `.claude/CLAUDE.md`。Stop hook 的受管状态区块可能由最后停止的窗口更新，但不会改变每个窗口自己的 transcript 绑定。
+
+Codex 当前没有经过验证的自动窗口绑定：
+
+- `--latest --source codex` 选择所有本地 Codex session 中最近修改的文件，不保证属于当前窗口。
+- `--select --source codex` 是人工选择，也不是自动绑定。
+- 无文件参数的 `trimctx new-chat` 在缺少绑定时可能回退到最近 session，多窗口 Codex 中不要使用这种形式。
+- 需要严格对应当前 Codex 窗口时，把确认后的 JSONL 路径显式传给每个命令。
+
+```powershell
+trimctx analyze --select --source codex
+trimctx analyze "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+trimctx new-chat "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+```
+
+生成续聊包后检查 `.trimctx/handoffs/<uid>/manifest.json` 中的 `input.file`、`session_id` 和 `sha256`，确认来源正确后再在新窗口使用。UID 需要在同一项目目录或明确的 `--out` 目录下解析。
+
 ## Compress
 
 ```bash
@@ -121,7 +144,7 @@ Hooks 写入范围：
 trimctx init --client codex --target user
 ```
 
-使用显式文件、`trimctx analyze --select --source codex` 或 `trimctx analyze --latest --source codex`。包内说明的是 skill/CLI 工作流，不宣称已验证 Codex `/trimctx` slash command 或当前窗口绑定。
+使用显式文件、`trimctx analyze --select --source codex` 或 `trimctx analyze --latest --source codex`。多窗口时必须显式确认并传入 JSONL 路径；`--latest` 和 `--select` 都不代表自动当前窗口绑定。包内说明的是 skill/CLI 工作流，不宣称已验证 Codex `/trimctx` slash command 或当前窗口绑定。
 
 ## Report v2
 

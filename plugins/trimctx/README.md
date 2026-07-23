@@ -21,6 +21,13 @@ Analyze the current Claude Code JSONL conversation from inside Claude Code.
 - Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
 - Hooks keep the original JSONL transcript read-only.
 
+## Multiple Claude Windows
+
+- Each window's SessionStart hook receives that session's `transcript_path` and `session_id` and writes them through that window's own `CLAUDE_ENV_FILE`.
+- Restart every open Claude Code window after installing hooks so each window receives its own binding.
+- Current-window commands use `TRIMCTX_TRANSCRIPT_PATH`; do not substitute `--latest` when several windows are open.
+- Windows in the same project share `.claude/CLAUDE.md`, so its managed status block may reflect the window whose Stop hook ran last. This does not change per-window transcript bindings.
+
 ## Requirements
 
 Node.js 20+ is required.

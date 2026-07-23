@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Short summaries now use assessment evidence, at most two findings, continuation gaps, and the first recommendation without exposing internal score breakdowns.
 - Tool-use and tool-result records now stay structurally protected from physical deletion, and removal decisions require decisive high-confidence evidence.
 - Report writes now use same-directory atomic replacement while preserving the original transcript and existing targets on failure.
+- Documented multi-window session targeting: Claude Code uses per-window hook bindings, while Codex workflows require an explicitly confirmed JSONL path when exact window identity matters.
 
 ## [0.2.10] - 2026-07-16
 

@@ -78,6 +78,8 @@ trimctx new-chat path/to/session.jsonl --out .trimctx/handoffs
 
 把 `next-context.md` 粘贴到新 AI 窗口前先审查。UID 只是本地引用，不是恢复令牌。
 
+多窗口时优先传入明确的 JSONL 路径。Claude Code 安装 hooks 后，`/trimctx:new-chat` 使用当前窗口的 `TRIMCTX_TRANSCRIPT_PATH`；Codex 尚无经过验证的当前窗口自动绑定，不要用无文件参数的 `new-chat` 或 `--latest` 猜测当前窗口。生成后可检查 `manifest.json` 的 `input.file`、`session_id` 和 `sha256`。
+
 ### 压缩
 
 ```bash
@@ -116,6 +118,8 @@ trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color
 
 绑定缺失时会停止，不会猜测其他 session。
 
+同时打开多个 Claude Code 窗口时，每个窗口的 SessionStart hook 都通过该窗口自己的 `CLAUDE_ENV_FILE` 写入 `TRIMCTX_TRANSCRIPT_PATH` 和 `TRIMCTX_SESSION_ID`。安装 hooks 后需要重启每个已打开窗口；当前窗口命令不要替换为 `--latest`。同一项目多个窗口共享 `.claude/CLAUDE.md`，因此其中的状态区块可能由最后触发 Stop hook 的窗口更新，但这不会改变各窗口的 transcript 绑定。
+
 Hooks 写入范围：
 
 - SessionStart 通过 `CLAUDE_ENV_FILE` 写入当前 `transcript_path`，供 `TRIMCTX_TRANSCRIPT_PATH` 使用。
@@ -124,7 +128,7 @@ Hooks 写入范围：
 
 ## Codex
 
-包内提供 Codex skill/CLI 工作流。使用显式文件、`--select` 或 `--latest --source codex`。本项目不宣称已验证 Codex `/trimctx` slash command，也不宣称已验证当前窗口 transcript 绑定。
+包内提供 Codex skill/CLI 工作流。单窗口发现可使用 `--select` 或 `--latest --source codex`；多窗口时二者都不能自动证明“当前窗口”，必须把确认后的 JSONL 路径显式传给 `analyze`、`report`、`new-chat` 或 `compress`。本项目不宣称已验证 Codex `/trimctx` slash command，也不宣称已验证当前窗口 transcript 绑定。
 
 ## 支持的输入
 

@@ -101,6 +101,29 @@ The command writes `.trimctx/handoffs/<uid>/` by default:
 
 Review the package before sharing or pasting it into a new window. It may contain original transcript content and secrets. The UID is a local package reference, not a restore token.
 
+## Multiple Windows and Current Sessions
+
+An explicit `<file>` is always the command's source of truth. In a multi-window environment, do not treat the most recently modified session as proof of the current window.
+
+After Claude Code hooks are installed, SessionStart writes that window's `transcript_path` and `session_id` through its own `CLAUDE_ENV_FILE`, creating `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` bindings. Restart every already-open Claude Code window after installation. `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` use the bound path and stop when it is missing instead of falling back to another session. File-less `trimctx analyze` also checks that the bound path is a readable file and, when a session ID exists, that it matches the transcript filename.
+
+Claude Code windows in the same project share `.claude/CLAUDE.md`. The managed status block may be updated by whichever window runs the Stop hook last, but that does not change each window's transcript binding.
+
+Codex does not currently have a verified automatic window binding:
+
+- `--latest --source codex` selects the most recently modified file across local Codex sessions; it does not guarantee the current window.
+- `--select --source codex` is a manual choice, not an automatic binding.
+- File-less `trimctx new-chat` may fall back to the latest session when no binding exists; do not use this form with multiple Codex windows.
+- To strictly target a Codex window, pass its confirmed JSONL path explicitly to every command.
+
+```powershell
+trimctx analyze --select --source codex
+trimctx analyze "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+trimctx new-chat "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+```
+
+After generating a package, inspect `input.file`, `session_id`, and `sha256` in `.trimctx/handoffs/<uid>/manifest.json` before using it in a new window. Resolve the UID from the same project directory or from the explicit `--out` directory.
+
 ## Compress
 
 ```bash
@@ -140,7 +163,7 @@ Install the packaged skill:
 trimctx init --client codex --target user
 ```
 
-Use an explicit file, `trimctx analyze --select --source codex`, or `trimctx analyze --latest --source codex`. The package documents a skill/CLI workflow, not a verified Codex `/trimctx` slash command or verified current-window binding.
+Use an explicit file, `trimctx analyze --select --source codex`, or `trimctx analyze --latest --source codex`. With multiple windows, confirm and pass the JSONL path explicitly; neither `--latest` nor `--select` is an automatic current-window binding. The package documents a skill/CLI workflow, not a verified Codex `/trimctx` slash command or verified current-window binding.
 
 ## Report v2
 
