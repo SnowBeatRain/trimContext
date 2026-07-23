@@ -33,9 +33,9 @@ function formatNextAction(report: AnalysisReport): string {
     return "先运行 `trimctx report` 审查 remove_candidate；compress_candidate 默认保留。";
   }
   if (compressCount > 0) {
-    return "当前只有 compress_candidate；默认保留，可用 `trimctx handoff` 生成续接上下文。";
+    return "当前只有 compress_candidate；默认保留，可用 `trimctx new-chat` 生成续接上下文。";
   }
-  return "暂无安全删除候选；继续收集样本或运行 `trimctx handoff` 做交接。";
+  return "暂无安全删除候选；继续收集样本或运行 `trimctx new-chat` 做交接。";
 }
 
 export function formatContextState(report: AnalysisReport): string {

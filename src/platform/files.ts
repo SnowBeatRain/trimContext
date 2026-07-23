@@ -1,6 +1,7 @@
-import { constants } from "node:fs";
-import { access, open, stat, type FileHandle } from "node:fs/promises";
-import { resolve } from "node:path";
+import { constants, type Stats } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { access, open, rename, rm, stat, type FileHandle } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 
 export async function pathExists(path: string): Promise<boolean> {
   try {
@@ -46,6 +47,95 @@ export async function writeFileDistinctFromInput(
       inputConflictMessage: conflictMessage
     }
   ]);
+}
+
+export async function atomicWriteFileDistinctFromInput(
+  inputHandle: FileHandle,
+  outputFile: string,
+  data: string,
+  conflictMessage = "Output file must be different from input file"
+): Promise<void> {
+  const inputStat = await inputHandle.stat();
+  await assertOutputIsDistinct(inputStat, outputFile, conflictMessage);
+
+  const directory = dirname(outputFile);
+  const outputName = basename(outputFile);
+  const tempFile = join(directory, `.${outputName}.trimctx-${randomBytes(8).toString("hex")}.tmp`);
+  let tempHandle: FileHandle | undefined;
+
+  try {
+    tempHandle = await open(tempFile, "wx");
+    await tempHandle.writeFile(data, "utf8");
+    await tempHandle.close();
+    tempHandle = undefined;
+
+    const currentInputStat = await inputHandle.stat();
+    if (!sameInputSnapshot(inputStat, currentInputStat)) {
+      throw new Error("Input file changed while output was being prepared");
+    }
+    await assertOutputIsDistinct(currentInputStat, outputFile, conflictMessage);
+
+    try {
+      await rename(tempFile, outputFile);
+    } catch (error) {
+      if (!shouldUseWindowsReplacement(error) || !await isRegularFile(outputFile)) throw error;
+      await replaceExistingWindowsFile(tempFile, outputFile);
+    }
+  } finally {
+    await tempHandle?.close().catch(() => undefined);
+    await rm(tempFile, { force: true }).catch(() => undefined);
+  }
+}
+
+function sameInputSnapshot(initial: Stats, current: Stats): boolean {
+  return initial.dev === current.dev
+    && initial.ino === current.ino
+    && initial.size === current.size
+    && initial.mtimeMs === current.mtimeMs
+    && initial.ctimeMs === current.ctimeMs;
+}
+
+async function assertOutputIsDistinct(inputStat: Stats, outputFile: string, message: string): Promise<void> {
+  try {
+    const outputStat = await stat(outputFile);
+    if (inputStat.dev === outputStat.dev && inputStat.ino === outputStat.ino) {
+      throw new Error(message);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+function shouldUseWindowsReplacement(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return process.platform === "win32" && (code === "EEXIST" || code === "EPERM");
+}
+
+async function isRegularFile(file: string): Promise<boolean> {
+  try {
+    return (await stat(file)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function replaceExistingWindowsFile(tempFile: string, outputFile: string): Promise<void> {
+  const backupFile = join(
+    dirname(outputFile),
+    `.${basename(outputFile)}.trimctx-${randomBytes(8).toString("hex")}.bak`
+  );
+  await rename(outputFile, backupFile);
+  try {
+    await rename(tempFile, outputFile);
+  } catch (error) {
+    try {
+      await rename(backupFile, outputFile);
+    } catch (restoreError) {
+      throw new AggregateError([error, restoreError], `Failed to replace and restore ${outputFile}`);
+    }
+    throw error;
+  }
+  await rm(backupFile, { force: true });
 }
 
 export interface DistinctFileOutput {

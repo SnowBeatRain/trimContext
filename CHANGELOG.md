@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added human-readable Markdown health reports through `trimctx report <file> -o report.md`; JSON output remains available through `.json` and `analyze --json` with the `trimctx.report.v2` schema.
+- Added structured signal evidence, an independent health assessment, findings, review queues, and candidate groups for auditable context review.
+- Added health status, health confidence, and report schema version to new-chat manifests.
+
+### Changed
+
+- Consolidated the public workflow around `init`, `analyze`, `report`, `new-chat`, and `compress`. The former `current`, `handoff`, and `install-hooks` entry points are migration history; use bound `trimctx`/`analyze`, `new-chat`, and `init --with-hooks` respectively.
+- Short summaries now use assessment evidence, at most two findings, continuation gaps, and the first recommendation without exposing internal score breakdowns.
+- Tool-use and tool-result records now stay structurally protected from physical deletion, and removal decisions require decisive high-confidence evidence.
+- Report writes now use same-directory atomic replacement while preserving the original transcript and existing targets on failure.
+
 ## [0.2.10] - 2026-07-16
 
 ### Added

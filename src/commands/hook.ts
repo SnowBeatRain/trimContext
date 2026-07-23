@@ -1,14 +1,10 @@
 import { Command } from "commander";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname } from "node:path";
 import { runHook, writeSessionEnvBinding } from "../core/hook.js";
 
-type InitTarget = "user" | "project";
-
-export function registerHookCommands(program: Command): void {
-  program
-    .command("hook")
+export function createHookCommand(): Command {
+  return new Command("hook")
     .option("--dry-run", "Print analysis result without modifying CLAUDE.md.")
     .option("--session-start", "Run as a Claude Code SessionStart hook and persist current transcript binding.")
     .description("Run as a Claude Code Stop hook: analyze session and update CLAUDE.md context state.")
@@ -21,30 +17,6 @@ export function registerHookCommands(program: Command): void {
       const result = await runHook({ dryRun: options.dryRun });
       process.stdout.write(`${result.message}\n`);
     });
-
-  program
-    .command("install-hooks")
-    .option("--target <target>", "Install target: user or project.", "user")
-    .option("--dir <directory>", "Override the base directory.")
-    .option("--force", "Overwrite existing trimctx hook configuration.")
-    .option("--dry-run", "Print planned configuration without writing.")
-    .description("Install experimental Claude Code hooks into settings.json.")
-    .action(async (options: { target?: string; dir?: string; force?: boolean; dryRun?: boolean }) => {
-      const target = parseInitTarget(options.target);
-      const baseDir = options.dir ? resolve(options.dir) : (target === "user" ? homedir() : process.cwd());
-      const settingsPath = join(baseDir, ".claude", "settings.json");
-      const lines = await installHooks(settingsPath, { force: options.force, dryRun: options.dryRun });
-      for (const line of lines) {
-        process.stdout.write(`${line}\n`);
-      }
-    });
-}
-
-function parseInitTarget(value: string | undefined): InitTarget {
-  if (value === "user" || value === "project") {
-    return value;
-  }
-  throw new Error("target must be one of: user, project");
 }
 
 export async function installHooks(

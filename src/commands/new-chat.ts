@@ -7,112 +7,34 @@ import { analyzeInput } from "../core/pipeline.js";
 import {
   assertDifferentFiles,
   pathExists,
-  writeFileDistinctFromInput,
   writeFilesDistinctFromInput
 } from "../platform/files.js";
 import { resolveCurrentSessionFile } from "../sessions/discovery.js";
-import { parseAnalysisOptions, resolveInputFile, type CliAnalysisOptions } from "./shared.js";
+import { resolveInputFile } from "./shared.js";
 
 export interface RegisterNewChatOptions {
   packageVersion: string;
 }
 
-export function registerNewChatCommands(program: Command, options: RegisterNewChatOptions): void {
-  configureNewChatCommand(
-    program.command("new-chat"),
-    "Create a new-chat continuation package for a long conversation.",
-    options
-  );
-  configureNewChatCommand(
-    program.command("handoff"),
-    "Compatibility alias for new-chat: write markdown handoff artifacts for continuing safely.",
-    options
-  );
-}
-
-function configureNewChatCommand(
-  command: Command,
-  description: string,
-  registerOptions: RegisterNewChatOptions
-): void {
-  command
+export function registerNewChatCommand(program: Command, options: RegisterNewChatOptions): void {
+  program
+    .command("new-chat")
     .argument("[file]")
-    .option("-o, --output <handoff.md>", "Write a legacy single handoff markdown file.")
-    .option("--next-context <next-context.md>", "Also write a compact next-context markdown file with --output.")
-    .option("--out, --out-dir <directory>", "Write a uid-based new-chat package under this directory.")
-    .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-    .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-    .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
-    .description(description)
-    .action(async (file: string | undefined, options: CliAnalysisOptions & { output?: string; nextContext?: string; outDir?: string }) => {
+    .option("--out <directory>", "Write a uid-based package under this directory.")
+    .description("Create a continuation package for a long conversation.")
+    .action(async (file: string | undefined, commandOptions: { out?: string }) => {
       const inputFile = file ? resolveInputFile(file) : await resolveCurrentSessionFile("auto");
-      if (options.outDir && (options.output || options.nextContext)) {
-        throw new Error("--out cannot be combined with -o/--output or --next-context");
-      }
-      if (options.output) {
-        await writeLegacyHandoff(inputFile, { ...options, output: options.output });
-        return;
-      }
-      if (options.nextContext) {
-        throw new Error("--next-context requires -o/--output; omit both to create a new-chat package");
-      }
-      await writeHandoffPackage(inputFile, options, registerOptions.packageVersion);
+      await writeHandoffPackage(inputFile, commandOptions.out, options.packageVersion);
     });
-}
-
-async function writeLegacyHandoff(
-  file: string,
-  options: CliAnalysisOptions & { output: string; nextContext?: string }
-): Promise<void> {
-  await assertDifferentFiles(file, options.output, "Output file must be different from input file");
-  if (options.nextContext) {
-    await assertDifferentFiles(file, options.nextContext, "Next context file must be different from input file");
-    await assertDifferentFiles(options.output, options.nextContext, "Next context file must be different from handoff output file");
-  }
-
-  const inputHandle = await open(file, "r");
-  try {
-    const report = analyzeInput(
-      await inputHandle.readFile("utf8"),
-      file,
-      parseAnalysisOptions(options)
-    );
-    if (!options.nextContext) {
-      await writeFileDistinctFromInput(
-        inputHandle,
-        options.output,
-        formatHandoff(report),
-        "Output file must be different from input file"
-      );
-    } else {
-      await writeFilesDistinctFromInput(inputHandle, [
-        {
-          file: options.output,
-          data: formatHandoff(report),
-          inputConflictMessage: "Output file must be different from input file"
-        },
-        {
-          file: options.nextContext,
-          data: formatNextContext(report),
-          inputConflictMessage: "Next context file must be different from input file",
-          outputConflictMessage: "Next context file must be different from handoff output file"
-        }
-      ]);
-    }
-  } finally {
-    await inputHandle.close();
-  }
-  process.stdout.write(`handoff: ${options.output}\n`);
-  if (options.nextContext) process.stdout.write(`next-context: ${options.nextContext}\n`);
 }
 
 async function writeHandoffPackage(
   file: string,
-  options: CliAnalysisOptions & { outDir?: string },
+  outDir: string | undefined,
   packageVersion: string
 ): Promise<void> {
   const uid = generateHandoffUid();
-  const rootDir = resolve(options.outDir ?? join(".trimctx", "handoffs"));
+  const rootDir = resolve(outDir ?? join(".trimctx", "handoffs"));
   const packageDir = join(rootDir, uid);
   const handoffPath = join(packageDir, "handoff.md");
   const nextContextPath = join(packageDir, "next-context.md");
@@ -130,10 +52,13 @@ async function writeHandoffPackage(
   const inputHandle = await open(file, "r");
   try {
     const input = await inputHandle.readFile();
-    const report = analyzeInput(input.toString("utf8"), file, parseAnalysisOptions(options));
+    const report = analyzeInput(input.toString("utf8"), file, {});
     const inputHash = createHash("sha256").update(input).digest("hex");
     const manifest = {
       schema_version: "trimctx.handoff_manifest.v1",
+      health_status: report.assessment.status,
+      health_confidence: report.assessment.confidence,
+      report_schema_version: report.schema_version,
       uid,
       created_at: new Date().toISOString(),
       trimctx_version: packageVersion,

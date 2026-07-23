@@ -1,5 +1,6 @@
-import type { AnalysisReport, AnalyzedMessage, TokenizationSummary } from "../types/report.js";
+import type { AnalysisMeta, AnalysisReport, AnalyzedMessage, Assessment, TokenizationSummary } from "../types/report.js";
 import type { TokenBreakdown } from "../types/message.js";
+import type { ResolvedAnalysisOptions } from "./options.js";
 
 export function createAnalysisSummary(
   analyzedMessages: AnalyzedMessage[],
@@ -38,6 +39,26 @@ export function createTokenizationSummary(messages: AnalyzedMessage[]): Tokeniza
   return {
     tokenizer: estimator,
     confidence: firstMetadata?.confidence ?? "medium"
+  };
+}
+
+export function createAnalysisMeta(
+  tokenization: TokenizationSummary,
+  assessment: Assessment,
+  options: ResolvedAnalysisOptions
+): AnalysisMeta {
+  return {
+    analyzer_version: "evidence-v2",
+    thresholds: {
+      recent_window: options.recentWindow,
+      remove: options.removeThreshold,
+      compress: options.compressThreshold
+    },
+    tokenizer: tokenization.tokenizer,
+    confidence: tokenization.confidence,
+    detectors: ["context", "duplicates", "supersession", "tools", "metadata"],
+    coverage: assessment.coverage,
+    limitations: assessment.limitations
   };
 }
 

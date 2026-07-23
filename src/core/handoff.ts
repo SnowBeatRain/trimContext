@@ -1,13 +1,10 @@
 import { formatNextContextMarkdown, formatResumeMarkdown } from "./resume/markdown.js";
-import type { AnalysisReport, AnalyzedMessage } from "../types/report.js";
+import type { AnalysisReport, ReviewQueueItem } from "../types/report.js";
 
 export function formatHandoff(report: AnalysisReport): string {
   const summary = report.summary;
-  const removeCandidates = topCandidates(report.remove_candidates, 5);
-  const protectedHighRot = topCandidates(
-    report.messages.filter((message) => message.protected && message.rot_score >= 0.6),
-    5
-  );
+  const candidates = report.review_queue.items.filter(item => !item.protected).slice(0, 5);
+  const protectedHighRot = report.review_queue.items.filter(item => item.protected).slice(0, 5);
 
   const lines: string[] = [];
   lines.push("# trimctx Handoff");
@@ -22,12 +19,11 @@ export function formatHandoff(report: AnalysisReport): string {
   lines.push(formatResumeMarkdown(report.resume));
   lines.push("");
   lines.push("## Safety Summary");
+  lines.push(`- Health: ${report.assessment.status} (${report.assessment.confidence})`);
   lines.push(`- Remove candidates: ${summary.remove_candidates}`);
   lines.push(`- Compress candidates: ${summary.compress_candidates}`);
   lines.push(`- Protected messages: ${summary.protected_messages}`);
   lines.push(`- Estimated removable tokens: ${summary.estimated_saving_tokens}`);
-  lines.push(`- Max rot score: ${summary.score_diagnostics.max_rot_score}`);
-  lines.push(`- Near remove threshold: ${summary.score_diagnostics.near_remove_threshold_count}`);
   lines.push("");
   lines.push("## Continue From Here");
   lines.push("- Treat `remove_candidate` as the only class eligible for destructive workflows, and still review it before use.");
@@ -36,11 +32,11 @@ export function formatHandoff(report: AnalysisReport): string {
   lines.push("- If remove candidates are zero, continue from the health report instead of forcing deletion.");
   lines.push("");
   lines.push("## Candidate Review Queue");
-  if (removeCandidates.length === 0) {
-    lines.push("- No remove candidates crossed the current safety threshold.");
+  if (candidates.length === 0) {
+    lines.push("- No unprotected candidates are present in the review queue.");
   } else {
-    for (const message of removeCandidates) {
-      lines.push(candidateLine(message));
+    for (const item of candidates) {
+      lines.push(candidateLine(item));
     }
   }
   lines.push("");
@@ -48,8 +44,8 @@ export function formatHandoff(report: AnalysisReport): string {
   if (protectedHighRot.length === 0) {
     lines.push("- No protected high-rot messages detected.");
   } else {
-    for (const message of protectedHighRot) {
-      lines.push(candidateLine(message));
+    for (const item of protectedHighRot) {
+      lines.push(candidateLine(item));
     }
   }
   lines.push("");
@@ -65,6 +61,7 @@ export function formatHandoff(report: AnalysisReport): string {
   lines.push("");
   lines.push("## Commands");
   lines.push(`- \`trimctx analyze ${quotePath(report.input.file)}\``);
+  lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.md\``);
   lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.json\``);
   lines.push(`- \`trimctx compress ${quotePath(report.input.file)} -o trimmed.jsonl\``);
   return `${lines.join("\n")}\n`;
@@ -80,6 +77,7 @@ export function formatNextContext(report: AnalysisReport): string {
   lines.push("");
   lines.push("## Next Commands");
   lines.push(`- \`trimctx analyze ${quotePath(report.input.file)}\``);
+  lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.md\``);
   lines.push(`- \`trimctx report ${quotePath(report.input.file)} -o report.json\``);
   lines.push(`- \`trimctx new-chat ${quotePath(report.input.file)}\``);
   lines.push("");
@@ -89,13 +87,9 @@ export function formatNextContext(report: AnalysisReport): string {
   return `${lines.join("\n")}\n`;
 }
 
-function topCandidates(messages: AnalyzedMessage[], limit: number): AnalyzedMessage[] {
-  return [...messages].sort((left, right) => right.rot_score - left.rot_score).slice(0, limit);
-}
-
-function candidateLine(message: AnalyzedMessage): string {
-  const reasons = message.reasons.length > 0 ? message.reasons.join(", ") : "no reasons";
-  return `- line ${message.sourceLine}, ${message.role}, score ${message.rot_score.toFixed(4)}: ${reasons}`;
+function candidateLine(item: ReviewQueueItem): string {
+  const reasons = item.reasons.length > 0 ? item.reasons.join(", ") : "no reasons";
+  return `- ${item.message_id}, line ${item.source_line}, ${item.role}, ${item.decision}, risk ${item.risk}, confidence ${item.confidence}: ${reasons}`;
 }
 
 function quotePath(file: string): string {

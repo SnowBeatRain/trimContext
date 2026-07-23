@@ -65,11 +65,12 @@ describe("safety rules", () => {
     expect(last.reasons).toContain("recent_message");
   });
 
-  test("does not mark tool calls or results as later-referenced just because their own tool id appears", () => {
+  test("hard-protects tool calls and results without treating their own ids as later references", () => {
     const messages: NormalizedMessage[] = [
       { ...message("m1", "assistant", "[tool_use Read tool-1] {\"file_path\":\"src/app.ts\"}"), tool: { isToolUse: true, toolUseId: "tool-1", toolName: "Read" } },
       { ...message("m2", "tool", "[tool_result tool-1] old read output"), tool: { isToolResult: true, toolResultFor: "tool-1" } },
-      message("m3", "assistant", "The read finished."),
+      message("m3", "tool", "tool output without normalized metadata"),
+      message("m4", "assistant", "The read finished."),
       ...padding(35)
     ];
 
@@ -81,6 +82,8 @@ describe("safety rules", () => {
     expect(protectedMessages[1].reasons).not.toContain("tool_result_referenced_later");
     expect(protectedMessages[1].reasons).toContain("contains_tool_interaction");
     expect(protectedMessages[1].protected).toBe(true);
+    expect(protectedMessages[2].reasons).toContain("contains_tool_interaction");
+    expect(protectedMessages[2].protected).toBe(true);
   });
 
   test("marks tool_result_referenced_later as importance signal when later text references its id", () => {
@@ -101,6 +104,7 @@ describe("safety rules", () => {
     const messages: NormalizedMessage[] = [
       {
         ...message("m1", "system", "compacted context"),
+        source: "claude-code-jsonl",
         raw: { type: "system", subtype: "away_summary", message: { role: "system", content: "compacted context" } }
       },
       ...padding(35)
@@ -110,5 +114,62 @@ describe("safety rules", () => {
 
     expect(protectedMessages[0].protected).toBe(true);
     expect(protectedMessages[0].reasons).toContain("system_or_developer_message");
+  });
+
+  test("only recognizes references after a tool result and before a real compact boundary", () => {
+    const messages: NormalizedMessage[] = [
+      message("m1", "assistant", "tool-1 was mentioned before its result."),
+      { ...message("m2", "assistant", "[tool_use Read tool-1]"), tool: { isToolUse: true, toolUseId: "tool-1", toolName: "Read" } },
+      { ...message("m3", "tool", "result one"), tool: { isToolResult: true, toolResultFor: "tool-1" } },
+      { ...message("m4", "unknown", "compacted"), source: "codex-jsonl", raw: { type: "compacted" } },
+      message("m5", "assistant", "tool-1 was only mentioned after compaction."),
+      { ...message("m6", "assistant", "[tool_use Read tool-2]"), tool: { isToolUse: true, toolUseId: "tool-2", toolName: "Read" } },
+      { ...message("m7", "tool", "result two"), tool: { isToolResult: true, toolResultFor: "tool-2" } },
+      message("m8", "assistant", "tool-2 supports the decision.")
+    ];
+    const protectedMessages = applySafetyRules(messages, { recentWindow: 0 });
+
+    expect(protectedMessages[2]?.reasons).not.toContain("tool_result_referenced_later");
+    expect(protectedMessages[6]?.reasons).toContain("tool_result_referenced_later");
+  });
+
+  test("uses source-scoped compact markers as hard protection", () => {
+    const messages: NormalizedMessage[] = [
+      {
+        ...message("m1", "assistant", "Claude away summary"),
+        source: "claude-code-jsonl",
+        raw: { type: "system", subtype: "away_summary" }
+      },
+      {
+        ...message("m2", "assistant", "Claude compact boundary"),
+        source: "claude-code-jsonl",
+        raw: { type: "system", subtype: "compact_boundary" }
+      },
+      {
+        ...message("m3", "unknown", "Codex compacted"),
+        source: "codex-jsonl",
+        raw: { type: "compacted" }
+      }
+    ];
+
+    const protectedMessages = applySafetyRules(messages, { recentWindow: 0 });
+
+    expect(protectedMessages.every((entry) => entry.protected)).toBe(true);
+    expect(protectedMessages.every((entry) => entry.reasons?.includes("system_or_developer_message"))).toBe(true);
+  });
+
+  test("does not protect OpenAI records that only resemble compact markers", () => {
+    const messages: NormalizedMessage[] = [
+      {
+        ...message("m1", "assistant", "ordinary text"),
+        source: "openai-jsonl",
+        raw: { type: "system", subtype: "away_summary" }
+      }
+    ];
+
+    const [result] = applySafetyRules(messages, { recentWindow: 0 });
+
+    expect(result?.protected).toBe(false);
+    expect(result?.reasons).not.toContain("system_or_developer_message");
   });
 });

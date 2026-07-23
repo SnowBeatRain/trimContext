@@ -53,7 +53,7 @@ npm link
 
 ## Common Commands
 
-`trimctx current` only analyzes a trusted current-window binding such as `TRIMCTX_TRANSCRIPT_PATH`; it never guesses from file modification time. Codex current-window binding is not documented as verified support, so use an explicit file, `--select`, or `--latest` unless an integration provides that binding.
+`trimctx analyze --json` without a file only analyzes a trusted current-window binding such as `TRIMCTX_TRANSCRIPT_PATH`; it never guesses from file modification time. Codex current-window binding is not documented as verified support, so use an explicit file, `--select`, or `--latest` unless an integration provides that binding.
 
 - Analyze the latest Claude Code or Codex session:
   ```bash
@@ -75,7 +75,11 @@ npm link
   ```bash
   trimctx analyze <file.jsonl> --color
   ```
-- Write a JSON report:
+- Write a human-readable Markdown report:
+  ```bash
+  trimctx report <file.jsonl> -o report.md
+  ```
+- Write a machine-readable JSON report:
   ```bash
   trimctx report <file.jsonl> -o report.json
   ```
@@ -95,9 +99,9 @@ npm link
   ```
   Only use this form when `TRIMCTX_TRANSCRIPT_PATH` is already set by the current AI client session. Do not synthesize that variable from latest-file discovery.
 
-## Handoff UID Handling
+## New-chat UID Handling
 
-If the user provides a handoff uid in the form `ctx_...`, treat it as a local new-chat package reference.
+If the user provides a new-chat uid in the form `ctx_...`, treat it as a local new-chat package reference.
 
 Read files in this order:
 
@@ -109,8 +113,9 @@ Use `manifest.json` as the source of truth for package metadata and paths. Do no
 
 ## Safety Rules
 
-- Default to analysis only.
+- Default to analysis only. A `healthy` status is not deletion permission, and `unknown` means evidence is insufficient.
 - Never overwrite the input JSONL file.
+- Protected content is never automatically deleted.
 - Only run compression when the user explicitly asks for it.
 - Treat `compress` output as a new artifact; do not write it back into an active AI client session automatically.
 - If no trusted current transcript binding or explicit file path is available, ask the user for an explicit JSONL path instead of guessing.

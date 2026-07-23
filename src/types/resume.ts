@@ -1,16 +1,20 @@
 import type { MessageRole } from "./message.js";
+import type { EvidenceConfidence } from "./signals.js";
 
 export interface ResumeEvidence {
   text: string;
   sourceLine: number;
   messageId: string;
   role: MessageRole;
+  confidence: EvidenceConfidence;
 }
 
 export interface ResumeFileEvidence {
   path: string;
   sourceLine: number;
   messageId: string;
+  role: MessageRole;
+  confidence: EvidenceConfidence;
 }
 
 export interface ResumeReadiness {
@@ -21,7 +25,6 @@ export interface ResumeReadiness {
     current_goal: boolean;
     decisions: boolean;
     active_files: boolean;
-    failures: boolean;
     test_signals: boolean;
     next_steps: boolean;
   };

@@ -32,6 +32,11 @@ export function parseCodexJsonl(input: string, file = "<input>"): NormalizedMess
       continue;
     }
 
+    if (raw.type === "compacted") {
+      messages.push(normalizeCompacted(raw, line, sourceLine, file));
+      continue;
+    }
+
     // Only response_item carries conversation content after session metadata.
     if (raw.type !== "response_item") {
       continue;
@@ -45,6 +50,40 @@ export function parseCodexJsonl(input: string, file = "<input>"): NormalizedMess
   }
 
   return messages;
+}
+
+function normalizeCompacted(
+  raw: Record<string, unknown>,
+  rawLine: string,
+  sourceLine: number,
+  file: string,
+): NormalizedMessage {
+  const payload = isRecord(raw.payload) ? raw.payload : undefined;
+  const summary = firstNonEmptyText(
+    payload?.summary,
+    payload?.message,
+    raw.summary,
+    raw.message
+  ) ?? "context compacted";
+
+  return {
+    id: buildId(raw, sourceLine, file),
+    role: "unknown",
+    content: `[compacted] ${summary}`,
+    source: "codex-jsonl",
+    sourceLine,
+    rawLine,
+    raw,
+    timestamp: typeof raw.timestamp === "string" ? raw.timestamp : undefined,
+  };
+}
+
+function firstNonEmptyText(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = flattenContent(value).text.trim();
+    if (text) return text;
+  }
+  return undefined;
 }
 
 function normalizeSessionMeta(

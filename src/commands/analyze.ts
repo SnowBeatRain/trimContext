@@ -8,9 +8,8 @@ import {
   resolveBoundSessionFile
 } from "../sessions/discovery.js";
 import { isInteractiveTerminal, selectSession } from "../sessions/picker.js";
-import { parseAnalysisOptions, type CliAnalysisOptions } from "./shared.js";
 
-interface AnalyzeSelectionOptions extends CliAnalysisOptions {
+interface AnalyzeSelectionOptions {
   json?: boolean;
   color?: boolean;
   select?: boolean;
@@ -27,13 +26,10 @@ export function registerAnalyzeCommand(program: Command): void {
     .option("--select", "Choose a local Claude Code or Codex session interactively.")
     .option("--latest", "Analyze the most recently modified local session.")
     .option("--source <source>", "Filter selection: auto, claude, or codex.")
-    .option("--recent-window <count>", "Number of most recent messages to hard-protect.")
-    .option("--remove-threshold <score>", "Rot score threshold for remove candidates.")
-    .option("--compress-threshold <score>", "Rot score threshold for compression candidates.")
     .description("Analyze a Claude Code, OpenAI, or Codex/Hermes JSONL conversation.")
     .action(async (file: string | undefined, options: AnalyzeSelectionOptions) => {
       const inputFile = await resolveAnalyzeInput(file, options);
-      const report = await analyzeFile(inputFile, parseAnalysisOptions(options));
+      const report = await analyzeFile(inputFile, {});
       if (options.json) {
         process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
         return;

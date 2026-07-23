@@ -11,9 +11,19 @@ interface TiktokenEncoder {
 type EncoderFactory = () => TiktokenEncoder | undefined;
 
 let testEncoderFactory: EncoderFactory | undefined;
+let cachedTokenizerFactory: EncoderFactory | undefined;
+let cachedTokenizer: Tokenizer | null | undefined;
 
 export function createTiktokenTokenizer(): Tokenizer | undefined {
-  return createTiktokenTokenizerFromFactory(testEncoderFactory ?? loadJsTiktokenEncoder);
+  const factory = testEncoderFactory ?? loadJsTiktokenEncoder;
+  if (cachedTokenizerFactory === factory && cachedTokenizer !== undefined) {
+    return cachedTokenizer ?? undefined;
+  }
+
+  const tokenizer = createTiktokenTokenizerFromFactory(factory);
+  cachedTokenizerFactory = factory;
+  cachedTokenizer = tokenizer ?? null;
+  return tokenizer;
 }
 
 export function createTiktokenTokenizerForTesting(factory: EncoderFactory): Tokenizer | undefined {
@@ -22,6 +32,8 @@ export function createTiktokenTokenizerForTesting(factory: EncoderFactory): Toke
 
 export function setTiktokenEncoderFactoryForTesting(factory: EncoderFactory | undefined): void {
   testEncoderFactory = factory;
+  cachedTokenizerFactory = undefined;
+  cachedTokenizer = undefined;
 }
 
 function createTiktokenTokenizerFromFactory(factory: EncoderFactory): Tokenizer | undefined {

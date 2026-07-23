@@ -15,8 +15,11 @@ Analyze the current Claude Code JSONL conversation from inside Claude Code.
 - Does not call an external LLM or upload transcript content.
 - Does not modify original session files.
 - Compression requires explicit user action and writes a separate output file.
-- Current-window commands require Claude hooks. Enable them during interactive `trimctx init`, or install/repair them later with `trimctx init --with-hooks` or `trimctx install-hooks`.
-- `trimctx current` requires the current-window hook binding and never falls back to latest-file discovery.
+- Current-window commands require Claude hooks. Enable them explicitly with `trimctx init --with-hooks`.
+- `trimctx` requires the current-window hook binding and never falls back to latest-file discovery.
+- SessionStart writes the current binding through `CLAUDE_ENV_FILE`.
+- Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
+- Hooks keep the original JSONL transcript read-only.
 
 ## Requirements
 

@@ -22,42 +22,16 @@ describe("CLI commands", () => {
     expect(result.stdout.trim()).toBe(packageJson.version);
   });
 
-  test("--help no longer lists the removed resume command", async () => {
+  test("--help lists only public commands", async () => {
     const result = await runCli(["--help"]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("current [options]");
-    expect(result.stdout).not.toContain("resume [options]");
-  });
-
-  test("current help exposes only current-window output options", async () => {
-    const result = await runCli(["current", "--help"]);
-
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain("--json");
-    expect(result.stdout).toContain("--color");
-    expect(result.stdout).not.toContain("--source");
-    expect(result.stdout).not.toContain("--compress");
-    expect(result.stdout).not.toContain("--remove-threshold");
-  });
-
-  test("keeps the public command order stable in help output", async () => {
-    const result = await runCli(["--help"]);
-    const commands = [
-      "init [options]",
-      "current [options]",
-      "analyze [options] [file]",
-      "report [options] <file>",
-      "compress [options] <file>",
-      "new-chat [options] [file]",
-      "handoff [options] [file]",
-      "hook [options]",
-      "install-hooks [options]"
-    ];
-    const positions = commands.map(command => result.stdout.indexOf(command));
-
-    expect(positions.every(position => position >= 0)).toBe(true);
-    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    for (const command of ["init", "analyze", "report", "new-chat", "compress"]) {
+      expect(result.stdout).toContain(`${command} [options]`);
+    }
+    for (const command of ["current", "handoff", "install-hooks", "hook", "resume"]) {
+      expect(result.stdout).not.toContain(`${command} [options]`);
+    }
   });
 
   test("init installs Claude plugin and Codex skill into a user base directory", async () => {
@@ -71,7 +45,7 @@ describe("CLI commands", () => {
     expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx", "compress.md"))).toBe(true);
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
     expect(await fileExists(join(home, ".claude", "settings.json"))).toBe(false);
-    expect(result.stdout).toContain("install-hooks");
+    expect(result.stdout).toContain("trimctx init --with-hooks");
     expect(result.stdout).toContain("现在你可以这样用：");
     expect(result.stdout).toContain("/trimctx");
     expect(result.stdout).toContain("trimctx new-chat");
@@ -98,46 +72,24 @@ describe("CLI commands", () => {
     expect(result.stdout).toContain("experimental Claude hooks");
   });
 
-  test("interactive init prompts for target and installs Claude hooks by default", async () => {
+  test("interactive init prompts only for target and leaves hooks uninstalled", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-prompt-home-"));
 
-    const result = await runCliWithInput(["init", "--dir", home], "1\n\n");
+    const result = await runCliWithInput(["init", "--dir", home], "1\n");
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("Where should trimctx install AI-client assets?");
-    expect(result.stdout).toContain("Enable Claude current-window hooks?");
+    expect(result.stdout).not.toContain("Enable Claude current-window hooks?");
     expect(result.stdout).toContain("installed all assets for user");
     expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
     expect(await fileExists(join(home, ".codex", "skills", "trimctx", "SKILL.md"))).toBe(true);
-    const settings = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8")) as {
-      hooks?: {
-        SessionStart?: Array<{ hooks?: Array<{ command?: string }> }>;
-        Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
-      };
-    };
-    expect(settings.hooks?.SessionStart?.some(group =>
-      group.hooks?.some(hook => hook.command === "trimctx hook --session-start")
-    )).toBe(true);
-    expect(settings.hooks?.Stop?.some(group =>
-      group.hooks?.some(hook => hook.command === "trimctx hook")
-    )).toBe(true);
-  });
-
-  test("interactive init can skip Claude hooks", async () => {
-    const home = await mkdtemp(join(tmpdir(), "trimctx-init-no-hooks-"));
-
-    const result = await runCliWithInput(["init", "--client", "claude", "--dir", home], "1\nn\n");
-
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain("installed claude assets for user");
-    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
     expect(await fileExists(join(home, ".claude", "settings.json"))).toBe(false);
   });
 
   test("init prompts for project install target when target is omitted", async () => {
     const project = await mkdtemp(join(tmpdir(), "trimctx-init-prompt-project-"));
 
-    const result = await runCliWithInput(["init", "--client", "claude", "--dir", project], "2\nn\n");
+    const result = await runCliWithInput(["init", "--client", "claude", "--dir", project], "2\n");
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("installed claude assets for project");
@@ -191,15 +143,13 @@ describe("CLI commands", () => {
     expect(result.stdout).not.toContain("现在你可以这样用：");
   });
 
-  test("init --no-hooks skips Claude hook installation explicitly", async () => {
+  test("init rejects the removed --no-hooks option", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-init-explicit-no-hooks-"));
 
     const result = await runCli(["init", "--client", "claude", "--target", "user", "--dir", home, "--no-hooks"]);
 
-    expect(result.code).toBe(0);
-    expect(await fileExists(join(home, ".claude", "plugins", "trimctx", "commands", "trimctx.md"))).toBe(true);
-    expect(await fileExists(join(home, ".claude", "settings.json"))).toBe(false);
-    expect(result.stdout).toContain("hooks not installed");
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("unknown option '--no-hooks'");
   });
 
   test("init rejects unknown clients and targets", async () => {
@@ -216,15 +166,41 @@ describe("CLI commands", () => {
     const { file, dir } = await writeSessionFixture();
     const output = join(dir, "report.json");
 
+    const inputHash = await sha256(file);
     await execFileAsync("node", ["--import", tsxLoaderPath, "src/cli.ts", "report", file, "-o", output], {
       cwd: process.cwd()
     });
 
     const report = JSON.parse(await readFile(output, "utf8")) as AnalysisReport;
-    expect(report.schema_version).toBe("trimctx.report.v1");
+    expect(report.schema_version).toBe("trimctx.report.v2");
     expect(report.input.file).toBe(file);
     expect(report.messages.length).toBeGreaterThan(0);
     expect(report.warnings.length).toBeGreaterThan(0);
+    expect(await sha256(file)).toBe(inputHash);
+  });
+
+  test("report writes a Markdown health report without modifying the input", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const output = join(dir, "report.md");
+    const inputHash = await sha256(file);
+
+    const result = await runCli(["report", file, "-o", output]);
+
+    expect(result.code).toBe(0);
+    expect(await readFile(output, "utf8")).toContain("# trimctx 会话健康报告");
+    expect(await sha256(file)).toBe(inputHash);
+  });
+
+  test("report rejects unsupported output extensions before replacing an existing target", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const output = join(dir, "report.txt");
+    await writeFile(output, "existing report\n", "utf8");
+
+    const result = await runCli(["report", file, "-o", output]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("report output must end in .json or .md");
+    expect(await readFile(output, "utf8")).toBe("existing report\n");
   });
 
   test("compress writes a new copy without modifying the original file", async () => {
@@ -262,40 +238,11 @@ describe("CLI commands", () => {
     expect(result.stderr).toContain("Output file must be different from input file");
   });
 
-  test("handoff rejects using the input file as output", async () => {
-    const { file } = await writeSessionFixture();
-
-    const result = await runCli(["handoff", file, "-o", file]);
-
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("Output file must be different from input file");
-  });
-
-  test("handoff rejects next-context using the input file as output", async () => {
-    const { file, dir } = await writeSessionFixture();
-    const output = join(dir, "handoff.md");
-
-    const result = await runCli(["handoff", file, "-o", output, "--next-context", file]);
-
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("Next context file must be different from input file");
-  });
-
-  test("handoff rejects next-context using the handoff output file", async () => {
-    const { file, dir } = await writeSessionFixture();
-    const output = join(dir, "handoff.md");
-
-    const result = await runCli(["handoff", file, "-o", output, "--next-context", output]);
-
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("Next context file must be different from handoff output file");
-  });
-
-  test("current analyzes only the transcript bound by the current AI window", async () => {
+  test("analyze uses only the transcript bound by the current AI window", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-current-bound-home-"));
     const { file } = await writeSessionFixture();
 
-    const result = await runCli(["current", "--json"], {
+    const result = await runCli(["analyze", "--json"], {
       HOME: home,
       TRIMCTX_TRANSCRIPT_PATH: file,
       TRIMCTX_SESSION_ID: "session"
@@ -306,11 +253,11 @@ describe("CLI commands", () => {
     expect(report.input.file).toBe(file);
   });
 
-  test("current does not fall back to the latest local session", async () => {
+  test("analyze without a file does not fall back to the latest local session", async () => {
     const home = await mkdtemp(join(tmpdir(), "trimctx-current-strict-home-"));
     await writeSessionFixture(join(home, ".claude", "projects", "project-a"));
 
-    const result = await runCli(["current", "--json"], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
+    const result = await runCli(["analyze", "--json"], { HOME: home, TRIMCTX_TRANSCRIPT_PATH: "" });
 
     expect(result.code).not.toBe(0);
     expect(result.stderr).toContain("当前窗口尚未绑定 transcript");
@@ -396,12 +343,14 @@ describe("CLI commands", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("trimctx 看了一下当前会话");
-    expect(result.stdout).toContain("状态：");
+    expect(result.stdout).toContain("状态:");
+    expect(result.stdout).toContain("置信度:");
     expect(result.stdout).toContain("原因：");
     expect(result.stdout).toContain("下一步：");
-    expect(result.stdout).toContain("trimctx new-chat");
     expect(result.stdout).toContain(file);
     expect(result.stdout).toContain("高级审计：");
+    expect(result.stdout).toContain("-o report.md");
+    expect(result.stdout).toContain("-o report.json");
     expect(result.stdout).toContain("本地分析，没有上传文件");
     expect(result.stdout).not.toContain("phase0:");
     expect(result.stdout).not.toContain("remove_candidate");
@@ -418,7 +367,8 @@ describe("CLI commands", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("trimctx 看了一下当前会话");
     expect(result.stdout).toContain(file);
-    expect(result.stdout).toContain("trimctx new-chat");
+    expect(result.stdout).toContain("下一步：");
+    expect(result.stdout).toContain("-o report.md");
     expect(result.stderr).toContain("不会恢复或切换 AI 客户端窗口");
   });
 
@@ -434,10 +384,10 @@ describe("CLI commands", () => {
     expect(result.stderr).toContain("trimctx analyze --latest");
   });
 
-  test("handoff uses TRIMCTX_TRANSCRIPT_PATH when no file argument is provided", async () => {
+  test("new-chat uses TRIMCTX_TRANSCRIPT_PATH when no file argument is provided", async () => {
     const { file, dir } = await writeSessionFixture();
 
-    const result = await runCli(["handoff", "--out", join(dir, "handoffs")], { TRIMCTX_TRANSCRIPT_PATH: file });
+    const result = await runCli(["new-chat", "--out", join(dir, "handoffs")], { TRIMCTX_TRANSCRIPT_PATH: file });
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("copyable uid: ctx_");
@@ -459,17 +409,6 @@ describe("CLI commands", () => {
     expect(newChat.stdout).toContain(file);
   });
 
-  test("handoff remains a compatibility alias for new-chat", async () => {
-    const { file, dir } = await writeSessionFixture();
-
-    const result = await runCli(["handoff", file, "--out", join(dir, "handoffs-alias")]);
-
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain("copyable uid: ctx_");
-    expect(result.stdout).toContain("next-context:");
-    expect(result.stdout).toContain("readme:");
-  });
-
   test("analyze rejects conflicting session selection modes", async () => {
     const { file } = await writeSessionFixture();
     const fileAndSelect = await runCli(["analyze", file, "--select"]);
@@ -485,41 +424,6 @@ describe("CLI commands", () => {
     expect(nonInteractiveSelect.stderr).toContain("--select requires an interactive terminal");
   });
 
-  test("current rejects former discovery and compression flags", async () => {
-    const source = await runCli(["current", "--source", "claude"]);
-    const compress = await runCli(["current", "--compress", "output.jsonl"]);
-
-    expect(source.code).not.toBe(0);
-    expect(source.stderr).toContain("unknown option '--source'");
-    expect(compress.code).not.toBe(0);
-    expect(compress.stderr).toContain("unknown option '--compress'");
-  });
-
-  test("applies analysis tuning flags to report output", async () => {
-    const { file } = await writeSessionFixture();
-    const defaultResult = await runCli(["analyze", file, "--json"]);
-    const tunedResult = await runCli([
-      "analyze",
-      file,
-      "--json",
-      "--recent-window",
-      "0",
-      "--remove-threshold",
-      "0.95",
-      "--compress-threshold",
-      "0.5"
-    ]);
-
-    expect(defaultResult.code).toBe(0);
-    expect(tunedResult.code).toBe(0);
-    const defaultReport = JSON.parse(defaultResult.stdout) as AnalysisReport;
-    const tunedReport = JSON.parse(tunedResult.stdout) as AnalysisReport;
-
-    expect(defaultReport.summary.protected_messages).toBeGreaterThan(tunedReport.summary.protected_messages);
-    expect(defaultReport.summary.remove_candidates).toBeGreaterThan(tunedReport.summary.remove_candidates);
-    expect(tunedReport.summary.compress_candidates).toBeGreaterThan(defaultReport.summary.compress_candidates);
-  });
-
   test("analyze prints a human-readable summary by default", async () => {
     const { file } = await writeSessionFixture();
 
@@ -527,52 +431,33 @@ describe("CLI commands", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("trimctx analysis");
-    expect(result.stdout).toContain("messages / ");
-    expect(result.stdout).toContain("token estimate:");
-    expect(result.stdout).toContain("tokenizer:");
-    expect(result.stdout).toContain("context pressure:");
-    expect(result.stdout).toContain("resume:");
-    expect(result.stdout).toContain("readiness:");
-    expect(result.stdout).toContain("next:");
+    expect(result.stdout).toContain("状态:");
+    expect(result.stdout).toContain("置信度:");
+    expect(result.stdout).toContain("续接缺失:");
+    expect(result.stdout).toContain("trimctx report");
+    expect(result.stdout).toContain("-o report.md");
+    expect(result.stdout).toContain("-o report.json");
+    expect(result.stdout).not.toContain("breakdown:");
     expect(() => JSON.parse(result.stdout)).toThrow();
   });
 
-  test("analyze prints conservative trust signals for zero remove candidates", async () => {
-    const { file } = await writeSessionFixture();
+  test("analyze keeps zero remove candidates conservative and review-only", async () => {
+    const { file } = await writeLowPressureFixture();
 
-    const result = await runCli(["analyze", file, "--remove-threshold", "1"]);
+    const result = await runCli(["analyze", file]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("trust:");
-    expect(result.stdout).toContain("0 remove candidates means nothing crossed the safe deletion threshold");
+    expect(result.stdout).toContain("状态: UNKNOWN");
+    expect(result.stdout).toContain("置信度: LOW");
+    expect(result.stdout).not.toContain("conversation is clean");
+    expect(result.stdout).not.toContain("health: OK");
     expect(result.stdout).toContain("trimctx report");
   });
 
-  test("handoff writes markdown and next-context files from an analysis report", async () => {
-    const { file, dir } = await writeSessionFixture();
-    const output = join(dir, "handoff.md");
-    const nextContext = join(dir, "next-context.md");
-
-    const result = await runCli(["handoff", file, "-o", output, "--next-context", nextContext]);
-
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain("handoff:");
-    const handoff = await readFile(output, "utf8");
-    const nextContextMarkdown = await readFile(nextContext, "utf8");
-    expect(handoff).toContain("# trimctx Handoff");
-    expect(handoff).toContain("## Continue From Here");
-    expect(handoff).toContain("## Resume Readiness");
-    expect(nextContextMarkdown).toContain("# Continue This Session");
-    expect(nextContextMarkdown).toContain("## Start Here");
-    expect(nextContextMarkdown).toContain("## Operating Rules");
-    expect(nextContextMarkdown).toContain("Do not modify the original JSONL transcript");
-    expect(nextContextMarkdown).toContain("trimctx analyze");
-  });
-
-  test("handoff writes a uid-based package by default", async () => {
+  test("new-chat writes a uid-based package by default", async () => {
     const { file } = await writeSessionFixture();
 
-    const result = await runCli(["handoff", file]);
+    const result = await runCli(["new-chat", file]);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("copyable uid: ctx_");
@@ -598,6 +483,9 @@ describe("CLI commands", () => {
     const readme = await readFile(readmePath, "utf8");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
       schema_version: string;
+      health_status: string;
+      health_confidence: string;
+      report_schema_version: string;
       uid: string;
       files: Record<string, string>;
       files_relative: Record<string, string>;
@@ -612,7 +500,11 @@ describe("CLI commands", () => {
     expect(readme).toContain("next-context.md");
     expect(readme).toContain("原始 transcript 没有被修改");
     expect(report.input.source).toBe("claude-code-jsonl");
+    expect(report.schema_version).toBe("trimctx.report.v2");
     expect(manifest.schema_version).toBe("trimctx.handoff_manifest.v1");
+    expect(manifest.health_status).toBe(report.assessment.status);
+    expect(manifest.health_confidence).toBe(report.assessment.confidence);
+    expect(manifest.report_schema_version).toBe("trimctx.report.v2");
     expect(manifest.uid).toBe(uid);
     expect(manifest.input.file).toBe(file);
     expect(manifest.input.sha256).toMatch(/^[a-f0-9]{64}$/);
@@ -635,11 +527,11 @@ describe("CLI commands", () => {
     expect(manifest.warnings.join("\n")).toContain("may contain original transcript content and secrets");
   });
 
-  test("handoff --out writes a uid-based handoff package under a custom directory", async () => {
+  test("new-chat --out writes a uid-based package under a custom directory", async () => {
     const { file, dir } = await writeSessionFixture();
     const outputDir = join(dir, "handoffs");
 
-    const result = await runCli(["handoff", file, "--out", outputDir]);
+    const result = await runCli(["new-chat", file, "--out", outputDir]);
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("copyable uid: ctx_");
@@ -701,45 +593,6 @@ describe("CLI commands", () => {
     expect(manifest.warnings.join("\n")).toContain("may contain original transcript content and secrets");
   });
 
-  test("handoff rejects mixing --out with explicit output files", async () => {
-    const { file, dir } = await writeSessionFixture();
-    const outputDir = join(dir, "handoffs");
-    const output = join(dir, "handoff.md");
-
-    const withOutput = await runCli(["handoff", file, "-o", output, "--out", outputDir]);
-    const withNextContext = await runCli(["handoff", file, "--out", outputDir, "--next-context", join(dir, "next.md")]);
-
-    expect(withOutput.code).not.toBe(0);
-    expect(withOutput.stderr).toContain("--out cannot be combined with -o/--output or --next-context");
-    expect(withNextContext.code).not.toBe(0);
-    expect(withNextContext.stderr).toContain("--out cannot be combined with -o/--output or --next-context");
-  });
-
-  test("handoff --out-dir alias writes a uid-based handoff package", async () => {
-    const { file, dir } = await writeSessionFixture();
-    const outputDir = join(dir, "handoffs-alias");
-
-    const result = await runCli(["handoff", file, "--out-dir", outputDir]);
-
-    expect(result.code).toBe(0);
-    const uid = result.stdout.match(/uid: (ctx_[a-z0-9_]+)/)?.[1];
-    expect(uid).toBeDefined();
-    expect(await fileExists(join(outputDir, uid!, "handoff.md"))).toBe(true);
-    expect(await fileExists(join(outputDir, uid!, "next-context.md"))).toBe(true);
-    expect(await fileExists(join(outputDir, uid!, "manifest.json"))).toBe(true);
-    expect(await fileExists(join(outputDir, uid!, "report.json"))).toBe(true);
-    expect(await fileExists(join(outputDir, uid!, "README.md"))).toBe(true);
-  });
-
-  test("handoff rejects --next-context without legacy output", async () => {
-    const { file, dir } = await writeSessionFixture();
-
-    const result = await runCli(["handoff", file, "--next-context", join(dir, "next.md")]);
-
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("--next-context requires -o/--output");
-  });
-
   test("analyze --json matches the report command output", async () => {
     const { file, dir } = await writeSessionFixture();
     const output = join(dir, "report.json");
@@ -752,33 +605,6 @@ describe("CLI commands", () => {
     expect(JSON.parse(analyzeResult.stdout)).toEqual(JSON.parse(await readFile(output, "utf8")));
   });
 
-  test("rejects invalid analysis tuning flags", async () => {
-    const { file } = await writeSessionFixture();
-    const invalidInteger = await runCli(["analyze", file, "--json", "--recent-window", "1.5"]);
-    const negativeRecentWindow = await runCli(["analyze", file, "--json", "--recent-window", "-1"]);
-    const invalidRemoveThreshold = await runCli(["analyze", file, "--json", "--remove-threshold", "1.1"]);
-    const invalidCompressThreshold = await runCli(["analyze", file, "--json", "--compress-threshold", "-0.1"]);
-    const invertedThresholds = await runCli([
-      "analyze",
-      file,
-      "--json",
-      "--remove-threshold",
-      "0.5",
-      "--compress-threshold",
-      "0.6"
-    ]);
-
-    expect(invalidInteger.code).not.toBe(0);
-    expect(invalidInteger.stderr).toContain("recent-window must be an integer");
-    expect(negativeRecentWindow.code).not.toBe(0);
-    expect(negativeRecentWindow.stderr).toContain("recent-window must be a non-negative integer");
-    expect(invalidRemoveThreshold.code).not.toBe(0);
-    expect(invalidRemoveThreshold.stderr).toContain("remove-threshold must be between 0 and 1");
-    expect(invalidCompressThreshold.code).not.toBe(0);
-    expect(invalidCompressThreshold.stderr).toContain("compress-threshold must be between 0 and 1");
-    expect(invertedThresholds.code).not.toBe(0);
-    expect(invertedThresholds.stderr).toContain("compress-threshold must be less than or equal to remove-threshold");
-  });
 });
 
 async function writeSessionFixture(dir = ""): Promise<{ dir: string; file: string }> {

@@ -10,6 +10,26 @@ async function reportForFixture(file: string) {
 }
 
 describe("fixture regression reports", () => {
+  test("keeps report v2 evidence references valid on realistic fixtures", async () => {
+    const report = await reportForFixture("tests/fixtures/codex-realistic.jsonl");
+    const messageIds = new Set(report.messages.map((message) => message.id));
+
+    expect(report.schema_version).toBe("trimctx.report.v2");
+    expect(report.review_queue.items.flatMap((item) => item.evidence).every((item) => messageIds.has(item.message_id))).toBe(true);
+    expect(report.candidate_groups.flatMap((group) => group.evidence).every((item) => messageIds.has(item.message_id))).toBe(true);
+  });
+
+  test("surfaces protected high-rot fixture evidence as attention", async () => {
+    const file = "tests/fixtures/claude-protected-high-rot.jsonl";
+    const input = await readFile(file, "utf8");
+    const messages = parseJsonl(input, file);
+    const report = createReport(analyzeMessages(messages, { recentWindow: 0 }), file, { recentWindow: 0 });
+
+    expect(report.assessment.status).toBe("attention");
+    expect(report.summary.score_diagnostics.protected_high_rot_count).toBeGreaterThan(0);
+    expect(report.review_queue.items.some((item) => item.protected && item.default_action === "keep_and_review")).toBe(true);
+  });
+
   test("keeps Claude Code safety signals stable on realistic fixture", async () => {
     const report = await reportForFixture("tests/fixtures/claude-code-realistic.jsonl");
 

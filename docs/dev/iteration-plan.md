@@ -18,7 +18,7 @@ The immediate value is not maximum token savings. The immediate value is helping
 - Which context looks stale, superseded, duplicated, orphaned, or low-value?
 - Which messages are protected and why?
 - Is it safe to generate a compressed copy?
-- Should I continue this session, produce a handoff, or start fresh?
+- Should I continue this session or create a reviewed new-chat package?
 
 ## Team Review Summary
 
@@ -26,7 +26,7 @@ The immediate value is not maximum token savings. The immediate value is helping
 
 - Heavy Claude Code/Codex users would use trimctx for diagnosis and review before trusting it for compression.
 - The product should win on local execution, auditability, no original-file mutation, no default LLM calls, and explainable reasons.
-- The main competitor is not another JSONL compressor; it is built-in compact/resume behavior and manual handoff summaries.
+- The main competitor is not another JSONL compressor; it is built-in compact/resume behavior and manual continuation summaries.
 - Success requires trust before growth: users must believe a zero-deletion result means conservative safety, not failure.
 
 ### Software Architect
@@ -50,7 +50,7 @@ The immediate value is not maximum token savings. The immediate value is helping
 - `analyze` is the front door and should stay short, readable, and actionable.
 - `report` and `analyze --json` should remain the automation and audit paths.
 - Error messages should tell users what was detected, where parsing failed, and what to do next.
-- `current` should remain strict current-window analysis; local discovery should be explicit through `analyze --select/--latest`.
+- Bound `trimctx`/`analyze` should remain strict current-window analysis; local discovery should be explicit through `analyze --select/--latest`.
 
 ## North Star
 
@@ -147,25 +147,25 @@ Acceptance:
 
 The npm package already contains Claude Code command/plugin files, a Codex skill wrapper, `trimctx init`, and experimental hooks. Stabilize those existing surfaces and disclose that the Stop hook may update the managed section in `.claude/CLAUDE.md`; status line, broader automation, MCP, Web UI, and automatic active-session compression remain deferred.
 
-## Next: v0.3 Handoff and Integration Design
+## Next: v0.3 New-chat and Integration Design
 
 Start only after v0.2 stabilization.
 
-### N1.1 Handoff output
+### N1.1 New-chat output
 
 Goal: help users continue work safely after a long or noisy session.
 
 Current implementation:
 
-- `trimctx handoff <file>` writes a UID-based package under `.trimctx/handoffs/<uid>/`
-- legacy single-file output remains available with `-o handoff.md --next-context next-context.md`
+- `trimctx new-chat <file>` writes a UID-based package under `.trimctx/handoffs/<uid>/`
+- `new-chat` is the only public continuation command
 - deterministic Markdown output, no LLM dependency
 - source JSONL remains unchanged
 
-The handoff includes:
+The new-chat package includes:
 
 - source file and detected format
-- safety summary and score diagnostics
+- health assessment and review metadata
 - continuation rules
 - candidate review queue
 - protected high-rot signals
@@ -174,7 +174,7 @@ The handoff includes:
 
 Acceptance:
 
-- Handoff generation does not require an LLM by default.
+- New-chat generation does not require an LLM by default.
 - Output is clearly separate from destructive compression.
 - Targeted CLI tests cover `handoff.md` and `next-context.md` generation.
 
@@ -272,16 +272,16 @@ Block completion if any of these happen:
 
 ## Immediate Task Queue
 
-1. Keep the Windows packed-install smoke platform-correct and green.
-2. Extract shared file safety and analysis option parsing.
-3. Separate the analysis pipeline from session discovery with a compatibility facade.
-4. Split CLI command registration without changing help, flags, output, or package-root behavior.
-5. Align hook side-effect and advanced compression documentation.
+1. Review Report v2 assessments, findings, and review queues on representative Claude Code and Codex sessions.
+2. Record Phase 0 manual-review metrics and private OpenAI export validation before making stronger compression-safety claims.
+3. Keep Windows packed-install, tarball contents, and fresh-install smoke coverage green.
+4. Preserve the five-command public surface, explicit hook write scope, and read-only original-transcript contract.
+5. Defer new discovery commands, background automation, Web UI, MCP, and more aggressive deletion thresholds.
 
 ## Current Recommendation
 
-The current implementation focus is cross-platform stability and behavior-preserving modularization, not scoring-weight changes:
+The current implementation focus is report quality and release evidence, not another product-surface expansion:
 
-1. Restore and preserve release quality gates.
-2. Reduce CLI, pipeline, session, and integration coupling behind existing tests.
-3. Keep existing integrations experimental and explicit about file writes; defer new product surfaces.
+1. Validate that structured evidence and health assessments are accurate, explainable, and actionable on real sessions.
+2. Preserve release quality gates and conservative removal behavior while collecting formal trust metrics.
+3. Keep existing integrations explicit about file writes and defer new product surfaces.

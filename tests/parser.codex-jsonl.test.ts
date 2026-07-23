@@ -9,6 +9,41 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturePath = path.join(__dirname, "./fixtures/codex-realistic.jsonl");
 
 describe("parseCodexJsonl", () => {
+  it("keeps a compacted event as an auditable metadata boundary", () => {
+    const input = JSON.stringify({
+      timestamp: "2026-01-01T00:00:00.000Z",
+      type: "compacted",
+      payload: { summary: "Prior context was compacted." }
+    });
+
+    const messages = parseCodexJsonl(input, "session.jsonl");
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      role: "unknown",
+      sourceLine: 1,
+      content: "[compacted] Prior context was compacted."
+    });
+    expect(messages[0]?.raw).toMatchObject({ type: "compacted" });
+    expect(messages[0]?.rawLine).toBe(input);
+  });
+
+  it("normalizes compacted payload.message strings and content blocks", () => {
+    const input = [
+      JSON.stringify({ type: "compacted", payload: { message: "String compact summary" } }),
+      JSON.stringify({ type: "compacted", payload: { message: [{ type: "input_text", text: "Block compact summary" }] } })
+    ].join("\n");
+
+    const messages = parseCodexJsonl(input, "session.jsonl");
+
+    expect(messages.map((message) => message.content)).toEqual([
+      "[compacted] String compact summary",
+      "[compacted] Block compact summary"
+    ]);
+    expect(messages.map((message) => message.sourceLine)).toEqual([1, 2]);
+    expect(messages.every((message) => message.rawLine.length > 0 && message.raw !== undefined)).toBe(true);
+  });
+
   it("parses a realistic Codex JSONL with all response_item subtypes", async () => {
     const input = await readFile(fixturePath, "utf-8");
     const messages = parseCodexJsonl(input, fixturePath);
@@ -107,7 +142,7 @@ describe("parseCodexJsonl", () => {
     expect(customCall!.tool?.toolUseId).toBe("call-002");
   });
 
-  it("hard-protects Codex tool calls and tool results by structure", () => {
+  it("keeps tool interaction reasons auditable while protecting paired calls and results", () => {
     const input = [
       JSON.stringify({
         timestamp: "2026-01-01T00:00:00.000Z",
@@ -149,6 +184,7 @@ describe("parseCodexJsonl", () => {
     expect(toolResult?.protected).toBe(true);
     expect(toolResult?.decision).toBe("keep_protected");
     expect(toolResult?.reasons).toContain("contains_tool_interaction");
+    expect(toolResult?.reasons).toContain("tool_result_referenced_later");
   });
 
   it("skips reasoning records (encrypted content)", async () => {

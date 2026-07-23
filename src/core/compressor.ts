@@ -1,10 +1,12 @@
 import { open } from "node:fs/promises";
 import { analyzeMessages, parseJsonl } from "./analyzer.js";
 import { createReport } from "./reporter.js";
+import { isCompactBoundaryMessage } from "./signals/context.js";
 import { assertDifferentFiles, writeFileDistinctFromInput } from "../platform/files.js";
 import type { AnalysisOptions } from "./options.js";
 import type { AnalysisReport } from "../types/report.js";
 import type { NormalizedMessage } from "../types/message.js";
+import { isHighDecisive } from "./rot-metrics.js";
 
 export interface CompressResult {
   removedMessages: number;
@@ -26,7 +28,7 @@ export async function compressFile(
     // Only non-protected remove candidates are eligible for physical deletion in the output copy.
     const removeIds = new Set(
       analyzed
-        .filter((message) => message.decision === "remove_candidate" && !message.protected)
+        .filter(canRemoveFromCompressedCopy)
         .map((message) => message.id)
     );
 
@@ -56,10 +58,18 @@ function compressJsonlLines(input: string, analyzed: NormalizedMessage[], remove
     .filter(({ line }) => line.trim().length > 0)
     .filter(({ sourceLine }) => {
       const messages = byLine.get(sourceLine) ?? [];
-      return messages.length === 0 || messages.some((message) => !removeIds.has(message.id));
+      return messages.length === 0 || messages.some((message) => !removeIds.has(message.id) || isCompactBoundaryMessage(message));
     })
     .map(({ line }) => line)
     .join("\n");
+}
+
+export function canRemoveFromCompressedCopy(message: NormalizedMessage): boolean {
+  return !isCompactBoundaryMessage(message) &&
+    !message.protected &&
+    message.decision === "remove_candidate" &&
+    (message.reasons?.length ?? 0) > 0 &&
+    isHighDecisive(message);
 }
 
 function compressOpenAiLines(input: string, analyzed: NormalizedMessage[], removeIds: Set<string>): string {

@@ -22,24 +22,24 @@
 ### v0.1 核心 CLI
 
 - `trimctx analyze <file>` / `--json`
-- `trimctx report <file> -o <report.json>`
+- `trimctx report <file> -o report.md|report.json`
 - `trimctx compress <file> -o <output.jsonl>`
 - Claude Code / OpenAI / Codex-Hermes 三种 JSONL parser（自动检测格式）
 - 近似 tokenizer（零外部依赖）
 - 安全规则引擎（13 条 hard-protect 规则）
 - 多维度 rot 评分器（6 维评分 + 重要性折扣）
-- JSON report schema（含 score_diagnostics）
+- `trimctx.report.v2` schema（含 assessment、findings、review_queue 和 recommendations）
 - 安全压缩器（原文件 hash 不变）
 
 ### v0.2 CLI 可用性与集成
 
 - `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
-- `trimctx current` — 严格分析 hooks 绑定的当前窗口；本地发现使用 `analyze --select/--latest`
+- `trimctx` / 不带文件的 `analyze` — 只分析 hooks 绑定的当前窗口；本地发现使用 `analyze --select/--latest`
 - `trimctx new-chat` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
-- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:compress`
+- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:new-chat`、`/trimctx:compress`
 - Codex skill（`codex/skills/trimctx/SKILL.md`）
 - GitHub 安装脚本（`install.sh` / `install.ps1`）
-- `report` 中的 `score_diagnostics`（max/p90/near_threshold/protected_high_rot/decision_ranges）
+- Markdown 会话健康报告，以及与 `analyze --json` 一致的 v2 JSON 报告
 
 验证命令：
 
@@ -185,54 +185,46 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 
 ## 当前主要问题
 
-### 1. 发布测试存在 Windows 路径假设
+### 1. Phase 0 信任门仍未锁定
 
-packed-install smoke 曾把全局包目录固定为 Unix 的 `prefix/lib/node_modules`，导致 Windows 上误报客户端资产缺失。测试需要按平台解析 npm 全局目录。
+当前工作流和保守压缩策略已经可用于本地审查，但这不等同于可以对外承诺“无需人工复核的压缩安全”。正式承诺仍需要多样本人工审查指标和真实私有 OpenAI export 验证。
 
-### 2. CLI 入口职责过多
+### 2. Report v2 需要代表性样本复核
 
-`src/cli.ts` 同时承担命令注册、参数解析、handoff package、资产安装、hook 配置和文件安全逻辑。下一步采用兼容 facade 和小模块渐进迁移，不改变命令契约。
+`trimctx.report.v2` 已提供结构化 evidence、独立 assessment、findings、review queue 和 candidate groups。下一步应检查这些结果是否准确、可解释、可操作，优先修正文案和误报，不扩大自动删除范围。
 
-### 3. 集成副作用文档不一致
+### 3. 集成边界需要持续保持明确
 
-SessionStart hook 通过 `CLAUDE_ENV_FILE` 写当前会话绑定；Stop hook 可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块。README、usage、roadmap 和 iteration plan 必须统一披露这一边界。
+SessionStart hook 通过 `CLAUDE_ENV_FILE` 写当前会话绑定；Stop hook 可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块。原始 transcript 始终只读，绑定式分析与显式压缩继续分离。
 
 ## 下一步执行顺序
 
-### Step 1：恢复跨平台发布质量门
+### Step 1：复核 Report v2 质量
 
-- 修复 Windows packed-install 路径。
-- 保持 tarball 资产清单和 fresh install smoke 覆盖。
-- 运行 `npm test`、`npm run build`、`npm pack --dry-run --json`。
+- 使用代表性 Claude Code / Codex 会话检查健康结论、findings 和 review queue。
+- 记录误报、漏报和 continuation readiness 缺口。
+- 只在证据充分时调整规则或展示文案。
 
-### Step 2：抽取低风险共享边界
+### Step 2：补齐 Phase 0 发布证据
 
-- 文件同路径保护与存在性检查。
-- CLI 分析参数解析。
-- parser -> analyzer -> report pipeline。
-- Claude/Codex session discovery。
+- 完成多样本人工审查指标。
+- 补充真实私有 OpenAI export 验证。
+- 在门槛满足前继续保留人工审查提示。
 
-### Step 3：拆分 CLI 命令注册
+### Step 3：保持发布与集成质量门
 
-- 核心分析命令。
-- `new-chat` / `handoff`。
-- `init` / `hook` / `install-hooks`。
-- `src/cli.ts` 只保留程序入口、版本读取和统一错误出口。
+- 保持 Windows packed-install、tarball 资产清单和 fresh-install smoke 覆盖。
+- 保持五个公开命令、内部 hook executor 和原始 transcript 只读契约。
+- 发布前运行测试、构建和 package contents 检查。
 
-### Step 4：统一产品文档
-
-- 已有 packaged integrations 标记为已实现但实验性。
-- `current` 不再承载压缩；压缩继续要求显式 `trimctx compress <file> -o <output>`。
-- 明确 hooks 写入范围，继续保证原始 JSONL 只读。
-
-### Step 5：冻结高风险扩展
+### Step 4：冻结高风险扩展
 
 暂不推进 Web UI、MCP、后台监控、自动压缩、LLM summarization 或更激进删除阈值。
 
 ## 当前结论
 
-项目已进入“保持现有可用行为，同时降低结构和集成维护风险”的阶段。
+项目已完成本轮命令面收敛、evidence-based Report v2、文件写入保护和集成说明更新，进入“复核报告质量并积累正式信任证据”的阶段。
 
 当前最重要任务：
 
-**恢复跨平台质量门，统一集成副作用文档，并在行为测试保护下完成 CLI、pipeline 和 session discovery 的渐进拆分。**
+**用代表性样本审查 Report v2，补齐 Phase 0 证据，同时保持现有命令和安全边界稳定。**

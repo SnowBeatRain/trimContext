@@ -2,7 +2,8 @@ import { describe, expect, test } from "vitest";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compressFile } from "../src/core/compressor.js";
+import { canRemoveFromCompressedCopy, compressFile } from "../src/core/compressor.js";
+import type { NormalizedMessage } from "../src/types/message.js";
 
 function countOpenAiMessages(jsonl: string): number {
   return jsonl
@@ -15,6 +16,30 @@ function countOpenAiMessages(jsonl: string): number {
 }
 
 describe("compressor", () => {
+  test("requires a non-protected remove candidate with a reason and high decisive evidence", () => {
+    const candidate: NormalizedMessage = {
+      id: "m1", role: "assistant", content: "unsafe manual candidate", source: "openai-jsonl", sourceLine: 1, rawLine: "{}", raw: {},
+      protected: false, decision: "remove_candidate", reasons: ["duplicate_message"],
+      analysis: { kind: "result", turn: 0, segment: 0, stable_identifiers: [], evidence: [] }
+    };
+
+    expect(canRemoveFromCompressedCopy(candidate)).toBe(false);
+    expect(canRemoveFromCompressedCopy({
+      ...candidate,
+      analysis: { ...candidate.analysis!, evidence: [{ code: "exact_duplicate", confidence: "high", message_id: "m1", source_line: 1, role: "assistant", details: {} }] }
+    })).toBe(true);
+    expect(canRemoveFromCompressedCopy({
+      ...candidate,
+      protected: true,
+      analysis: { ...candidate.analysis!, evidence: [{ code: "exact_duplicate", confidence: "high", message_id: "m1", source_line: 1, role: "assistant", details: {} }] }
+    })).toBe(false);
+    expect(canRemoveFromCompressedCopy({
+      ...candidate,
+      source: "codex-jsonl",
+      raw: { type: "compacted" },
+      analysis: { ...candidate.analysis!, evidence: [{ code: "exact_duplicate", confidence: "high", message_id: "m1", source_line: 1, role: "assistant", details: {} }] }
+    })).toBe(false);
+  });
   test("writes a new file, preserves original input, removes only unprotected remove candidates", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
     const input = join(dir, "session.jsonl");
@@ -48,6 +73,75 @@ describe("compressor", () => {
     expect(result.report.summary.remove_candidates).toBe(result.report.remove_candidates.length);
     expect(originalLineCount - compressedLineCount).toBe(result.removedMessages);
     expect(result.report.remove_candidates.every((candidate) => candidate.reasons.length > 0)).toBe(true);
+  });
+
+  test("keeps paired tool calls and results even when an old call has high duplicate evidence", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-"));
+    const input = join(dir, "paired-tools.jsonl");
+    const output = join(dir, "paired-tools.trimmed.jsonl");
+    const padding = Array.from({ length: 35 }, (_, i) =>
+      JSON.stringify({
+        type: i % 2 === 0 ? "user" : "assistant",
+        uuid: `pad-${i}`,
+        message: { role: i % 2 === 0 ? "user" : "assistant", content: `padding ${i}` }
+      })
+    );
+    const original = [
+      JSON.stringify({
+        type: "assistant",
+        uuid: "call-record-1",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "call-1", name: "Search", input: { query: "API_KEY" } }]
+        }
+      }),
+      JSON.stringify({
+        type: "user",
+        uuid: "output-record-1",
+        message: {
+          role: "tool",
+          content: [{ type: "tool_result", tool_use_id: "call-1", content: "old search output with one match" }]
+        }
+      }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "call-record-2",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "call-2", name: "Search", input: { query: "API_KEY" } }]
+        }
+      }),
+      JSON.stringify({
+        type: "user",
+        uuid: "output-record-2",
+        message: {
+          role: "tool",
+          content: [{ type: "tool_result", tool_use_id: "call-2", content: "fresh search output with two matches" }]
+        }
+      }),
+      ...padding
+    ].join("\n");
+    await writeFile(input, original, "utf8");
+
+    const result = await compressFile(input, output);
+    const compressed = await readFile(output, "utf8");
+    const oldUse = result.report.messages.find((entry) => entry.id === "call-record-1");
+    const oldResult = result.report.messages.find((entry) => entry.id === "output-record-1");
+
+    expect(compressed).toContain('"uuid":"call-record-1"');
+    expect(compressed).toContain('"uuid":"output-record-1"');
+    expect(compressed).toContain('"uuid":"call-record-2"');
+    expect(compressed).toContain('"uuid":"output-record-2"');
+    expect(oldUse?.analysis?.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "exact_duplicate" })
+    ]));
+    expect(oldUse?.rot_score).toBeGreaterThan(0);
+    expect(oldUse).toMatchObject({ protected: true, decision: "keep_protected" });
+    expect(oldResult?.analysis?.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "obsolete_tool_output" })
+    ]));
+    expect(oldResult?.rot_score).toBeGreaterThan(0);
+    expect(oldResult).toMatchObject({ protected: true, decision: "keep_protected" });
   });
 
   test("preserves Codex non-message records when compressing", async () => {
@@ -172,15 +266,23 @@ describe("compressor", () => {
     ].join("\n");
     await writeFile(input, original, "utf8");
 
-    await compressFile(input, output, { recentWindow: 0 });
+    const result = await compressFile(input, output, { recentWindow: 0 });
     const compressed = await readFile(output, "utf8");
+    const compactMarker = result.report.messages.find((message) => message.content.includes("compaction marker stays"));
+    const removedTokenTotal = result.report.remove_candidates.reduce((sum, message) => sum + message.tokens, 0);
 
-    expect(compressed).not.toContain("legacy charge api");
+    expect((compressed.match(/legacy charge api/g) ?? [])).toHaveLength(2);
     expect(compressed).toContain("event metadata stays");
     expect(compressed).toContain("turn-001");
     expect(compressed).toContain("abc123encrypted");
     expect(compressed).toContain("compaction marker stays");
     expect(compressed).toContain("new billing endpoint");
+    expect(compactMarker?.protected).toBe(true);
+    expect(compactMarker?.decision).toBe("keep_protected");
+    expect(result.report.remove_candidates.some((message) => message.id === compactMarker?.id)).toBe(false);
+    expect(result.report.summary.estimated_saving_tokens).toBe(removedTokenTotal);
+    expect(result.report.warnings.join("\n")).toContain("session_compacted");
+    expect(original.split("\n").length - compressed.split("\n").length).toBe(result.removedMessages);
   });
 
   test("rejects output paths that resolve to the input file", async () => {
@@ -220,7 +322,7 @@ describe("compressor", () => {
     expect(countOpenAiMessages(original) - countOpenAiMessages(compressed)).toBe(result.removedMessages);
     expect(compressed).toContain("System stays");
     expect(compressed).toContain("new billing endpoint");
-    expect(compressed).not.toContain("legacy charge api");
+    expect((compressed.match(/legacy charge api/g) ?? [])).toHaveLength(1);
   });
 
   test("keeps OpenAI messages array indices aligned when records contain skipped entries", async () => {
@@ -251,8 +353,9 @@ describe("compressor", () => {
     expect(firstLine.messages).toEqual([
       { role: "system", content: "System stays" },
       "unknown raw entry stays in place",
+      { role: "assistant", content: "Use old payment endpoint legacy charge api" },
       { role: "user", content: "Correction: instead use new billing endpoint" }
     ]);
-    expect(compressed).not.toContain("legacy charge api");
+    expect((compressed.match(/legacy charge api/g) ?? [])).toHaveLength(1);
   });
 });

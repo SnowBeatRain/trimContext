@@ -1,7 +1,7 @@
 {
   "name": "trimctx",
   "version": "0.2.10",
-  "description": "Local CLI for analyzing and safely trimming long AI conversation context. Supports Claude Code, OpenAI, and Codex JSONL formats.",
+  "description": "Local CLI for auditing AI conversation health, reviewing context risks, and writing safe trimmed copies. Supports Claude Code, OpenAI, and Codex JSONL.",
   "type": "module",
   "license": "MIT",
   "author": "trimctx contributors",

@@ -11,10 +11,17 @@ const program = new Command();
 
 program
   .name("trimctx")
-  .description("Analyze and safely trim long AI conversation context.")
+  .description("Audit AI conversation health and write safe trimmed copies.")
   .version(packageVersion);
 
 registerCommands(program, { packageRoot, packageVersion });
+
+const removedCommand = findRemovedCommandOperand(process.argv.slice(2));
+if (removedCommand) {
+  program.error(`error: unknown command '${removedCommand}'`, {
+    code: "commander.unknownCommand"
+  });
+}
 
 program.parseAsync().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
@@ -33,4 +40,10 @@ function readPackageVersion(root: string): string {
     // Keep --version usable in unusual development layouts.
   }
   return "0.0.0-dev";
+}
+
+function findRemovedCommandOperand(args: string[]): string | undefined {
+  const removedCommands = new Set(["current", "handoff", "install-hooks"]);
+  const firstOperand = args.find(argument => !argument.startsWith("-"));
+  return firstOperand && removedCommands.has(firstOperand) ? firstOperand : undefined;
 }

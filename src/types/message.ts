@@ -1,3 +1,5 @@
+import type { MessageAnalysisContext } from "./signals.js";
+
 export type MessageRole =
   | "system"
   | "developer"
@@ -33,9 +35,11 @@ export type Reason =
   | "low_reference_in_later_context"
   | "old_message"
   | "duplicate_nearby_message"
+  | "duplicate_message"
   | "orphan_tool_result"
   | "large_low_value_tool_output"
-  | "low_value_metadata";
+  | "low_value_metadata"
+  | "obsolete_tool_output";
 
 export interface MessageToolInfo {
   toolUseId?: string;
@@ -102,4 +106,5 @@ export interface NormalizedMessage {
   rot_score?: number;
   decision?: Decision;
   reasons?: Reason[];
+  analysis?: MessageAnalysisContext;
 }

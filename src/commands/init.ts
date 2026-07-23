@@ -20,7 +20,6 @@ interface InitOptions {
   force?: boolean;
   dryRun?: boolean;
   withHooks?: boolean;
-  hooks?: boolean;
 }
 
 interface InitAsset {
@@ -47,7 +46,6 @@ export function registerInitCommand(program: Command, options: RegisterInitComma
     .option("--force", "Overwrite existing installed trimctx assets.")
     .option("--dry-run", "Print planned installation paths without writing files.")
     .option("--with-hooks", "Also install experimental Claude Code current-window hooks.")
-    .option("--no-hooks", "Do not install Claude Code hooks.")
     .description("Install AI-client command files and skills for Claude Code and Codex.")
     .action(async (options: InitOptions) => {
       const result = await initClientAssets(options);
@@ -104,7 +102,7 @@ async function initClientAssets(options: InitOptions): Promise<InitResult> {
     const baseDir = resolve(options.dir ?? (target === "user" ? homedir() : process.cwd()));
     const assets = initAssetsFor(client, target, baseDir);
     const lines = [`trimctx init: ${options.dryRun ? "planned" : "installed"} ${client} assets for ${target}`];
-    const shouldInstallHooks = await resolveInitHooks(options, client, readline);
+    const shouldInstallHooks = options.withHooks === true && client !== "codex";
 
     for (const asset of assets) {
       await assertTemplateExists(asset.source, asset.label);
@@ -129,7 +127,7 @@ async function initClientAssets(options: InitOptions): Promise<InitResult> {
       const hookLines = await installHooks(settingsPath, { force: options.force, dryRun: options.dryRun });
       lines.push(...hookLines.map(l => `- ${l}`));
     } else if (client === "all" || client === "claude") {
-      lines.push("- hooks not installed; run `trimctx install-hooks` or `trimctx init --with-hooks` to enable Claude current-window binding later.");
+      lines.push("- hooks not installed; rerun `trimctx init --with-hooks --force` to enable Claude current-window binding later.");
     }
 
     if (!options.dryRun) {
@@ -261,43 +259,5 @@ async function pathExists(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function resolveInitHooks(options: InitOptions, client: InitClient, readline?: PromptSession): Promise<boolean> {
-  if (client === "codex") {
-    return false;
-  }
-  if (options.hooks === false) {
-    return false;
-  }
-  if (options.withHooks) {
-    return true;
-  }
-  if (options.target !== undefined || !isInteractiveInput()) {
-    return false;
-  }
-
-  const ownsReadline = readline === undefined;
-  const prompt = readline ?? new PromptSession();
-  try {
-    for (;;) {
-      const answer = (await prompt.question([
-        "Enable Claude current-window hooks?",
-        "  This lets /trimctx and /trimctx:handoff bind to the active Claude Code transcript.",
-        "Choose Y or n [Y]: "
-      ].join("\n"))).trim().toLowerCase();
-      if (answer === "" || answer === "y" || answer === "yes") {
-        return true;
-      }
-      if (answer === "n" || answer === "no") {
-        return false;
-      }
-      process.stdout.write("Please choose Y to enable hooks or n to skip.\n");
-    }
-  } finally {
-    if (ownsReadline) {
-      prompt.close();
-    }
   }
 }

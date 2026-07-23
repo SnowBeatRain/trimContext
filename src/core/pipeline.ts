@@ -10,5 +10,5 @@ export async function analyzeFile(file: string, options: AnalysisOptions = {}): 
 }
 
 export function analyzeInput(input: string, file: string, options: AnalysisOptions = {}): AnalysisReport {
-  return createReport(analyzeMessages(parseJsonl(input, file), options), file);
+  return createReport(analyzeMessages(parseJsonl(input, file), options), file, options);
 }

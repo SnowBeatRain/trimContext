@@ -74,12 +74,12 @@ describe("package contents", () => {
     expect(files).toContain("plugins/trimctx/commands/trimctx/analyze.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/compress.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/new-chat.md");
-    expect(files).toContain("plugins/trimctx/commands/trimctx/handoff.md");
+    expect(files).not.toContain("plugins/trimctx/commands/trimctx/handoff.md");
     expect(files).not.toContain("plugins/trimctx/commands/trimctx/resume.md");
     expect(files).toContain("codex/skills/trimctx/SKILL.md");
   }, 30_000);
 
-  test("documents strict current-window targeting and explicit latest discovery in client assets", async () => {
+  test("documents the supported analysis and hook entry points in client assets", async () => {
     const [claudeCommand, pluginReadme, pluginSystem, codexSkill] = await Promise.all([
       readFile("plugins/trimctx/commands/trimctx.md", "utf8"),
       readFile("plugins/trimctx/README.md", "utf8"),
@@ -87,18 +87,21 @@ describe("package contents", () => {
       readFile("codex/skills/trimctx/SKILL.md", "utf8")
     ]);
 
-    expect(claudeCommand).toContain("trimctx current --color");
+    expect(claudeCommand).toContain('trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color');
     expect(claudeCommand).not.toContain("only selects the latest local JSONL file");
-    expect(pluginReadme).toContain("`trimctx current` requires the current-window hook binding");
+    expect(pluginReadme).toContain("`trimctx init --with-hooks`");
+    expect(pluginReadme).toContain("SessionStart writes the current binding through `CLAUDE_ENV_FILE`");
+    expect(pluginReadme).toContain("Stop may update only the trimctx-managed block");
     expect(pluginSystem).toContain(
-      "`trimctx current` analyzes only the transcript bound by `TRIMCTX_TRANSCRIPT_PATH`"
+      "`trimctx` analyzes only the transcript bound by `TRIMCTX_TRANSCRIPT_PATH`"
     );
     expect(pluginSystem).toContain(
       "Use `trimctx analyze --latest` for explicit latest-session discovery"
     );
-    expect(pluginSystem).not.toContain("trimctx current --source");
+    expect(pluginSystem).not.toContain("trimctx current");
     expect(codexSkill).toContain("trimctx analyze --latest --source codex --color");
-    expect(codexSkill).not.toContain("trimctx current --source");
+    expect(codexSkill).toContain("trimctx report <file.jsonl> -o report.md");
+    expect(codexSkill).not.toContain("trimctx current");
   });
 
   test("publishes only the bundled CLI, not the source or expanded module tree", async () => {
@@ -161,29 +164,30 @@ describe("package contents", () => {
       const packageRoot = installedPackageRoot(prefix);
       const version = await execFileAsync(trimctxBin, ["--version"], { shell: process.platform === "win32" });
       const help = await execFileAsync(trimctxBin, ["--help"], { shell: process.platform === "win32" });
-      const currentHelp = await execFileAsync(trimctxBin, ["current", "--help"], {
-        shell: process.platform === "win32"
-      });
       const analyzeHelp = await execFileAsync(trimctxBin, ["analyze", "--help"], {
         shell: process.platform === "win32"
       });
 
       await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "new-chat.md"))).resolves.toBeUndefined();
-      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "handoff.md"))).resolves.toBeUndefined();
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "handoff.md"))).rejects.toThrow();
       await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "resume.md"))).rejects.toThrow();
       expect(version.stdout.trim()).toBe(packageJson.version);
       expect(help.stdout).toContain("Usage: trimctx [options] [command]");
       expect(help.stdout).toContain("Commands:");
       expect(help.stdout).toContain("init [options]");
       expect(help.stdout).toContain("analyze [options] [file]");
-      expect(help.stdout).toContain("new-chat [options] [file]");
-      expect(help.stdout).toContain("handoff [options] [file]");
-      expect(help.stdout).not.toContain("session-env");
-      expect(currentHelp.stdout).not.toContain("--source");
-      expect(currentHelp.stdout).not.toContain("--compress");
+      for (const command of ["init", "analyze", "report", "new-chat", "compress"]) {
+        expect(help.stdout).toContain(`${command} [options]`);
+      }
+      for (const command of ["current", "handoff", "install-hooks", "hook", "session-env"]) {
+        expect(help.stdout).not.toContain(`${command} [options]`);
+      }
       expect(analyzeHelp.stdout).toContain("--select");
       expect(analyzeHelp.stdout).toContain("--latest");
       expect(analyzeHelp.stdout).toContain("--source");
+      expect(analyzeHelp.stdout).not.toContain("--recent-window");
+      expect(analyzeHelp.stdout).not.toContain("--remove-threshold");
+      expect(analyzeHelp.stdout).not.toContain("--compress-threshold");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

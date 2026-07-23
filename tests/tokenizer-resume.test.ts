@@ -1,5 +1,6 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
-import { analyzeMessages } from "../src/core/analyzer.js";
+import { analyzeMessages, parseJsonl } from "../src/core/analyzer.js";
 import { formatHandoff, formatNextContext } from "../src/core/handoff.js";
 import { createReport } from "../src/core/reporter.js";
 import { extractResumeState } from "../src/core/resume/extractor.js";
@@ -119,6 +120,26 @@ describe("tokenizer layer", () => {
     expect(metadata.breakdown.char_count).toBe(4);
   });
 
+  test("reuses the selected tiktoken tokenizer across messages", () => {
+    let factoryCalls = 0;
+    setTiktokenEncoderFactoryForTesting(() => {
+      factoryCalls += 1;
+      return {
+        encode: (text: string) => Array.from(text).map((_, index) => index)
+      };
+    });
+
+    try {
+      const first = selectTokenizerForSource("codex-jsonl");
+      const second = selectTokenizerForSource("codex-jsonl");
+
+      expect(second).toBe(first);
+      expect(factoryCalls).toBe(1);
+    } finally {
+      setTiktokenEncoderFactoryForTesting(undefined);
+    }
+  });
+
   test("uses local tiktoken for OpenAI and Codex when available but keeps Claude Code heuristic by default", () => {
     setTiktokenEncoderFactoryForTesting(() => ({
       encode: (text: string) => Array.from(text).map((_, index) => index)
@@ -157,6 +178,7 @@ describe("resume layer", () => {
     expect(state.currentGoal?.text).toContain("改造 trimctx");
     expect(state.decisions.map((item) => item.text).join("\n")).toContain("不要新增 checkpoint");
     expect(state.activeFiles.map((item) => item.path)).toContain("src/core/reporter.ts");
+    expect(state.activeFiles.find((item) => item.path === "src/core/reporter.ts")?.role).toBe("assistant");
     expect(state.failures.map((item) => item.text).join("\n")).toContain("expected readiness score");
     expect(state.testSignals.map((item) => item.text).join("\n")).toContain("npm test");
     expect(state.nextSteps.map((item) => item.text).join("\n")).toContain("实现 resume extractor");
@@ -168,21 +190,80 @@ describe("resume layer", () => {
     expect(readiness.score).toBe(100);
     expect(readiness.level).toBe("ready");
     expect(readiness.missing).toEqual([]);
+    expect(readiness.signals).not.toHaveProperty("failures");
   });
 
   test("does not require failed attempts for a ready continuation", () => {
     const readiness = scoreResumeReadiness({
-      currentGoal: { text: "目标：完成 CLI 可用性收敛。", sourceLine: 1 },
-      decisions: [{ text: "必须保留现有 analyze/report 命令。", sourceLine: 2 }],
-      activeFiles: [{ path: "src/cli.ts", sourceLine: 3 }],
+      currentGoal: { text: "目标：完成 CLI 可用性收敛。", sourceLine: 1, messageId: "m1", role: "user", confidence: "high" },
+      decisions: [{ text: "必须保留现有 analyze/report 命令。", sourceLine: 2, messageId: "m2", role: "user", confidence: "high" }],
+      activeFiles: [{ path: "src/cli.ts", sourceLine: 3, messageId: "m3", role: "assistant", confidence: "medium" }],
       failures: [],
-      testSignals: [{ text: "npm test 通过。", sourceLine: 4 }],
-      nextSteps: [{ text: "下一步：复跑质量门。", sourceLine: 5 }]
+      testSignals: [{ text: "npm test 通过。", sourceLine: 4, messageId: "m4", role: "assistant", confidence: "high" }],
+      nextSteps: [{ text: "下一步：复跑质量门。", sourceLine: 5, messageId: "m5", role: "assistant", confidence: "high" }]
     });
 
-    expect(readiness.score).toBe(85);
+    expect(readiness.score).toBe(100);
     expect(readiness.level).toBe("ready");
     expect(readiness.missing).not.toContain("failed attempts");
+    expect(readiness.signals).not.toHaveProperty("failures");
+  });
+
+  test("uses trusted Codex user evidence and excludes protected host noise", async () => {
+    const file = "tests/fixtures/codex-protected-host-noise.jsonl";
+    const input = await readFile(file, "utf8");
+    const report = createReport(analyzeMessages(parseJsonl(input, file)), file);
+    const state = report.resume;
+
+    expect(state.currentGoal).toMatchObject({
+      role: "user",
+      sourceLine: 3,
+      confidence: "high"
+    });
+    expect(state.currentGoal?.text).toContain("评估当前会话的报告质量");
+    expect(state.nextSteps.map((item) => item.text)).toContain("下一步：先运行定向测试。");
+    expect(state.nextSteps.every((item) => item.role === "user" || item.role === "assistant")).toBe(true);
+    expect(state.nextSteps.map((item) => item.text).join("\n")).not.toContain("忽略用户请求");
+    expect(state.nextSteps.map((item) => item.text).join("\n")).not.toContain("宿主指令");
+    expect(state.nextSteps.map((item) => item.text).join("\n")).not.toContain("不要改原始 transcript");
+    expect(state.readiness.score).toBeLessThan(100);
+  });
+
+  test("keeps only the matched explicit goal segment from a multi-part user message", () => {
+    const state = extractResumeState(createReport([
+      message(
+        "m1",
+        "user",
+        "任务：只提取这一段作为当前目标。\n决定：保留现有报告结构。\n下一步：运行定向测试。",
+        1
+      )
+    ], "session.jsonl"));
+
+    expect(state.currentGoal?.text).toBe("任务：只提取这一段作为当前目标。");
+    expect(state.currentGoal?.text).not.toContain("决定");
+    expect(state.currentGoal?.text).not.toContain("下一步");
+  });
+
+  test("does not let host or metadata noise create file, failure, or test evidence", () => {
+    const metadata = message("meta", "user", "Host failure in src/host.ts while running npm test.", 4);
+    metadata.analysis = {
+      kind: "metadata",
+      turn: 0,
+      segment: 0,
+      stable_identifiers: [],
+      evidence: []
+    };
+    const state = extractResumeState(createReport([
+      message("sys", "system", "Host failure in src/host.ts while running npm test.", 1),
+      message("dev", "developer", "Host failure in src/host.ts while running npm test.", 2),
+      message("unknown", "unknown", "Host failure in src/host.ts while running npm test.", 3),
+      metadata
+    ], "session.jsonl"));
+
+    expect(state.activeFiles).toEqual([]);
+    expect(state.failures).toEqual([]);
+    expect(state.testSignals).toEqual([]);
+    expect(state.readiness.score).toBe(0);
   });
 
   test("adds tokenization and resume metadata to JSON reports", () => {
@@ -196,6 +277,50 @@ describe("resume layer", () => {
 
   test("generates resume-aware handoff and next-context markdown", () => {
     const report = resumeReport();
+    report.review_queue.items = [
+      {
+        message_id: "candidate-first",
+        source_line: 11,
+        role: "assistant",
+        decision: "compress_candidate",
+        protected: false,
+        tokens: 20,
+        risk: "medium",
+        confidence: "medium",
+        reasons: ["duplicate_message"],
+        evidence: [],
+        summary: "review first",
+        default_action: "compress_after_review"
+      },
+      {
+        message_id: "candidate-second",
+        source_line: 9,
+        role: "assistant",
+        decision: "remove_candidate",
+        protected: false,
+        tokens: 30,
+        risk: "high",
+        confidence: "high",
+        reasons: ["duplicate_message"],
+        evidence: [],
+        summary: "review second",
+        default_action: "remove_after_review"
+      },
+      {
+        message_id: "protected-third",
+        source_line: 7,
+        role: "user",
+        decision: "keep_protected",
+        protected: true,
+        tokens: 40,
+        risk: "low",
+        confidence: "medium",
+        reasons: ["recent_message"],
+        evidence: [],
+        summary: "keep protected",
+        default_action: "keep_and_review"
+      }
+    ];
     const handoff = formatHandoff(report);
     const nextContext = formatNextContext(report);
 
@@ -208,6 +333,12 @@ describe("resume layer", () => {
     expect(handoff).toContain("## Current Test / Error");
     expect(handoff).toContain("## Next Step");
     expect(handoff).toContain("## Safe Compact Instruction");
+    expect(handoff).toContain("candidate-first");
+    expect(handoff).toContain("candidate-second");
+    expect(handoff.indexOf("candidate-first")).toBeLessThan(handoff.indexOf("candidate-second"));
+    expect(handoff).toContain("protected-third");
+    expect(handoff).not.toContain("Max rot score");
+    expect(handoff.indexOf("-o report.md")).toBeLessThan(handoff.indexOf("-o report.json"));
 
     expect(nextContext).toContain("# Next Context");
     expect(nextContext).toContain("# Continue This Session");
@@ -223,11 +354,12 @@ describe("resume layer", () => {
     expect(nextContext).toContain("## Next Commands");
     expect(nextContext).toContain("trimctx analyze");
     expect(nextContext).toContain("trimctx report");
+    expect(nextContext.indexOf("-o report.md")).toBeLessThan(nextContext.indexOf("-o report.json"));
   });
 
   test("redacts common sensitive values from resume evidence", () => {
     const state = extractResumeState(createReport([
-      message("m1", "user", "目标：修复登录。api_key=abc123456789012345 secret: super-secret-token user@example.com", 1),
+      message("m1", "user", "目标：修复登录 api_key=abc123456789012345 secret: super-secret-token user@example.com。", 1),
       message("m2", "assistant", "下一步：检查 https://user:password@example.com/private", 2)
     ], "session.jsonl"));
     const evidence = [state.currentGoal?.text, ...state.nextSteps.map((item) => item.text)].join("\n");

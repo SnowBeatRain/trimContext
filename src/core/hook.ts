@@ -57,7 +57,7 @@ export async function writeSessionEnvBinding(): Promise<{ updated: boolean; mess
 
   await mkdir(dirname(envFile), { recursive: true });
   await appendFile(envFile, `${lines.join("\n")}\n`, "utf8");
-  return { updated: true, message: "updated trimctx current Claude session binding" };
+  return { updated: true, message: "updated trimctx Claude session binding" };
 }
 
 export async function runHook(options: { dryRun?: boolean } = {}): Promise<HookResult> {

@@ -107,12 +107,12 @@ Make the CLI comfortable for real users, not just internal validation.
 
 - Human-readable default output for `trimctx analyze <file>`.
 - `trimctx analyze <file> --json` for full JSON output.
-- `trimctx report <file> -o <report.json>` remains the full machine-readable report path.
-- `trimctx current` strictly analyzes the hook-bound current-window transcript.
+- `trimctx report <file> -o report.md` is the human review path; `.json` and `analyze --json` are the machine-readable paths.
+- `trimctx` and file-less `analyze` use only a trusted hook-bound current-window transcript.
 - `trimctx analyze --select/--latest --source auto|claude|codex` provides explicit local discovery.
 - `trimctx new-chat [file]` writes deterministic UID-based continuation packages without LLM calls.
 - Better error messages for unsupported JSONL, unreadable files, and unsafe output paths.
-- Advanced threshold flags exist for validation/tuning, but the default path should remain conservative and simple.
+- Internal thresholds remain fixed on the public CLI; validation/tuning is not exposed as an active user workflow.
 - Zero `remove_candidate` results on a real sample are acceptable when messages do not cross the stricter removal threshold; document this as conservative safety behavior rather than treating it as parser failure.
 
 ### User Experience
@@ -139,17 +139,17 @@ top reasons:
 - old_message: 190
 
 next:
+- trimctx report <file> -o report.md
 - trimctx report <file> -o report.json
-- trimctx compress <file> -o output.jsonl
 ```
 
 ### Acceptance Criteria
 
 - `analyze` output fits in a terminal screen for large sessions.
 - `analyze --json` preserves current full JSON behavior.
-- `current` fails without a valid current-window binding; `analyze --latest --source claude` handles latest-file discovery.
+- Bound analysis fails without a valid current-window binding; `analyze --latest --source claude` handles latest-file discovery.
 - Tests cover human summary output and JSON output separately.
-- Threshold/options validation is covered for invalid values and unsafe combinations.
+- Public CLI tests ensure internal threshold flags are not exposed.
 - Phase 0 validation records manual review metrics for critical false deletion count, protected recall, and remove candidate precision.
 - Real private OpenAI export validation is recorded before claiming Phase 0 complete.
 
@@ -169,16 +169,13 @@ Let users use trimctx from inside Claude Code without manually finding JSONL fil
 
 ### Deliverables
 
-- `trimctx install claude-code`
 - Claude Code slash command file for `/trimctx`
-- `/trimctx` summary command
-- `/trimctx report`
-- `/trimctx compress`
-- `trimctx install-hooks`
-- `trimctx hook`
-- `trimctx statusline`
-- Safe output location for generated reports and compressed copies
-- Uninstall or repair behavior for the installed command
+- `/trimctx` read-only assessment command
+- `/trimctx:new-chat` as the only continuation command
+- `/trimctx:compress` for explicit separate-copy compression
+- Explicit hook opt-in through `trimctx init --with-hooks`
+- Safe output locations for generated reports and compressed copies
+- Clear SessionStart/Stop write-scope disclosure
 
 ### User Experience
 
@@ -288,13 +285,13 @@ Keep the core engine vendor-neutral and expand integrations or heavier detection
 
 ## Current Priority
 
-The next project phase should stabilize the verified CLI and existing integrations before adding new discovery or automation surfaces:
+The command surface, report pipeline, and integration boundaries are now stabilized for the current iteration. The next phase should validate report quality and accumulate release evidence before adding new discovery or automation surfaces:
 
-1. Keep Windows packed-install and npm package smoke tests green.
-2. Split CLI, pipeline, session discovery, and shared file-safety responsibilities without changing behavior.
-3. Keep `analyze`, `analyze --json`, `report`, `compress`, `current`, and `new-chat` as the active CLI surface.
-4. Document SessionStart and Stop hook writes explicitly.
-5. Re-evaluate additional session discovery, diagnostics, or background automation only after the current structure is stable.
+1. Keep `init`, `analyze`, `analyze --json`, `report`, `compress`, and `new-chat` as the active CLI surface.
+2. Review Report v2 assessments, findings, candidate groups, and continuation readiness on representative real sessions.
+3. Record Phase 0 manual-review metrics and private OpenAI export validation before stronger safety claims.
+4. Keep Windows packed-install, npm package smoke tests, hook write-scope disclosure, and original-transcript protections green.
+5. Re-evaluate additional session discovery, diagnostics, or background automation only after report quality and trust gates are established.
 
 Only after this should additional integration or background automation work begin.
 
