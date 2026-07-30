@@ -9,7 +9,10 @@ coverage/
 *.test.json
 *.test.jsonl
 .claude/CLAUDE.md
+.claude/plugins/
+.codex/skills/trimctx/
 handoff.md
+!plugins/trimctx/commands/trimctx/handoff.md
 next-context.md
 trimmed.jsonl
 .trimctx/

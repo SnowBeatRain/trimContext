@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
@@ -11,15 +12,54 @@ const unsafeInstallPipePatterns = [
   /\biwr\s+[^\n|]*\|\s*iex\b/i
 ];
 
+function npmCommandEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.npm_config_dry_run;
+  delete env.npm_config_cache;
+  delete env.NPM_CONFIG_CACHE;
+  env.npm_config_cache = npmCacheDir();
+  env.NPM_CONFIG_CACHE = npmCacheDir();
+  return env;
+}
+
+function npmCacheDir(): string {
+  return path.join(tmpdir(), "trimctx-npm-cache", String(process.pid));
+}
+
 async function listPackedFiles(): Promise<string[]> {
   const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
-  const { stdout } = await execFileAsync(npmBin, ["pack", "--dry-run", "--json"], {
+  const { stdout } = await execFileAsync(npmBin, ["pack", "--dry-run", "--json", "--cache", npmCacheDir()], {
     cwd: process.cwd(),
+    env: npmCommandEnv(),
     shell: process.platform === "win32"
   });
   const [pack] = JSON.parse(stdout) as Array<{ files: Array<{ path: string }> }>;
 
   return pack.files.map((file) => file.path);
+}
+
+async function packTarball(destination: string): Promise<string> {
+  const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+  const { stdout } = await execFileAsync(npmBin, ["pack", "--pack-destination", destination, "--json", "--cache", npmCacheDir()], {
+    cwd: process.cwd(),
+    env: npmCommandEnv(),
+    shell: process.platform === "win32"
+  });
+  const [pack] = JSON.parse(stdout) as Array<{ filename: string }>;
+
+  return path.join(destination, pack.filename);
+}
+
+function installedTrimctxBinary(prefix: string): string {
+  return process.platform === "win32"
+    ? path.join(prefix, "trimctx.cmd")
+    : path.join(prefix, "bin", "trimctx");
+}
+
+function installedPackageRoot(prefix: string): string {
+  return process.platform === "win32"
+    ? path.join(prefix, "node_modules", "trimctx")
+    : path.join(prefix, "lib", "node_modules", "trimctx");
 }
 
 describe("package contents", () => {
@@ -32,10 +72,54 @@ describe("package contents", () => {
     expect(files).toContain("plugins/trimctx/.system");
     expect(files).toContain("plugins/trimctx/commands/trimctx.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/analyze.md");
-    expect(files).toContain("plugins/trimctx/commands/trimctx/resume.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/compress.md");
+    expect(files).toContain("plugins/trimctx/commands/trimctx/new-chat.md");
+    expect(files).not.toContain("plugins/trimctx/commands/trimctx/handoff.md");
+    expect(files).not.toContain("plugins/trimctx/commands/trimctx/resume.md");
     expect(files).toContain("codex/skills/trimctx/SKILL.md");
+  }, 30_000);
+
+  test("documents the supported analysis and hook entry points in client assets", async () => {
+    const [claudeCommand, pluginReadme, pluginSystem, codexSkill] = await Promise.all([
+      readFile("plugins/trimctx/commands/trimctx.md", "utf8"),
+      readFile("plugins/trimctx/README.md", "utf8"),
+      readFile("plugins/trimctx/.system", "utf8"),
+      readFile("codex/skills/trimctx/SKILL.md", "utf8")
+    ]);
+
+    expect(claudeCommand).toContain('trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color');
+    expect(claudeCommand).not.toContain("only selects the latest local JSONL file");
+    expect(pluginReadme).toContain("`trimctx init --with-hooks`");
+    expect(pluginReadme).toContain("SessionStart writes the current binding through `CLAUDE_ENV_FILE`");
+    expect(pluginReadme).toContain("Stop may update only the trimctx-managed block");
+    expect(pluginSystem).toContain(
+      "`trimctx` analyzes only the transcript bound by `TRIMCTX_TRANSCRIPT_PATH`"
+    );
+    expect(pluginSystem).toContain(
+      "Use `trimctx analyze --latest` for explicit latest-session discovery"
+    );
+    expect(pluginSystem).not.toContain("trimctx current");
+    expect(codexSkill).toContain("trimctx analyze --latest --source codex --color");
+    expect(codexSkill).toContain("trimctx report <file.jsonl> -o report.md");
+    expect(codexSkill).not.toContain("trimctx current");
   });
+
+  test("publishes only the bundled CLI, not the source or expanded module tree", async () => {
+    const files = await listPackedFiles();
+
+    expect(files).toContain("dist/cli.js");
+    expect(files.some((file) => file.startsWith("src/"))).toBe(false);
+    expect(files.some((file) => file.endsWith(".ts"))).toBe(false);
+    expect(files.some((file) => file.endsWith(".d.ts"))).toBe(false);
+    expect(files.some((file) => file.startsWith("dist/core/"))).toBe(false);
+    expect(files.some((file) => file.startsWith("dist/adapters/"))).toBe(false);
+    expect(files.some((file) => file.startsWith("dist/types/"))).toBe(false);
+    expect(files.filter((file) => file.startsWith("docs/dev/")).sort()).toEqual([
+      "docs/dev/requirements.md",
+      "docs/dev/roadmap.md"
+    ]);
+    expect(files).toContain("CONTRIBUTING.md");
+  }, 30_000);
 
   test("does not publish download-and-execute install pipe examples", async () => {
     const files = await listPackedFiles();
@@ -59,5 +143,53 @@ describe("package contents", () => {
     }
 
     expect(unsafeMatches).toEqual([]);
-  });
+  }, 30_000);
+
+  test("packed tarball installs a runnable trimctx binary", async () => {
+    const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
+    const packageJson = JSON.parse(await readFile(path.join(process.cwd(), "package.json"), "utf8")) as { version: string };
+    const tempDir = await mkdtemp(path.join(tmpdir(), "trimctx-pack-smoke-"));
+    const prefix = path.join(tempDir, "prefix");
+
+    try {
+      const tarball = await packTarball(tempDir);
+      await mkdir(path.join(prefix, "lib"), { recursive: true });
+      await execFileAsync(npmBin, ["install", "--global", "--prefix", prefix, tarball, "--cache", npmCacheDir()], {
+        cwd: tempDir,
+        env: npmCommandEnv(),
+        shell: process.platform === "win32"
+      });
+
+      const trimctxBin = installedTrimctxBinary(prefix);
+      const packageRoot = installedPackageRoot(prefix);
+      const version = await execFileAsync(trimctxBin, ["--version"], { shell: process.platform === "win32" });
+      const help = await execFileAsync(trimctxBin, ["--help"], { shell: process.platform === "win32" });
+      const analyzeHelp = await execFileAsync(trimctxBin, ["analyze", "--help"], {
+        shell: process.platform === "win32"
+      });
+
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "new-chat.md"))).resolves.toBeUndefined();
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "handoff.md"))).rejects.toThrow();
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "resume.md"))).rejects.toThrow();
+      expect(version.stdout.trim()).toBe(packageJson.version);
+      expect(help.stdout).toContain("Usage: trimctx [options] [command]");
+      expect(help.stdout).toContain("Commands:");
+      expect(help.stdout).toContain("init [options]");
+      expect(help.stdout).toContain("analyze [options] [file]");
+      for (const command of ["init", "analyze", "report", "new-chat", "compress"]) {
+        expect(help.stdout).toContain(`${command} [options]`);
+      }
+      for (const command of ["current", "handoff", "install-hooks", "hook", "session-env"]) {
+        expect(help.stdout).not.toContain(`${command} [options]`);
+      }
+      expect(analyzeHelp.stdout).toContain("--select");
+      expect(analyzeHelp.stdout).toContain("--latest");
+      expect(analyzeHelp.stdout).toContain("--source");
+      expect(analyzeHelp.stdout).not.toContain("--recent-window");
+      expect(analyzeHelp.stdout).not.toContain("--remove-threshold");
+      expect(analyzeHelp.stdout).not.toContain("--compress-threshold");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

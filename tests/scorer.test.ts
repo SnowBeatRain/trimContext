@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { analyzeMessages } from "../src/core/analyzer.js";
+import { scoreMessages } from "../src/core/scorer.js";
 import type { NormalizedMessage } from "../src/types/message.js";
 
 function message(id: string, role: NormalizedMessage["role"], content: string): NormalizedMessage {
@@ -22,6 +23,37 @@ function padding(count: number): NormalizedMessage[] {
 }
 
 describe("scorer", () => {
+  test("uses a valid evidence details strength for metadata scores", () => {
+    const scored = scoreMessages([
+      { ...message("m1", "unknown", "[last-prompt] payload"), analysis: { kind: "metadata", turn: 0, segment: 0, stable_identifiers: [], evidence: [{ code: "low_value_metadata", confidence: "medium", message_id: "m1", source_line: 1, role: "unknown", details: { strength: 0.65 } }] } },
+      { ...message("m2", "unknown", "[mode] payload"), analysis: { kind: "metadata", turn: 0, segment: 0, stable_identifiers: [], evidence: [{ code: "low_value_metadata", confidence: "high", message_id: "m2", source_line: 2, role: "unknown", details: { strength: 0.9 } }] } }
+    ], { removeThreshold: 0.8, compressThreshold: 0.6 });
+
+    expect(scored.map((entry) => [entry.scores?.low_value_score, entry.scores?.rot_score])).toEqual([[0.65, 0.65], [0.9, 0.9]]);
+  });
+  test("uses high decisive evidence for removal and never promotes support-only evidence", () => {
+    const base = [
+      {
+        ...message("m1", "assistant", "old duplicate"),
+        analysis: { kind: "result", turn: 0, segment: 0, stable_identifiers: [], evidence: [{ code: "exact_duplicate", confidence: "high", message_id: "m1", source_line: 1, role: "assistant", related_message_id: "m2", related_source_line: 2, details: {} }] }
+      },
+      {
+        ...message("m2", "assistant", "support only"),
+        analysis: { kind: "result", turn: 0, segment: 0, stable_identifiers: [], evidence: [{ code: "old_message", confidence: "low", message_id: "m2", source_line: 2, role: "assistant", details: {} }] }
+      },
+      {
+        ...message("m3", "tool", "obsolete output"),
+        analysis: { kind: "tool_result", turn: 0, segment: 0, stable_identifiers: [], evidence: [{ code: "obsolete_tool_output", confidence: "medium", message_id: "m3", source_line: 3, role: "tool", details: {} }] }
+      }
+    ];
+
+    const scored = scoreMessages(base, { removeThreshold: 0.8, compressThreshold: 0.6 });
+
+    expect(scored[0]).toMatchObject({ decision: "remove_candidate", reasons: ["duplicate_message"] });
+    expect(scored[0]?.scores?.rot_score).toBeGreaterThanOrEqual(0.8);
+    expect(scored[1]).toMatchObject({ decision: "keep" });
+    expect(scored[2]).toMatchObject({ decision: "compress_candidate", reasons: ["obsolete_tool_output"] });
+  });
   test("computes deterministic rot scores, decisions, and reasons", () => {
     const base = [
       message("m1", "assistant", "Use old payment endpoint legacy charge api"),
@@ -39,9 +71,9 @@ describe("scorer", () => {
 
     expect(first.scores!.rot_score).toBeGreaterThanOrEqual(0.8);
     expect(first.decision).toBe("remove_candidate");
-    expect(first.reasons).toContain("superseded_by_later_instruction");
+    expect(first.reasons).toContain("duplicate_message");
     expect(first.reasons!.length).toBeGreaterThan(0);
-    expect(orphanTool.scores!.orphan_tool_score).toBe(1);
+    expect(orphanTool.scores!.orphan_tool_score).toBeGreaterThan(0);
     expect(last.decision).toBe("keep_protected");
   });
 

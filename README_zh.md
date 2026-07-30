@@ -1,382 +1,155 @@
 # trimctx
 
-**本地优先的 CLI，用于分析和安全精简 AI 长对话上下文。**
+**用于审查并安全精简 AI 长对话上下文的本地 CLI。**
 
-当你使用 Claude Code、Codex、Cursor 或其他 AI 助手连续工作数小时，对话历史会积累大量过期内容——旧报错、被覆盖的指令、孤立的工具输出、元信息噪音。这就是**上下文腐化（context rot）**：对话越来越慢、越来越贵，模型开始拉入不相关的历史。
+trimctx 读取 Claude Code、OpenAI 和 Codex/Hermes JSONL transcript，识别陈旧或低价值上下文，生成可审计的会话健康报告，并可写出保守的压缩副本。它不会修改原始 transcript，也不调用 LLM。
 
-trimctx 读取你的 JSONL 对话文件，识别低价值或过期消息，解释原因，生成安全的压缩副本——**永远不修改原文件**。
-
-**安全原则：trimctx 宁可少删，也不要误删。**
-
-**发布里程碑：** `0.2.3` 把 resume-aware reports、handoff/next-context 产物、面向 OpenAI/Codex-family 输入的可选精确 `tiktoken` 计数，以及更安全的 AI 客户端安装说明整合成一个 npm-ready release。它仍保持保守边界：Phase 0 还需要更多真实样本验证和人工评审指标后才算完成。
+安全原则：宁可少删，也不要误删。
 
 [English](README.md)
 
-## 长什么样
-
-```
-$ trimctx analyze ~/.claude/projects/my-project/abc123.jsonl
-
-trimctx analysis
-
-  633 messages / 218K tokens
-  token estimate: heuristic-v1 (local_heuristic, medium confidence)
-  tokenizer: local_heuristic (medium confidence)
-  context pressure: HIGH  removable: 5.6K tokens (2.6%)
-  health: MODERATE  rot: 10.8% (68 candidates)
-
-  trust:
-    41 remove candidates crossed the safe deletion threshold.
-    review the JSON report before applying destructive workflows.
-    phase0: REVIEW_REQUIRED
-    candidates are review-only until Phase 0 gates are locked.
-    max score: 0.6428; near threshold: 0
-
-  breakdown:
-    remove:       41 messages (5.6K tokens)
-    compress:     27 messages
-    protected:    338 messages
-    saving:       5.6K tokens (2.6%)
-
-  top reasons:
-    - metadata noise: 18
-    - old content: 15
-    - superseded: 12
-    - orphan tool result: 8
-    - low reference: 6
-
-  next:
-    trimctx report "~/.claude/projects/my-project/abc123.jsonl" -o report.json
-    run Phase 0 manual review before using compress output as replacement context
-    trimctx analyze "~/.claude/projects/my-project/abc123.jsonl" --json
-```
-
 ## 快速开始
 
-**需要 Node.js 20+。**
-
-从 npm 安装，然后安装 AI 客户端可识别的命令文件：
+要求 Node.js 20+。
 
 ```bash
 npm install -g trimctx
-trimctx init
+trimctx init --target user
+trimctx analyze path/to/session.jsonl
+trimctx report path/to/session.jsonl -o report.md
 ```
 
-`trimctx init` 会询问安装到当前用户全局位置，还是安装到当前项目。用户全局安装会把 Claude Code slash commands 写入 `~/.claude/plugins/trimctx`，把 Codex skill 写入 `~/.codex/skills/trimctx`。它默认**不会**安装自动 hook。之后重启 AI 客户端，在 Claude Code 里运行 `/trimctx`，或让 Codex 使用 trimctx skill。
+`report.md` 是推荐给人工审查的报告。使用 `compress` 或生成续聊包前，请先阅读它。
 
-也可以继续使用 GitHub 一条命令安装：
-
-Windows CMD：
-
-> 如果 CMD 提示 `'pwsh' is not recognized`，可改用 `powershell`。执行前请先审阅下载到本地的脚本。
-
-```bat
-pwsh -NoProfile -Command "Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1"
-type install.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
-```
-
-Windows PowerShell：
-
-```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1
-Get-Content install.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-macOS / Linux / WSL：
+自动化流程使用稳定的 JSON 入口：
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh
-less install.sh
-bash install.sh
+trimctx report path/to/session.jsonl -o report.json
+trimctx analyze path/to/session.jsonl --json
 ```
 
-然后重启 Claude Code，直接运行：
+两者产生相同的 `trimctx.report.v2` JSON 值。`report` 还支持 `.md`；其他扩展名会被拒绝。
 
-```text
-/trimctx
-```
+## 健康状态语义
 
-Windows 上默认写入：
+- `healthy` 表示现有证据下上下文风险较低，不是删除许可。
+- `attention` 和 `degraded` 表示存在需要审查或高置信风险。
+- `unknown` 表示证据不足，不能描述为“干净”。
+- Protected 内容永不自动删除。
+- 每条 `remove_candidate` 都必须是非 protected，并包含 reasons 和决定性证据。
 
-- `trimctx.cmd` / `trimctx.ps1` 到 `%USERPROFILE%\.local\bin`
-- Claude Code 插件到 `%USERPROFILE%\.claude\plugins\trimctx`
-- 源码 checkout 到 `%LOCALAPPDATA%\trimctx`
-
-macOS / Linux 上默认写入：
-
-- `trimctx` 到 `~/.local/bin/trimctx`
-- Claude Code 插件到 `~/.claude/plugins/trimctx`
-- 源码 checkout 到 `~/.local/share/trimctx`
-
-如果 shell 找不到 `trimctx`，把下面这行加入 shell profile：
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-本地开发时也可以从源码链接：
-
-```bash
-git clone https://github.com/SnowBeatRain/trimContext.git
-cd trimContext
-npm install
-npm run build
-npm link
-trimctx --help
-```
-
-日常核心流程：
-
-```bash
-trimctx init
-trimctx current
-trimctx handoff path/to/session.jsonl
-```
-
-- `trimctx init` 安装 Claude Code 插件和 Codex skill 文件。
-- `trimctx current` 自动分析最新的本地 Claude Code 或 Codex 会话。
-- `trimctx handoff <file>` 生成可用 UID 引用的继续交接包。
-
-需要更深入排查时，再使用 `trimctx analyze <file>` 查看指定文件摘要，或用 `trimctx report <file> -o report.json` 写出完整 JSON 审计报告。`trimctx compress` 只建议在审查报告后使用；压缩仍保持保守，并且永远不修改原文件。
-
-## Resume-aware 交接
-
-`trimctx analyze`、`trimctx report`、`trimctx current` 和 `trimctx resume` 会在报告中包含本地 resume state。提取器基于规则，不调用外部 LLM 或 API。
-
-resume state 是长会话后的最佳努力、启发式续接辅助：
-
-- `tokenization` 记录 token 计算使用的 tokenizer 名称和置信度。默认使用本地启发式 tokenizer；安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可以使用本地精确 `tiktoken` 计数且不调用厂商 API。
-- `resume.readiness` 评估会话是否包含足够续接信号。
-- `resume.currentGoal`、`decisions`、`activeFiles`、`failures`、`testSignals` 和 `nextSteps` 会保留压缩后可能需要的续接线索。
-- `trimctx handoff <file>` 会在 `.trimctx/handoffs/<uid>/` 下写出基于 UID 的完整交接包，包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。
-
-原始 JSONL 会话仍然只读。Resume 提取只影响报告和生成的 Markdown 产物。分享或粘贴到另一个会话前，请人工审查生成的 handoff；规则提取可能遗漏、误分类或脱敏不完美。
-
-自动分析最新的 Claude Code 或 Codex 会话：
-
-```bash
-trimctx current
-trimctx current --source claude
-trimctx current --source codex
-```
-
-使用旧兼容别名分析最新 Claude Code 会话：
-
-```bash
-trimctx resume
-```
-
-安装 AI 客户端命令文件：
-
-```bash
-trimctx init                 # 交互选择用户全局或项目级安装
-trimctx init --target user --client claude    # 只为当前用户安装 Claude Code commands
-trimctx init --target user --client codex     # 只为当前用户安装 Codex skill
-trimctx init --target project --dir .
-trimctx init --with-hooks    # 实验性：同时安装 Claude Stop hook 自动化
-trimctx install-hooks        # 实验性：只安装 hooks，必须显式 opt-in
-```
-
-在 Claude Code 中使用：
-
-- `trimctx init` 会提示选择用户全局或项目级安装；`--target user` 会把 `plugins/trimctx/` 安装到 `~/.claude/plugins/trimctx`。
-- 插件提供 `/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress` 命令文件。
-- 安全边界：`/trimctx` 按文件修改时间分析最新本地 JSONL；不会写回 Claude Code，不会修改原始会话，只在用户明确触发时压缩。
-
-在 Codex 中使用：
-
-- `trimctx init` 会提示选择用户全局或项目级安装；`--target user` 会把 `codex/skills/trimctx/SKILL.md` 安装到 `~/.codex/skills/trimctx`。
-- 运行 `trimctx current --source codex` 可分析 `~/.codex/sessions/` 下最新本地 Codex JSONL。
-- 这里明确是 skill/CLI 集成，不宣传为已验证的 Codex `/trimctx` slash command。
-
-如果要从源码开发，请克隆仓库并运行本地 TypeScript 入口：
-
-```bash
-git clone https://github.com/SnowBeatRain/trimContext.git
-cd trimContext
-npm install
-npm run build
-npm run dev -- analyze path/to/session.jsonl
-```
-
-## 谁适合用
-
-- **Claude Code / Codex / Cursor 用户** — 长时间运行的会话触及上下文限制
-- **开发者** — 想了解 AI 上下文窗口被什么内容占满
-- **团队** — 在归档前审查和压缩共享的对话日志
-
-## 工作原理
-
-1. **解析** — 自动识别 Claude Code JSONL、OpenAI JSONL 和 Codex/Hermes rollout JSONL 格式。
-2. **归一化** — 统一消息结构、tool-use 块、tool result 和元事件。
-3. **保护** — 将高风险内容标记为 protected（system prompt、最近消息、用户决策、代码、错误、diff、配置变更、记忆指令）。
-4. **评分** — 基于消息年龄、重复度、后续引用度、孤立工具输出、元信息噪音等维度给剩余消息打分。
-5. **报告** — 输出人类可读摘要和包含逐条决策与原因的完整 JSON 报告。
-6. **压缩** — 写出新 JSONL，只排除非 protected 的 `remove_candidate` 消息。
+短摘要只使用报告 assessment、最多两条 finding、续接缺失项和第一条 recommendation。完整 Markdown 与 JSON 报告才是审计依据。
 
 ## 命令
 
-### 核心命令
-
-#### `trimctx init`
-
-从 npm 包安装 AI 客户端命令文件与 skill。默认不安装 hooks；hook 自动化是实验性能力，需要通过 `trimctx install-hooks` 或 `trimctx init --with-hooks` 显式开启。
+### 分析
 
 ```bash
-trimctx init
-trimctx init --client claude --force
-trimctx init --client codex --target project --dir .
-trimctx init --dry-run
+trimctx analyze path/to/session.jsonl
+trimctx analyze path/to/session.jsonl --json
+trimctx analyze --select
+trimctx analyze --latest
+trimctx analyze --latest --source claude
+trimctx analyze --latest --source codex
 ```
 
-| 参数 | 默认值 | 说明 |
-|---|---:|---|
-| `--client <client>` | `all` | `claude`、`codex` 或 `all` |
-| `--target <target>` | 提示选择 | `user` 安装到 home 目录下；`project` 安装到 `--dir` 或当前目录下 |
-| `--dir <directory>` | home/当前目录 | 覆盖基础目录 |
-| `--force` | `false` | 覆盖已有 trimctx 资产 |
-| `--dry-run` | `false` | 只打印计划路径，不写文件 |
-| `--with-hooks` | `false` | 实验性：同时安装 Claude Stop hook 自动化 |
+存在可信 `TRIMCTX_TRANSCRIPT_PATH` 绑定时，不带文件的 `trimctx analyze` 会分析该 transcript。显式 `--select` 和 `--latest` 只选择文件，不会恢复或切换 AI 客户端窗口。
 
-#### `trimctx current`
-
-自动分析最新的 Claude Code 或 Codex 会话。
+### 报告
 
 ```bash
-trimctx current
-trimctx current --source claude
-trimctx current --source codex
+trimctx report path/to/session.jsonl -o report.md
+trimctx report path/to/session.jsonl -o report.json
 ```
 
-#### `trimctx handoff <file>`
+- Markdown 面向人工审查，包含结论、健康维度、关键发现、审查队列、protected 陈旧信号、续接状态、限制和下一步。
+- JSON 是完整的 v2 机器可读报告，与 `analyze --json` 一致。
+- Markdown 证据摘要会脱敏并限制长度，但完整 JSON 报告和续聊包仍可能包含原始对话内容，分享前必须审查。
+- 报告采用原子写入，并拒绝输入文件本身或它的别名。
 
-写出确定性的 Markdown 交接文档，帮助在长会话或噪音会话后安全继续工作，不修改原始 JSONL。
+### 新会话续接
 
 ```bash
-trimctx handoff session.jsonl
+trimctx new-chat path/to/session.jsonl
+trimctx new-chat path/to/session.jsonl --out .trimctx/handoffs
 ```
 
-默认会创建 `.trimctx/handoffs/<uid>/`，其中包含 `handoff.md`、`next-context.md`、`manifest.json` 和 `report.json`。UID 使用 UTC 时间（`ctx_YYYYMMDD_HHMMSS_xxxxxx`）并以 `copyable uid: ...` 输出，方便直接复制引用。`manifest.json` 同时包含本机自动化可用的绝对路径，以及便于移动或归档 package 的相对文件名。可用 `--out <dir>` 指定自定义 package 根目录；旧版单文件输出仍可通过 `-o handoff.md --next-context next-context.md` 使用。交接包可能在 `report.json` 中包含原始会话内容和密钥，分享前请先审查。
+命令会在 `.trimctx/handoffs/<uid>/` 写出 `handoff.md`、`next-context.md`、`manifest.json`、`report.json` 和 `README.md`。`manifest.json` 记录输入 hash、文件路径、健康状态/置信度和报告 schema 版本，包内报告为 v2。
 
-### 诊断命令
+把 `next-context.md` 粘贴到新 AI 窗口前先审查。UID 只是本地引用，不是恢复令牌。
 
-#### `trimctx analyze <file>`
+多窗口时优先传入明确的 JSONL 路径。Claude Code 安装 hooks 后，`/trimctx:new-chat` 使用当前窗口的 `TRIMCTX_TRANSCRIPT_PATH`；Codex 尚无经过验证的当前窗口自动绑定，不要用无文件参数的 `new-chat` 或 `--latest` 猜测当前窗口。生成后可检查 `manifest.json` 的 `input.file`、`session_id` 和 `sha256`。
 
-输出终端摘要或完整 JSON 报告。
+### 压缩
 
 ```bash
-trimctx analyze session.jsonl
-trimctx analyze session.jsonl --json
-trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
+trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
 
-| 参数 | 默认值 | 说明 |
-|---|---:|---|
-| `--json` | `false` | 输出完整 JSON 而不是终端摘要 |
-| `--color` | `false` | 终端输出加颜色 |
-| `--recent-window <N>` | `30` | 硬保护最近 N 条消息 |
-| `--remove-threshold <score>` | `0.80` | 标记为 `remove_candidate` 的最低 rot_score |
-| `--compress-threshold <score>` | `0.60` | 标记为 `compress_candidate` 的最低 rot_score |
+压缩只写新 JSONL，只移除非 protected 的 `remove_candidate`。`keep`、`keep_protected` 和 `compress_candidate` 都会保留。请先审查报告。
 
-### 高级审计命令
-
-#### `trimctx report <file> -o <report.json>`
-
-写出完整 JSON 报告，包含逐条消息的决策、评分、原因、警告、顶层 `phase0_trust` 和顶层 `parser_diagnostics`。
+### 安装客户端资产
 
 ```bash
-trimctx report session.jsonl -o report.json
+trimctx init --target user
+trimctx init --client claude --target user
+trimctx init --client codex --target user
+trimctx init --target project --dir .
+trimctx init --with-hooks --target user
+trimctx init --dry-run --target user
 ```
 
-### 实验性压缩命令
+Hooks 只通过 `trimctx init --with-hooks` 显式安装。
 
-#### `trimctx compress <file> -o <output.jsonl>`
+## Claude Code
 
-写出安全压缩副本。原文件永远不被修改。
+打包插件提供：
+
+- `/trimctx`：分析 hooks 绑定的当前 transcript
+- `/trimctx:analyze`：分析显式 JSONL 路径
+- `/trimctx:new-chat`：为当前 transcript 生成续聊包
+- `/trimctx:compress`：仅在用户明确要求压缩时使用
+
+`/trimctx` 执行：
 
 ```bash
-trimctx compress session.jsonl -o session.trimmed.jsonl
+trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color
 ```
 
-| 决策 | 行为 |
-|---|---|
-| `keep_protected` | 始终保留 |
-| `keep` | 保留 |
-| `compress_candidate` | 保留（当前仅报告） |
-| `remove_candidate` | 仅在非 protected 时从副本移除；Phase 0 gates locked 前仅作为人工审查候选 |
+绑定缺失时会停止，不会猜测其他 session。
 
-`compress_candidate` 是有意保守的信号：它表示 trimctx 发现了过期或低价值迹象，但还没有足够证据安全删除该消息。`remove_candidate` 在 Phase 0 trust locked 前也只是人工审查候选。某些格式，尤其是 Codex/Hermes rollout 文件，在默认阈值下可能产生 0 条 `remove_candidate`；这应视为安全优先的结果，而不是 parser 失败。
+同时打开多个 Claude Code 窗口时，每个窗口的 SessionStart hook 都通过该窗口自己的 `CLAUDE_ENV_FILE` 写入 `TRIMCTX_TRANSCRIPT_PATH` 和 `TRIMCTX_SESSION_ID`。安装 hooks 后需要重启每个已打开窗口；当前窗口命令不要替换为 `--latest`。同一项目多个窗口共享 `.claude/CLAUDE.md`，因此其中的状态区块可能由最后触发 Stop hook 的窗口更新，但这不会改变各窗口的 transcript 绑定。
 
-### 兼容别名
+Hooks 写入范围：
 
-#### `trimctx resume`
+- SessionStart 通过 `CLAUDE_ENV_FILE` 写入当前 `transcript_path`，供 `TRIMCTX_TRANSCRIPT_PATH` 使用。
+- Stop 只可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的区块。
+- 原始 JSONL transcript 始终只读。
 
-查找并分析 `~/.claude/projects/` 下最近修改的 Claude Code 会话。新流程优先使用 `trimctx current`。
+## Codex
 
-```bash
-trimctx resume
-trimctx resume --json
-trimctx resume --compress session.trimmed.jsonl
-```
+包内提供 Codex skill/CLI 工作流。单窗口发现可使用 `--select` 或 `--latest --source codex`；多窗口时二者都不能自动证明“当前窗口”，必须把确认后的 JSONL 路径显式传给 `analyze`、`report`、`new-chat` 或 `compress`。本项目不宣称已验证 Codex `/trimctx` slash command，也不宣称已验证当前窗口 transcript 绑定。
 
 ## 支持的输入
 
 | 格式 | 状态 |
-|---|---|
-| Claude Code JSONL | 已支持 |
-| OpenAI Chat Completion 风格 JSONL | 已支持 |
-| Codex/Hermes rollout JSONL | 已支持 |
-| 纯文本转录 | 不支持 |
-| 数据库或远程 API | 不支持 |
+| --- | --- |
+| Claude Code JSONL | 支持 |
+| OpenAI JSONL | 支持 |
+| Codex/Hermes rollout JSONL | 支持 |
+| 纯文本、数据库、远程 API | 不支持 |
 
-## 安全模型
-
-trimctx 保护可能仍然重要的内容：
-
-- `system` 和 `developer` 消息
-- 最近 N 条消息（可配置，默认 30）
-- 记忆类指令（"记住"、"从现在开始"、"不要忘记"）
-- 用户明确决策和纠正
-- 代码块、错误栈、文件路径、shell 命令和 git diff
-- 测试失败和调试证据
-- 架构、API、schema 和配置变更
-- 被后续对话引用的工具结果
-
-**验证原文件未被修改：**
+## 安全验证
 
 ```bash
 sha256sum session.jsonl
 trimctx compress session.jsonl -o session.trimmed.jsonl
 sha256sum session.jsonl
-# 两次 hash 应一致。
 ```
 
-## 当前限制
+两次输入 hash 必须一致。真实 transcript 和生成的私有报告不得提交到仓库或进入 npm 包。
 
-- `compress_candidate` 消息保持原样（暂不改写或摘要）。
-- JSON 报告包含 `summary.score_diagnostics`，用于在调整阈值前查看评分分布；诊断字段不会改变压缩行为。
-- token 数默认使用零依赖本地启发式估算。安装可选 `js-tiktoken` 后，OpenAI 风格和 Codex/Hermes rollout 输入可使用本地精确 `tiktoken` 计数，不调用厂商 API。
-- Claude Code 和 Codex/Hermes rollout 路径已用本地样本验证；真实多样本验证仍在进行中，OpenAI 还需要用户提供真实导出样本后，Phase 0 才能覆盖所有已支持来源。建议先审查报告，再使用压缩输出。
-- 默认阈值优先避免误删，而不是最大化 token 节省；只有在用私有验证样本审查报告后，才建议下调阈值。
-- 暂无 Web UI、MCP server 或独立安装器。Claude Code 已通过项目命令文件和插件包装支持；Codex 已通过 skill/CLI 工作流支持，不宣传为已验证的 slash command。
-
-## 文档
-
-- [使用说明](docs/user/usage_zh.md) — 详细命令示例、输出和安全验证
-- [路线图](docs/dev/roadmap.md) — 计划里程碑和功能
-- [需求说明](docs/dev/requirements.md) — 项目范围和验收标准
-
-## Phase 0 验证
-
-在推荐给其他用户使用前，建议先用私有多样本数据集验证：
-
-```bash
-npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
-```
-
-详见 `docs/dev/phase0/phase0-plan.md`、`docs/dev/phase0/manual-label-guide.md` 和 `docs/dev/phase0/validation-summary-template.md`，按安全优先流程完成验证。
+现有工作流已验证可用，但这不等于 `phase0_trust` 已锁定。任何“无需人工审查即可安全压缩”的对外承诺，仍必须满足 `docs/dev/phase0/phase0-plan.md` 的正式发布门槛。
 
 ## 开发
 
@@ -386,10 +159,8 @@ npm test
 npm run build
 ```
 
-## 参与贡献
-
-见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境、代码规范和 PR 流程。
+更多信息见 [docs/user/usage_zh.md](docs/user/usage_zh.md)、[docs/dev/requirements.md](docs/dev/requirements.md) 和 [docs/dev/roadmap.md](docs/dev/roadmap.md)。
 
 ## 许可证
 
-[MIT](LICENSE)
+MIT

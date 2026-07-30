@@ -1,5 +1,6 @@
 import type { Decision, NormalizedMessage, Reason, RotScores, TokenBreakdown, TokenMetadata, TokenizerConfidence, TokenizerName } from "./message.js";
 import type { ResumeState } from "./resume.js";
+import type { EvidenceConfidence, MessageAnalysisContext, SignalCode } from "./signals.js";
 
 export interface AnalyzedMessage {
   id: string;
@@ -14,6 +15,7 @@ export interface AnalyzedMessage {
   scores: RotScores;
   decision: Decision;
   reasons: Reason[];
+  analysis: MessageAnalysisContext;
   timestamp?: string;
   sessionId?: string;
 }
@@ -99,17 +101,130 @@ export interface ReasonCount {
   count: number;
 }
 
+export type HealthStatus = "healthy" | "attention" | "degraded" | "unknown";
+
+export interface HealthDimension {
+  level: "low" | "medium" | "high" | "unknown";
+  score: number;
+  evidence_count: number;
+  summary: string;
+}
+
+export interface Assessment {
+  status: HealthStatus;
+  confidence: EvidenceConfidence;
+  summary: string;
+  dimensions: {
+    context_pressure: HealthDimension;
+    stale_context: HealthDimension;
+    repetition: HealthDimension;
+    tool_noise: HealthDimension;
+    continuation: HealthDimension;
+    observability: HealthDimension;
+  };
+  coverage: {
+    analyzable_messages: number;
+    analyzable_ratio: number;
+    protected_ratio: number;
+    unknown_role_ratio: number;
+  };
+  limitations: string[];
+}
+
+export interface FindingEvidenceRef {
+  message_id: string;
+  source_line: number;
+  role: NormalizedMessage["role"];
+  code: string;
+  confidence: EvidenceConfidence;
+  related_message_id?: string;
+}
+
+export interface Finding {
+  id: string;
+  type: "superseded" | "duplicate" | "tool" | "metadata" | "limitation";
+  severity: "info" | "warning" | "critical";
+  confidence: EvidenceConfidence;
+  code: string;
+  title: string;
+  explanation: string;
+  summary: string;
+  impact: {
+    message_count: number;
+    tokens: number;
+    token_ratio: number;
+  };
+  suggested_action: "review_superseded_context" | "keep_canonical_message" | "review_tool_evidence" | "review_metadata" | "collect_more_evidence";
+  tokens: number;
+  evidence: FindingEvidenceRef[];
+}
+
+export interface ReviewQueueItem {
+  message_id: string;
+  source_line: number;
+  role: NormalizedMessage["role"];
+  decision: Decision;
+  protected: boolean;
+  tokens: number;
+  risk: "low" | "medium" | "high";
+  confidence: EvidenceConfidence;
+  reasons: Reason[];
+  evidence: FindingEvidenceRef[];
+  summary: string;
+  default_action: "remove_after_review" | "compress_after_review" | "keep_and_review";
+}
+
+export interface CandidateGroup {
+  id: string;
+  type: "superseded" | "duplicate" | "tool" | "metadata";
+  code: SignalCode;
+  related_message_id?: string;
+  canonical_message_id: string;
+  member_message_ids: string[];
+  tokens: number;
+  evidence: FindingEvidenceRef[];
+}
+
+export interface Recommendation {
+  code: "write_report" | "clarify_continuation" | "new_chat" | "review_then_compress";
+  priority: number;
+  summary: string;
+  command?: string;
+}
+
+export interface AnalysisMeta {
+  analyzer_version: "evidence-v2";
+  thresholds: {
+    recent_window: number;
+    remove: number;
+    compress: number;
+  };
+  tokenizer: TokenizerName;
+  confidence: TokenizerConfidence;
+  detectors: string[];
+  coverage: Assessment["coverage"];
+  limitations: string[];
+}
+
 export interface AnalysisReport {
-  schema_version: "trimctx.report.v1";
+  schema_version: "trimctx.report.v2";
   input: {
     file: string;
     source: NormalizedMessage["source"];
+    session_id?: string;
   };
   summary: AnalysisSummary;
   tokenization: TokenizationSummary;
   phase0_trust: Phase0TrustStatus;
   parser_diagnostics: ParserDiagnostics;
   resume: ResumeState;
+  assessment: Assessment;
+  findings: Finding[];
+  review_queue: { items: ReviewQueueItem[] };
+  candidate_groups: CandidateGroup[];
+  compress_candidates: AnalyzedMessage[];
+  recommendations: Recommendation[];
+  analysis_meta: AnalysisMeta;
   messages: AnalyzedMessage[];
   remove_candidates: AnalyzedMessage[];
   warnings: string[];

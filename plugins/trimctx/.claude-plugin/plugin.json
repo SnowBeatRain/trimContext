@@ -1,6 +1,6 @@
 {
   "name": "trimctx",
-  "description": "Analyze Claude Code and Codex JSONL conversation context with the local trimctx CLI. Provides /trimctx, /trimctx:analyze, /trimctx:resume, and /trimctx:compress commands.",
+  "description": "Analyze Claude Code and Codex JSONL conversation context with the local trimctx CLI. Provides /trimctx, /trimctx:analyze, /trimctx:new-chat, and /trimctx:compress commands.",
   "author": {
     "name": "trimctx contributors"
   }

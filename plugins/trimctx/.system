@@ -3,8 +3,14 @@
 This plugin is a thin wrapper around the local `trimctx` CLI.
 
 - Default commands analyze local JSONL session files only; they do not modify original session files.
+- `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH` from the current Claude Code session.
+- If `TRIMCTX_TRANSCRIPT_PATH` is missing, ask the user to run `trimctx init --with-hooks` and restart Claude Code.
 - Compression is only allowed through an explicit command that writes a separate output artifact.
 - Never overwrite the active or original session file.
 - Do not claim secrets are redacted automatically; local reports and compressed artifacts may contain original conversation content.
 - Do not upload, paste, or transmit generated artifacts unless the user explicitly asks after reviewing them.
-- `trimctx current --source auto` selects the latest local JSONL file by modification time; it is not a live-client current-session API.
+- `trimctx` analyzes only the transcript bound by `TRIMCTX_TRANSCRIPT_PATH`; it never scans recent files or falls back when the binding is unavailable.
+- Use `trimctx analyze --latest` for explicit latest-session discovery, or `trimctx analyze --select` to choose a local transcript interactively.
+- SessionStart writes `TRIMCTX_TRANSCRIPT_PATH` through `CLAUDE_ENV_FILE`.
+- Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
+- Neither hook modifies the original JSONL transcript.

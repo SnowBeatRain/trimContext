@@ -1,21 +1,9 @@
 import type { AnalysisReport } from "../types/report.js";
+import { formatRatio, formatScore, formatTokens } from "./format.js";
+import { reasonLabel } from "./reason-labels.js";
 
 const STATE_START = "<!-- TRIMCTX_STATE_START -->";
 const STATE_END = "<!-- TRIMCTX_STATE_END -->";
-
-const REASON_LABELS: Record<string, string> = {
-  low_value_metadata: "metadata noise",
-  old_message: "old content",
-  superseded_by_later_instruction: "superseded",
-  low_reference_in_later_context: "low reference",
-  duplicate_nearby_message: "duplicate",
-  orphan_tool_result: "orphan tool",
-  large_low_value_tool_output: "large tool output",
-  contains_file_path: "file path",
-  recent_message: "recent",
-  contains_code_block: "code block",
-  contains_tool_interaction: "tool interaction",
-};
 
 type HealthLevel = "ok" | "moderate" | "heavy";
 
@@ -23,20 +11,6 @@ function healthLevel(rotRate: number): HealthLevel {
   if (rotRate < 0.1) return "ok";
   if (rotRate < 0.3) return "moderate";
   return "heavy";
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
-  return `${tokens}`;
-}
-
-function formatRatio(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatScore(score: number): string {
-  return score.toFixed(3);
 }
 
 function formatRoleCounts(roleCounts: AnalysisReport["parser_diagnostics"]["role_counts"]): string {
@@ -59,9 +33,9 @@ function formatNextAction(report: AnalysisReport): string {
     return "先运行 `trimctx report` 审查 remove_candidate；compress_candidate 默认保留。";
   }
   if (compressCount > 0) {
-    return "当前只有 compress_candidate；默认保留，可用 `trimctx handoff` 生成续接上下文。";
+    return "当前只有 compress_candidate；默认保留，可用 `trimctx new-chat` 生成续接上下文。";
   }
-  return "暂无安全删除候选；继续收集样本或运行 `trimctx handoff` 做交接。";
+  return "暂无安全删除候选；继续收集样本或运行 `trimctx new-chat` 做交接。";
 }
 
 export function formatContextState(report: AnalysisReport): string {
@@ -104,7 +78,7 @@ export function formatContextState(report: AnalysisReport): string {
   if (s.top_reasons.length > 0) {
     const reasonStr = s.top_reasons
       .slice(0, 5)
-      .map(r => `${REASON_LABELS[r.reason] ?? r.reason}(${r.count})`)
+      .map(r => `${reasonLabel(r.reason)}(${r.count})`)
       .join(", ");
     lines.push(`- 主要信号：${reasonStr}`);
   }

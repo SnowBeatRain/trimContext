@@ -30,10 +30,10 @@ For the team-reviewed iteration priorities and quality gates, see `docs/dev/iter
    - Write compressed copies.
 
 2. CLI
-   - Expose stable commands for analyze, report, compress, resume, current-session discovery, and deterministic handoff artifacts.
+   - Expose stable commands for analyze, report, compress, current-session discovery, and deterministic new-chat continuation artifacts.
    - Keep default output readable for humans.
    - Keep full JSON available for automation.
-   - Treat diagnostics, active-session mutation, hooks, Web UI, and MCP as post-Phase-0 candidates, not the current mainline.
+   - Treat new diagnostics, automatic active-session mutation, additional hook automation, Web UI, and MCP as later candidates, not the current mainline.
 
 3. AI Integrations
    - Install slash commands or hooks for Claude Code.
@@ -48,7 +48,7 @@ For the team-reviewed iteration priorities and quality gates, see `docs/dev/iter
 | --- | --- | --- |
 | v0.1 | Core CLI | Local files can be analyzed, reported, and compressed safely. |
 | v0.2 | Usable CLI | Real users can run trimctx without reading huge JSON output. |
-| v0.3 | Claude Code Integration | Users can use hooks/status line or installed commands during Claude Code sessions. |
+| v0.3 | Integration Stabilization | Packaged commands and experimental hooks are documented, testable, and explicit that Stop may update `.claude/CLAUDE.md`. |
 | v0.4 | Open Source Ready | Repository is ready for public release and npm publication. |
 | v0.5 | Enhanced Detection / Multi-platform | Core engine supports heavier detectors and more AI tool integrations. |
 
@@ -107,12 +107,12 @@ Make the CLI comfortable for real users, not just internal validation.
 
 - Human-readable default output for `trimctx analyze <file>`.
 - `trimctx analyze <file> --json` for full JSON output.
-- `trimctx report <file> -o <report.json>` remains the full machine-readable report path.
-- `trimctx resume` analyzes the most recent Claude Code transcript.
-- `trimctx current --source codex` analyzes the latest Codex session from the documented local path.
-- `trimctx handoff <file>` writes deterministic UID-based continuation packages without LLM calls.
+- `trimctx report <file> -o report.md` is the human review path; `.json` and `analyze --json` are the machine-readable paths.
+- `trimctx` and file-less `analyze` use only a trusted hook-bound current-window transcript.
+- `trimctx analyze --select/--latest --source auto|claude|codex` provides explicit local discovery.
+- `trimctx new-chat [file]` writes deterministic UID-based continuation packages without LLM calls.
 - Better error messages for unsupported JSONL, unreadable files, and unsafe output paths.
-- Advanced threshold flags exist for validation/tuning, but the default path should remain conservative and simple.
+- Internal thresholds remain fixed on the public CLI; validation/tuning is not exposed as an active user workflow.
 - Zero `remove_candidate` results on a real sample are acceptable when messages do not cross the stricter removal threshold; document this as conservative safety behavior rather than treating it as parser failure.
 
 ### User Experience
@@ -139,29 +139,29 @@ top reasons:
 - old_message: 190
 
 next:
+- trimctx report <file> -o report.md
 - trimctx report <file> -o report.json
-- trimctx compress <file> -o output.jsonl
 ```
 
 ### Acceptance Criteria
 
 - `analyze` output fits in a terminal screen for large sessions.
 - `analyze --json` preserves current full JSON behavior.
-- `resume` works for the latest Claude Code session.
+- Bound analysis fails without a valid current-window binding; `analyze --latest --source claude` handles latest-file discovery.
 - Tests cover human summary output and JSON output separately.
-- Threshold/options validation is covered for invalid values and unsafe combinations.
+- Public CLI tests ensure internal threshold flags are not exposed.
 - Phase 0 validation records manual review metrics for critical false deletion count, protected recall, and remove candidate precision.
 - Real private OpenAI export validation is recorded before claiming Phase 0 complete.
 
 ### Not Included
 
-- Packaged slash command installation.
+- Additional automatic integration beyond the packaged Claude/Codex assets.
 - Background monitoring.
 - Multi-platform integrations.
 
 ## v0.3: Claude Code Integration
 
-Current status: deferred. Per `docs/dev/iteration-plan.md`, do not start installation, hooks, status line, MCP, Web UI, or LLM summarization work until v0.2 validation and trust signals are stable.
+Current status: partially implemented and under stabilization. The npm package already ships Claude Code commands, a Codex skill, `trimctx init`, and experimental SessionStart/Stop hooks. Further hook automation, status line, MCP, Web UI, and LLM summarization remain deferred.
 
 ### Goal
 
@@ -169,16 +169,13 @@ Let users use trimctx from inside Claude Code without manually finding JSONL fil
 
 ### Deliverables
 
-- `trimctx install claude-code`
 - Claude Code slash command file for `/trimctx`
-- `/trimctx` summary command
-- `/trimctx report`
-- `/trimctx compress`
-- `trimctx install-hooks`
-- `trimctx hook`
-- `trimctx statusline`
-- Safe output location for generated reports and compressed copies
-- Uninstall or repair behavior for the installed command
+- `/trimctx` read-only assessment command
+- `/trimctx:new-chat` as the only continuation command
+- `/trimctx:compress` for explicit separate-copy compression
+- Explicit hook opt-in through `trimctx init --with-hooks`
+- Safe output locations for generated reports and compressed copies
+- Clear SessionStart/Stop write-scope disclosure
 
 ### User Experience
 
@@ -196,7 +193,7 @@ Then inside Claude Code:
 
 - Install command is idempotent.
 - Installed slash command points to the local package correctly.
-- `/trimctx` uses the current or latest session automatically.
+- `/trimctx` uses only the hook-bound current session; local latest discovery remains explicit through `analyze --latest`.
 - Hooks use `transcript_path` from Claude Code hook input instead of guessing the active session.
 - Status line output is fast and short.
 - Generated files are placed outside the original transcript path.
@@ -288,15 +285,15 @@ Keep the core engine vendor-neutral and expand integrations or heavier detection
 
 ## Current Priority
 
-The next project phase should finish Phase 0 validation and stabilize the current CLI before investing further in installers or additional discovery commands:
+The command surface, report pipeline, and integration boundaries are now stabilized for the current iteration. The next phase should validate report quality and accumulate release evidence before adding new discovery or automation surfaces:
 
-1. Complete multi-sample private real-session validation.
-2. Produce a validation summary with protected/remove/compress ratios, top reasons, and manual review notes.
-3. Re-run real-session validation after each scoring/safety change.
-4. Keep `analyze`, `analyze --json`, `report`, `compress`, and `resume` as the active CLI surface.
-5. Re-evaluate additional session discovery or diagnostics commands only after Phase 0 evidence shows they are necessary.
+1. Keep `init`, `analyze`, `analyze --json`, `report`, `compress`, and `new-chat` as the active CLI surface.
+2. Review Report v2 assessments, findings, candidate groups, and continuation readiness on representative real sessions.
+3. Record Phase 0 manual-review metrics and private OpenAI export validation before stronger safety claims.
+4. Keep Windows packed-install, npm package smoke tests, hook write-scope disclosure, and original-transcript protections green.
+5. Re-evaluate additional session discovery, diagnostics, or background automation only after report quality and trust gates are established.
 
-Only after this should v0.3 installation work begin.
+Only after this should additional integration or background automation work begin.
 
 ## Repository Hygiene Before Public Release
 

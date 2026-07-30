@@ -16,14 +16,12 @@ describe("analyze CLI", () => {
     });
 
     expect(stdout).toContain("trimctx analysis");
-    expect(stdout).toContain("messages /");
-    expect(stdout).toContain("tokens");
-    expect(stdout).toContain("tokenizer:");
-    expect(stdout).toContain("health:");
-    expect(stdout).toContain("rot:");
-    expect(stdout).toContain("resume:");
-    expect(stdout).toContain("readiness:");
-    expect(stdout).toContain("next:");
+    expect(stdout).toContain("状态: UNKNOWN");
+    expect(stdout).toContain("置信度: LOW");
+    expect(stdout).toContain("续接缺失:");
+    expect(stdout).toContain("报告:");
+    expect(stdout).toContain("-o report.md");
+    expect(stdout).toContain("-o report.json");
     expect(stdout).not.toContain('"messages": [');
   });
 
@@ -34,7 +32,9 @@ describe("analyze CLI", () => {
     });
 
     const report = JSON.parse(stdout) as AnalysisReport;
-    expect(report.schema_version).toBe("trimctx.report.v1");
+    expect(report.schema_version).toBe("trimctx.report.v2");
+    expect(report.assessment.status).toBe("unknown");
+    expect(report.review_queue.items).toEqual(expect.any(Array));
     expect(report.messages.length).toBeGreaterThan(0);
     expect(report.summary.top_reasons.length).toBeGreaterThan(0);
     expect(report.tokenization).toEqual({ tokenizer: "local_heuristic", confidence: "medium" });

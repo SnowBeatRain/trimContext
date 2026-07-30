@@ -4,6 +4,8 @@ import { parseOpenAiJsonl } from "../adapters/openai-jsonl.js";
 import { parseJsonlRecords } from "./diagnostics.js";
 import { resolveAnalysisOptions, type AnalysisOptions } from "./options.js";
 import { applySafetyRules } from "./safety.js";
+import { annotateMessageContext } from "./signals/context.js";
+import { attachSignalEvidence } from "./signals/index.js";
 import { scoreMessages } from "./scorer.js";
 import { selectTokenizerForSource } from "./tokenizer/index.js";
 import type { NormalizedMessage } from "../types/message.js";
@@ -20,7 +22,7 @@ export function analyzeMessages(messages: NormalizedMessage[], options: Analysis
       token_metadata: tokenMetadata
     };
   });
-  return scoreMessages(applySafetyRules(withTokens, resolved), resolved);
+  return scoreMessages(attachSignalEvidence(annotateMessageContext(applySafetyRules(withTokens, resolved))), resolved);
 }
 
 export function parseJsonl(input: string, file = "<input>"): NormalizedMessage[] {

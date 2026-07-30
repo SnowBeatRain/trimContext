@@ -9,30 +9,37 @@
 - `docs/dev/execution-plan.md`：执行任务、数据集和 Phase 0 验收。
 - `docs/dev/iteration-plan.md`：团队评审后的当前迭代计划、优先级和质量门。
 
+## 分支整理状态（2026-07-18）
+
+- `refactor/full-command-optimization` 保留在远端作为历史参考，不删除、不继续作为发布分支开发。
+- 该分支已被 `main` 上的选择性整合方案取代：报告摘要、Codex tool item 归一化、ROT 指标计算三个低耦合抽取已进入主线；Hook dry-run 防泄漏修复已按当前 `0.2.10` 架构重写并进入主线。
+- 相对整合前发布基线 `origin/main@80aeae5`，该分支的独有提交计数为 `2 / 12`，精确合并重演在 `src/cli.ts`、`src/commands/new-chat.ts`、`src/core/compressor.ts`、`src/platform/files.ts` 产生 4 个核心语义冲突。相对已完成选择性整合的当前 `main@0598895`，计数为 `7 / 12`，并因两边都调整 Hook 回归覆盖而新增 `tests/hook.test.ts` 冲突。
+- 这些冲突涉及命令架构、当前会话、压缩安全、文件写边界和 Hook 回归契约，且旧分支仍基于 `0.2.9`，因此不采用完整合并或简单的 `ours` / `theirs` 消解。
+- 后续发布以 `main` 为唯一候选；除非明确开展历史代码研究，否则不要从该分支继续提交或发布。
+
 ## 当前已经完成
 
 ### v0.1 核心 CLI
 
 - `trimctx analyze <file>` / `--json`
-- `trimctx report <file> -o <report.json>`
+- `trimctx report <file> -o report.md|report.json`
 - `trimctx compress <file> -o <output.jsonl>`
 - Claude Code / OpenAI / Codex-Hermes 三种 JSONL parser（自动检测格式）
 - 近似 tokenizer（零外部依赖）
 - 安全规则引擎（13 条 hard-protect 规则）
 - 多维度 rot 评分器（6 维评分 + 重要性折扣）
-- JSON report schema（含 score_diagnostics）
+- `trimctx.report.v2` schema（含 assessment、findings、review_queue 和 recommendations）
 - 安全压缩器（原文件 hash 不变）
 
 ### v0.2 CLI 可用性与集成
 
 - `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
-- `trimctx current` — 自动发现最新会话，支持 `--source auto|claude|codex`
-- `trimctx resume` — 快捷分析最新 Claude Code 会话
-- `trimctx handoff` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
-- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:resume`、`/trimctx:compress`
+- `trimctx` / 不带文件的 `analyze` — 只分析 hooks 绑定的当前窗口；本地发现使用 `analyze --select/--latest`
+- `trimctx new-chat` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
+- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:new-chat`、`/trimctx:compress`
 - Codex skill（`codex/skills/trimctx/SKILL.md`）
 - GitHub 安装脚本（`install.sh` / `install.ps1`）
-- `report` 中的 `score_diagnostics`（max/p90/near_threshold/protected_high_rot/decision_ranges）
+- Markdown 会话健康报告，以及与 `analyze --json` 一致的 v2 JSON 报告
 
 验证命令：
 
@@ -56,7 +63,7 @@ npm run build
 - 总 compress candidates：245
 - 所有样本压缩前后原始文件 hash 均未变化
 
-人工评审尚未完成（precision、protected recall、critical false deletion count 待确认）。真实私有 OpenAI 和 Codex/Hermes 样本验证仍待补充。
+项目负责人已经确认现有功能在真实工作流中可行；后续私有验证作为回归记录，不再作为继续 CLI 稳定化和结构重构的前置条件。这不等同于宣称 `phase0_trust` 已锁定；未来若对外承诺无需人工审查的压缩安全性，仍需满足正式 Phase 0 发布门槛。
 
 ## 已修复的问题
 
@@ -178,75 +185,46 @@ parser 可用，scorer/safety 已经能在真实长会话里产出一批可解�
 
 ## 当前主要问题
 
-### 1. Phase 0 证据记录已扩展，但人工评审闭环仍未完成
+### 1. Phase 0 信任门仍未锁定
 
-当前 CLI 输出体验已经进入 v0.2 形态：
+当前工作流和保守压缩策略已经可用于本地审查，但这不等同于可以对外承诺“无需人工复核的压缩安全”。正式承诺仍需要多样本人工审查指标和真实私有 OpenAI export 验证。
 
-- `analyze` 默认输出短摘要
-- `report` 输出完整 JSON
-- `analyze --json` 输出完整 JSON
-- `resume` 可分析最近 Claude Code session
-- `current --source codex` 可分析最近 Codex session
-- `handoff` 可生成 deterministic Markdown 交接材料
+### 2. Report v2 需要代表性样本复核
 
-当前 `reports/phase0/validation-summary.md` 已记录 Claude Code 与 Codex/Hermes rollout 私有样本的聚合验证结果，但 Phase 0 还不能宣称完成：
+`trimctx.report.v2` 已提供结构化 evidence、独立 assessment、findings、review queue 和 candidate groups。下一步应检查这些结果是否准确、可解释、可操作，优先修正文案和误报，不扩大自动删除范围。
 
-- 真实私有 OpenAI JSONL export 仍未提供验证
-- 删除候选 precision、protected recall、critical false deletion count 仍需要人工评审指标
-- 零 `remove_candidate` 批次只能证明默认行为保守，不能证明删除候选 precision
+### 3. 集成边界需要持续保持明确
+
+SessionStart hook 通过 `CLAUDE_ENV_FILE` 写当前会话绑定；Stop hook 可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的上下文状态区块。原始 transcript 始终只读，绑定式分析与显式压缩继续分离。
 
 ## 下一步执行顺序
 
-### Step 1：完成 Phase 0 人工评审指标
+### Step 1：复核 Report v2 质量
 
-按 `docs/dev/manual-review-rubric.md` 对私有验证结果进行人工评审，并只把聚合指标写入：
+- 使用代表性 Claude Code / Codex 会话检查健康结论、findings 和 review queue。
+- 记录误报、漏报和 continuation readiness 缺口。
+- 只在证据充分时调整规则或展示文案。
 
-```text
-reports/phase0/validation-summary.md
-```
+### Step 2：补齐 Phase 0 发布证据
 
-目标：
+- 完成多样本人工审查指标。
+- 补充真实私有 OpenAI export 验证。
+- 在门槛满足前继续保留人工审查提示。
 
-- 记录 remove candidate precision
-- 记录 protected recall
-- 确认 critical false deletion = 0
-- 标记 `questionable_remove`、`over_protected` 和 `missed_low_value_noise` 作为后续调参证据
+### Step 3：保持发布与集成质量门
 
-### Step 2：补真实私有 OpenAI export 验证
-
-在用户提供真实 OpenAI JSONL export 后，将其加入 Phase 0 私有验证批次。只发布聚合统计，不提交原始 transcript、私有 report 或 `phase0-results.json`。
-
-期望：
-
-- 能自动识别 OpenAI JSONL
-- `analyze`、`report`、`compress` 都能跑通
-- `compress` 不修改原文件
-- 人工评审指标能覆盖 OpenAI 样本
-
-### Step 3：收敛当前 CLI 信任信号
-
-先维持默认保守行为，不调整 scorer/compress 行为。当前阶段继续打磨：
-
-- `trimctx analyze <file>`
-- `trimctx analyze <file> --json`
-- `trimctx report <file> -o <report.json>`
-- `trimctx compress <file> -o <output.jsonl>`
-- `trimctx resume`
-- `trimctx current --source codex`
-- `trimctx handoff <file>`
+- 保持 Windows packed-install、tarball 资产清单和 fresh-install smoke 覆盖。
+- 保持五个公开命令、内部 hook executor 和原始 transcript 只读契约。
+- 发布前运行测试、构建和 package contents 检查。
 
 ### Step 4：冻结高风险扩展
 
-Phase 0 人工指标闭环前，不推进 Web UI、MCP、hooks、自动压缩、LLM summarization 或更激进删除阈值。
-
-### Step 5：准备发布前证据检查
-
-在声称阶段完成前运行质量门，并检查文档不得宣称未验证能力已完成。
+暂不推进 Web UI、MCP、后台监控、自动压缩、LLM summarization 或更激进删除阈值。
 
 ## 当前结论
 
-项目现在已经不是“不能跑”的阶段，而是进入“验证信任信号是否足够”的阶段。
+项目已完成本轮命令面收敛、evidence-based Report v2、文件写入保护和集成说明更新，进入“复核报告质量并积累正式信任证据”的阶段。
 
 当前最重要任务：
 
-**补齐 Phase 0 人工评审指标和真实私有 OpenAI export 验证，确认当前 CLI 的安全性和可用性，再决定是否调整 scorer/compress 或推进更高风险集成。**
+**用代表性样本审查 Report v2，补齐 Phase 0 证据，同时保持现有命令和安全边界稳定。**

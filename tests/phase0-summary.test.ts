@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -18,11 +18,21 @@ describe("phase0 validation summary", () => {
     );
 
     const summary = await readFile(join(outDir, "validation-summary.md"), "utf8");
+    const results = JSON.parse(await readFile(join(outDir, "phase0-results.json"), "utf8")) as {
+      sample_count: number;
+      aggregate: { analyze_ok: number; input_unchanged: number };
+      results: unknown[];
+    };
+    const fixtureCount = (await readdir(join(process.cwd(), "tests", "fixtures")))
+      .filter((file) => file.endsWith(".jsonl")).length;
+
+    expect(results.sample_count).toBe(fixtureCount);
+    expect(results.results).toHaveLength(fixtureCount);
     expect(summary).toContain("# Phase 0 Validation Summary");
     expect(summary).toContain("## Aggregate");
-    expect(summary).toContain("| Samples | 4 |");
-    expect(summary).toContain("| Analyze OK | 4/4 |");
-    expect(summary).toContain("| Input unchanged | 4/4 |");
+    expect(summary).toContain(`| Samples | ${fixtureCount} |`);
+    expect(summary).toContain(`| Analyze OK | ${results.aggregate.analyze_ok}/${fixtureCount} |`);
+    expect(summary).toContain(`| Input unchanged | ${results.aggregate.input_unchanged}/${fixtureCount} |`);
     expect(summary).toContain("## Source Coverage");
     expect(summary).toContain("claude-code-jsonl");
     expect(summary).toContain("codex-jsonl");

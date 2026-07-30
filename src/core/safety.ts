@@ -1,5 +1,6 @@
 import type { NormalizedMessage, Reason } from "../types/message.js";
 import type { ResolvedAnalysisOptions } from "./options.js";
+import { isCompactBoundaryMessage } from "./signals/context.js";
 
 const HARD_PROTECT_REASONS: Reason[] = [
   "system_or_developer_message",
@@ -24,12 +25,11 @@ export function applySafetyRules(messages: NormalizedMessage[], options: Pick<Re
   return messages.map((message, index) => {
     const reasons = new Set<Reason>(message.reasons ?? []);
     const content = message.content;
-    const raw = message.raw as Record<string, unknown> | undefined;
 
     if (message.role === "system" || message.role === "developer") {
       reasons.add("system_or_developer_message");
     }
-    if (raw?.subtype === "away_summary") {
+    if (isCompactBoundaryMessage(message)) {
       reasons.add("system_or_developer_message");
     }
     if (index >= recentStart) {
@@ -62,7 +62,7 @@ export function applySafetyRules(messages: NormalizedMessage[], options: Pick<Re
     if (/(architecture|schema|配置|架构|接口|数据库|package\.json|tsconfig)/i.test(content)) {
       reasons.add("contains_architecture_or_api_decision");
     }
-    if (message.tool?.isToolUse || message.tool?.isToolResult) {
+    if (message.tool?.isToolUse || message.tool?.isToolResult || message.role === "tool") {
       reasons.add("contains_tool_interaction");
     }
     if (message.tool?.isToolResult && message.tool.toolResultFor && referencedToolResults.has(message.tool.toolResultFor)) {
@@ -73,7 +73,6 @@ export function applySafetyRules(messages: NormalizedMessage[], options: Pick<Re
     }
 
     const next = { ...message, reasons: [...reasons] };
-    // Hard-protected reasons are final guards: scoring may flag them, but compression must preserve them.
     next.protected = next.reasons.some((reason) =>
       HARD_PROTECT_REASONS.includes(reason)
     );
@@ -95,23 +94,19 @@ function findRecentWindowStart(messages: NormalizedMessage[], count: number): nu
 }
 
 function findReferencedToolResults(messages: NormalizedMessage[]): Set<string> {
-  const resultIds = new Set(
-    messages
-      .map((message) => message.tool?.toolResultFor)
-      .filter((value): value is string => typeof value === "string")
-  );
   const referenced = new Set<string>();
-
-  // A tool result is protected only when later narrative text references its tool call id.
-  for (const id of resultIds) {
+  for (let resultIndex = 0; resultIndex < messages.length; resultIndex += 1) {
+    const id = messages[resultIndex]!.tool?.toolResultFor;
+    if (!id) continue;
     const escaped = escapeRegExp(id);
     const pattern = new RegExp(`\\b${escaped}\\b`);
-    if (
-      messages.some(
-        (message) => !message.tool?.isToolResult && !message.tool?.isToolUse && pattern.test(message.content)
-      )
-    ) {
-      referenced.add(id);
+    for (let index = resultIndex + 1; index < messages.length; index += 1) {
+      const message = messages[index]!;
+      if (isCompactBoundaryMessage(message)) break;
+      if (!message.tool?.isToolResult && !message.tool?.isToolUse && pattern.test(message.content)) {
+        referenced.add(id);
+        break;
+      }
     }
   }
 

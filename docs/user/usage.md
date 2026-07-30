@@ -1,448 +1,213 @@
-# Usage Guide
+# trimctx Usage Guide
 
-This guide explains how to run trimctx safely against local Claude Code, OpenAI, or Codex/Hermes rollout JSONL conversation files.
+trimctx is a local, deterministic CLI for analyzing Claude Code, OpenAI, and Codex/Hermes JSONL transcripts. It does not call an LLM, upload transcript data, or modify the original JSONL.
 
-[中文版](usage_zh.md)
+## Install
 
-## Requirements
-
-- Node.js 20 or later
-- A JSONL conversation file from Claude Code, an OpenAI-style chat export, or a Codex/Hermes rollout export
-
-trimctx is local-only: it does not call an LLM, upload files, or use a database. Token counting also stays local: the built-in `local_heuristic` tokenizer is the default, and the optional `js-tiktoken` package enables exact local counts for OpenAI-style and Codex/Hermes rollout inputs without calling a vendor API. The `0.2.3` release is a packaging and continuation milestone, not a Phase 0 completion claim; keep reviewing reports before relying on compression output.
-
-If you install `trimctx` globally and want exact `tiktoken` counts, install `js-tiktoken` in the same resolvable environment as the CLI, or use a project-local `trimctx` install with a project-local `js-tiktoken` dependency.
-
-## Installation
-
-### One-command GitHub install
-
-This path does not require publishing trimctx to npm.
-
-Windows CMD:
-
-> If CMD says `'pwsh' is not recognized`, use `powershell` instead. Review the downloaded script before running it.
-
-```bat
-pwsh -NoProfile -Command "Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1"
-type install.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
-```
-
-Windows PowerShell:
-
-```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.ps1 -OutFile install.ps1
-Get-Content install.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-macOS / Linux / WSL:
-
-```bash
-curl -fsSLO https://raw.githubusercontent.com/SnowBeatRain/trimContext/main/install.sh
-less install.sh
-bash install.sh
-```
-
-On Windows, it installs CLI shims at `%USERPROFILE%\.local\bin`, installs the Claude Code plugin at `%USERPROFILE%\.claude\plugins\trimctx`, and keeps the source checkout at `%LOCALAPPDATA%\trimctx`.
-
-On macOS / Linux, it installs the CLI at `~/.local/bin/trimctx`, installs the Claude Code plugin at `~/.claude/plugins/trimctx`, and keeps the source checkout at `~/.local/share/trimctx`.
-
-Restart Claude Code after installation, then run:
-
-```text
-/trimctx
-```
-
-If your shell cannot find `trimctx`, add `~/.local/bin` to `PATH`:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-### From source
-
-```bash
-git clone https://github.com/SnowBeatRain/trimContext.git
-cd trimContext
-npm install
-npm run build
-```
-
-Run the source CLI during development:
-
-```bash
-npx tsx src/cli.ts analyze path/to/session.jsonl
-```
-
-Run the compiled CLI after `npm run build`:
-
-```bash
-node dist/cli.js analyze path/to/session.jsonl
-```
-
-### npm install
-
-Install the CLI and then install AI-client command files:
+Requires Node.js 20+.
 
 ```bash
 npm install -g trimctx
-trimctx init
-trimctx analyze path/to/session.jsonl
+trimctx --version
+trimctx init --target user
 ```
 
-`trimctx init` installs Claude Code command files and the Codex skill from the npm package. It prompts for user/global versus project install when `--target` is omitted. It does not install automatic hooks by default; `trimctx install-hooks` and `trimctx init --with-hooks` are experimental explicit opt-in automation. Use `trimctx init --dry-run` to inspect paths before writing.
-
-## Quick Start
-
-Analyze a file and print a short summary:
+Install Claude hooks only when current-window binding is needed:
 
 ```bash
-trimctx analyze path/to/session.jsonl
-```
-
-Typical summary shape:
-
-```text
-trimctx analysis
-
-  633 messages / 218K tokens
-  token estimate: heuristic-v1 (local_heuristic, medium confidence)
-  tokenizer: local_heuristic (medium confidence)
-  context pressure: HIGH  removable: 5.6K tokens (2.6%)
-  health: MODERATE  rot: 10.8% (68 candidates)
-
-  trust:
-    41 remove candidates crossed the safe deletion threshold.
-    review the JSON report before applying destructive workflows.
-    phase0: REVIEW_REQUIRED
-    candidates are review-only until Phase 0 gates are locked.
-    max score: 0.6428; near threshold: 0
-
-  next:
-    trimctx report "<file>" -o report.json
-    run Phase 0 manual review before using compress output as replacement context
-    trimctx analyze "<file>" --json
-```
-
-Write a full JSON report before compressing:
-
-```bash
-trimctx report path/to/session.jsonl -o report.json
-```
-
-Generate a compressed copy only after reviewing the report:
-
-```bash
-trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
-```
-
-Generate handoff artifacts for continuing work in a later session:
-
-```bash
-trimctx handoff path/to/session.jsonl
+trimctx init --target user --with-hooks
 ```
 
 ## Recommended Workflow
 
-1. Run `analyze` to see whether trimctx finds meaningful candidates.
-2. Run `report` and inspect the reasons for `remove_candidate` messages.
-3. Keep the original JSONL file unchanged.
-4. Run `compress` with `-o` to create a new file only after review; before Phase 0 trust is locked, treat that output as a review artifact rather than replacement context.
-5. Compare the original file hash before and after compression if you need safety evidence.
+1. Analyze the session.
+2. Write and review a Markdown report.
+3. Use JSON only for automation or deeper audit.
+4. Create a new-chat package or compressed copy only after review.
 
 ```bash
-sha256sum session.jsonl
+trimctx analyze path/to/session.jsonl
+trimctx report path/to/session.jsonl -o report.md
+trimctx report path/to/session.jsonl -o report.json
+trimctx new-chat path/to/session.jsonl
+trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
+```
+
+`healthy` is not deletion permission. `unknown` means evidence is insufficient, not that the conversation is clean. Protected messages are never automatically deleted.
+
+## Analyze
+
+```bash
+trimctx analyze <file>
+trimctx analyze <file> --json
+trimctx analyze --select
+trimctx analyze --latest
+trimctx analyze --latest --source claude
+trimctx analyze --latest --source codex
+```
+
+The terminal summary reads the v2 assessment, displays at most two findings, lists missing continuation evidence, and shows only the first recommendation. It intentionally omits internal score and token breakdowns.
+
+Without a file, `analyze` accepts only a trusted `TRIMCTX_TRANSCRIPT_PATH` binding. `--select` and `--latest` are explicit discovery modes. Selecting a JSONL file does not restore or switch an AI client window.
+
+Use `--json` for the complete `trimctx.report.v2` value.
+
+## Report
+
+The output file must end in `.md` or `.json` (case-insensitive).
+
+```bash
+# Human review
+trimctx report session.jsonl -o report.md
+
+# Automation
 trimctx report session.jsonl -o report.json
-trimctx compress session.jsonl -o session.trimmed.jsonl
-sha256sum session.jsonl
-```
-
-The two hashes for `session.jsonl` should match.
-
-## Phase 0 validation for shared use
-
-If you plan to recommend trimctx to other users or validate a release candidate, run the private multi-sample validation workflow:
-
-```bash
-npm run --silent phase0:run -- --dir datasets/private/phase0 --out reports/phase0
-npm run --silent phase0:review -- --reports reports/phase0 --labels datasets/private/phase0-labels --out reports/phase0
-```
-
-`phase0:review` is a repository development script; run it from a source checkout, not from a globally installed `trimctx` package. The script writes `reports/phase0/phase0-review.json` and `reports/phase0/phase0-review.md`. Its `trust_status` is `review_required` while labels, label references, or metrics are incomplete, `locked` only when all gates pass, and `failed` when review completes but a metric gate fails. Protected review is intentionally scoped: all critical protected messages must be labeled, while non-critical protected messages are checked by representative sampling.
-
-The workflow is documented in `docs/dev/phase0/phase0-plan.md`, `docs/dev/phase0/manual-label-guide.md`, and `docs/dev/phase0/validation-summary-template.md`.
-
-`reports/phase0/phase0-results.json` is private by default. It can include local paths plus captured `stderr` or `error` details, so publish only a sanitized summary or manually redacted excerpt.
-
-## Commands
-
-### `trimctx init`
-
-Install AI-client command files and skills from the installed package.
-
-```bash
-trimctx init
-trimctx init --client claude
-trimctx init --client codex --target project --dir .
-trimctx init --dry-run
-```
-
-By default, `trimctx init` prompts for user/global or project install. With `--target user`, Claude Code assets go to `~/.claude/plugins/trimctx` and Codex skill assets go to `~/.codex/skills/trimctx`. Existing assets are not overwritten unless `--force` is provided.
-
-### `trimctx analyze <file>`
-
-Analyze a Claude Code, OpenAI, or Codex/Hermes rollout JSONL conversation and print a terminal summary.
-
-```bash
-trimctx analyze session.jsonl
-```
-
-Options:
-
-| Flag | Description |
-|---|---|
-| `--json` | Print the full JSON report instead of the short summary |
-| `--color` | Colorize the terminal summary |
-| `--recent-window <count>` | Hard-protect the most recent N messages; default `30` |
-| `--remove-threshold <score>` | `rot_score` threshold for `remove_candidate`; default `0.80` |
-| `--compress-threshold <score>` | `rot_score` threshold for `compress_candidate`; default `0.60` |
-
-Examples:
-
-```bash
 trimctx analyze session.jsonl --json
-trimctx analyze session.jsonl --recent-window 20 --remove-threshold 0.85
 ```
 
-### `trimctx report <file> -o <report.json>`
+`report.json` and `analyze --json` are deeply equivalent. JSON is pretty-printed with a trailing newline.
 
-Write a complete JSON report.
+The Markdown report contains:
+
+- conclusion and confidence
+- health dimensions
+- key findings with finding, evidence, impact, and action
+- review queue
+- protected but possibly stale items
+- trusted continuation status
+- limitations and safety notes
+- next actions
+
+Displayed evidence contains only message id, source line, role, and a redacted summary capped at 160 characters. Token-like secrets, email addresses, key/value secrets, and Basic Auth credentials are redacted. Markdown table pipes and line breaks are escaped. This narrow display does not mean every generated artifact is safe to share; review it first.
+
+Report writes use a same-directory temporary file and atomic replacement. The command rejects the input file and aliases of it, keeps an existing report intact when rendering or writing fails, and rechecks the open input handle before replacement.
+
+## New Chat
 
 ```bash
-trimctx report session.jsonl -o report.json
+trimctx new-chat session.jsonl
+trimctx new-chat session.jsonl --out custom-root
 ```
 
-The report includes:
+The command writes `.trimctx/handoffs/<uid>/` by default:
 
-- `input` — source file metadata
-- `summary` — message counts, token estimates, protected count, candidate counts, estimated savings, and score diagnostics
-- `tokenization` — tokenizer name and confidence; `local_heuristic` means a local estimate, while optional `js-tiktoken` enables exact high-confidence local counts for OpenAI-style and Codex/Hermes rollout inputs.
-- `messages` — per-message token estimates, decisions, reasons, and scores
-- `remove_candidates` — messages selected for safe removal by current thresholds
-- `warnings` — parser or analysis issues encountered during processing
+- `handoff.md`
+- `next-context.md`
+- `manifest.json`
+- `report.json`
+- `README.md`
 
-`summary.score_diagnostics` is for threshold tuning and validation. It includes `max_rot_score`, `p90_rot_score`, `near_remove_threshold_count`, `protected_high_rot_count`, and `decision_score_ranges`. These diagnostics do not change message decisions or compression behavior.
+`manifest.json` preserves the source hash and file lists and records `health_status`, `health_confidence`, and `report_schema_version`. The embedded `report.json` is v2. Candidate and protected sections preserve the report review-queue order; continuation sections use trusted resume evidence.
 
-### `trimctx compress <file> -o <output.jsonl>`
+Review the package before sharing or pasting it into a new window. It may contain original transcript content and secrets. The UID is a local package reference, not a restore token.
 
-Create a new JSONL file. The `-o` flag is required.
+## Multiple Windows and Current Sessions
+
+An explicit `<file>` is always the command's source of truth. In a multi-window environment, do not treat the most recently modified session as proof of the current window.
+
+After Claude Code hooks are installed, SessionStart writes that window's `transcript_path` and `session_id` through its own `CLAUDE_ENV_FILE`, creating `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` bindings. Restart every already-open Claude Code window after installation. `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` use the bound path and stop when it is missing instead of falling back to another session. File-less `trimctx analyze` also checks that the bound path is a readable file and, when a session ID exists, that it matches the transcript filename.
+
+Claude Code windows in the same project share `.claude/CLAUDE.md`. The managed status block may be updated by whichever window runs the Stop hook last, but that does not change each window's transcript binding.
+
+Codex does not currently have a verified automatic window binding:
+
+- `--latest --source codex` selects the most recently modified file across local Codex sessions; it does not guarantee the current window.
+- `--select --source codex` is a manual choice, not an automatic binding.
+- File-less `trimctx new-chat` may fall back to the latest session when no binding exists; do not use this form with multiple Codex windows.
+- To strictly target a Codex window, pass its confirmed JSONL path explicitly to every command.
+
+```powershell
+trimctx analyze --select --source codex
+trimctx analyze "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+trimctx new-chat "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+```
+
+After generating a package, inspect `input.file`, `session_id`, and `sha256` in `.trimctx/handoffs/<uid>/manifest.json` before using it in a new window. Resolve the UID from the same project directory or from the explicit `--out` directory.
+
+## Compress
 
 ```bash
 trimctx compress session.jsonl -o session.trimmed.jsonl
 ```
 
-`compress` removes only non-protected `remove_candidate` messages. It keeps `compress_candidate` messages because they are currently report-only.
+Compression writes a new file and never changes the input. It removes only non-protected `remove_candidate` messages. Protected messages, `keep`, and `compress_candidate` remain in the copy. A candidate is still a review item; a health status does not authorize deletion.
 
-If a report contains `compress_candidate` messages but no `remove_candidate` messages, the parser and scorer can still be working correctly. It means the messages crossed the reporting threshold but did not cross the stricter removal threshold. This is expected for safety-sensitive or sparsely validated formats such as Codex/Hermes rollout files.
+## Claude Code Plugin
 
-| Decision | Behavior |
-|---|---|
-| `keep_protected` | Kept |
-| `keep` | Kept |
-| `compress_candidate` | Kept; report-only candidate |
-| `remove_candidate` | Removed only if not protected |
-
-### `trimctx handoff <file>`
-
-Write deterministic Markdown artifacts for continuing a long or noisy session without mutating the original JSONL.
+Install assets and opt into hooks:
 
 ```bash
-trimctx handoff session.jsonl
+trimctx init --client claude --target user --with-hooks
 ```
 
-By default, trimctx writes a uid-based package under `.trimctx/handoffs/<uid>/`. The package includes the primary handoff, a shorter continuation context, a machine-readable manifest, and the full JSON report. The UID uses UTC time (`ctx_YYYYMMDD_HHMMSS_xxxxxx`) and is printed as `copyable uid: ...` so it can be pasted into follow-up instructions. `manifest.json` stores absolute file paths for local automation and relative file names for moving or archiving the package. Use `--out <dir>` to place packages under a custom root. Legacy single-file output is still available with `-o handoff.md --next-context next-context.md`. Review the package before sharing because `report.json` may include original transcript content and secrets.
+After restarting Claude Code:
 
-Example `handoff.md` output:
+- `/trimctx` runs `trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color`.
+- `/trimctx:analyze` accepts an explicit JSONL file.
+- `/trimctx:new-chat` creates the current-session continuation package.
+- `/trimctx:compress` writes a separate copy only after an explicit request.
 
-```markdown
-# trimctx Handoff
+If `TRIMCTX_TRANSCRIPT_PATH` is missing, current-window commands stop instead of guessing another session.
 
-## Source
-- File: path/to/session.jsonl
-- Format: claude-code-jsonl
-- Messages: 633
-- Estimated tokens: 218385
+Hook write scope:
 
-## Safety Summary
-- Remove candidates: 41
-- Compress candidates: 30
-- Protected messages: 338
-- Estimated removable tokens: 5592
-- Max rot score: 0.6428
-- Near remove threshold: 0
+- SessionStart writes `transcript_path` and session binding data through `CLAUDE_ENV_FILE`.
+- Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
+- Original JSONL transcripts remain read-only.
 
-## Continue From Here
-- Treat `remove_candidate` as the only class eligible for destructive workflows...
-- Treat `compress_candidate` as report-only review signal...
-- Keep original JSONL unchanged...
-- If remove candidates are zero, continue from the health report...
+## Codex Skill
 
-## Candidate Review Queue
-- line 42, user, score 0.8500: old_message, low_reference_in_later_context
-- line 58, assistant, score 0.8200: superseded_by_later_instruction, old_message
-...
-
-## Protected High-Rot Signals
-- line 301, user, score 0.6500: contains_code_block, old_message
-
-## Warnings
-- This handoff package may include original transcript content and secrets; review it before sharing or pasting into another system.
-- session_compacted: session contains away_summary or compact_boundary markers
-
-## Commands
-- `trimctx analyze "path/to/session.jsonl"`
-- `trimctx report "path/to/session.jsonl" -o report.json`
-- `trimctx compress "path/to/session.jsonl" -o trimmed.jsonl`
-```
-
-Example `next-context.md` output:
-
-```markdown
-# Next Context
-
-Use this as the compact handoff for the next agent or session.
-
-## Current State
-- Source file: path/to/session.jsonl
-- Source format: claude-code-jsonl
-- Messages analyzed: 633
-- Remove candidates: 41
-- Compress candidates: 30
-
-## Operating Rules
-- Do not modify the original JSONL file.
-- Review remove candidates before applying any destructive workflow.
-- Use score diagnostics as trust signals, not as automatic tuning instructions.
-
-## Next Commands
-- `trimctx analyze "path/to/session.jsonl"`
-- `trimctx report "path/to/session.jsonl" -o report.json`
-- `trimctx handoff "path/to/session.jsonl"`
-```
-
-### `trimctx current`
-
-Analyze the most recently modified Claude Code or Codex `.jsonl` session under local client session directories.
+Install the packaged skill:
 
 ```bash
-trimctx current
-trimctx current --source auto
-trimctx current --source claude
-trimctx current --source codex
-trimctx current --json
-trimctx current --compress session.trimmed.jsonl
+trimctx init --client codex --target user
 ```
 
-`--source auto` scans the Claude Code project session root and the Codex session root, then chooses the newest JSONL file. `--source claude` scans only `~/.claude/projects/`; `--source codex` scans only `~/.codex/sessions/`.
+Use an explicit file, `trimctx analyze --select --source codex`, or `trimctx analyze --latest --source codex`. With multiple windows, confirm and pass the JSONL path explicitly; neither `--latest` nor `--select` is an automatic current-window binding. The package documents a skill/CLI workflow, not a verified Codex `/trimctx` slash command or verified current-window binding.
 
-### `trimctx resume`
+## Report v2
 
-Analyze the most recently modified Claude Code `.jsonl` session under `~/.claude/projects/`.
+Top-level fields include:
 
-```bash
-trimctx resume
-trimctx resume --json
-trimctx resume --compress session.trimmed.jsonl
-```
+- `schema_version`
+- `input`, `summary`, and `tokenization`
+- `parser_diagnostics` and `phase0_trust`
+- `resume`, `assessment`, and `findings`
+- `review_queue` and `candidate_groups`
+- `recommendations` and `analysis_meta`
+- `messages`, candidate arrays, and `warnings`
 
-`resume` uses Claude Code's local session directory. If no session exists there, it exits with an error. It does not scan arbitrary directories.
+The JSON report is complete audit data and can contain full message content. Keep private reports out of git and npm packages.
 
-## Client Integrations
-
-### Claude Code
-
-This repository includes project-level command files under `.claude/commands/`:
-
-- `.claude/commands/trimctx.md` exposes `/trimctx` for analyzing the latest Claude Code or Codex session.
-- `.claude/commands/trimctx/analyze.md` exposes `/trimctx:analyze <file>`.
-- `.claude/commands/trimctx/resume.md` exposes `/trimctx:resume`.
-- `.claude/commands/trimctx/compress.md` exposes `/trimctx:compress`.
-
-The npm package also includes `plugins/trimctx/`, a Claude Code plugin wrapper with the same command files. These commands call the `trimctx` executable, so install the CLI globally or run `npm link` during local development.
-
-Safety boundary: these commands analyze exported/local JSONL files. They do not install hooks, do not write back into Claude Code sessions, and do not compress unless the user chooses `/trimctx:compress` or a CLI command with `--compress`.
-
-### Codex
-
-The package includes `codex/skills/trimctx/SKILL.md`, which provides a Codex-supported skill entry point for the CLI workflow. This is not documented as a verified Codex `/trimctx` slash command; use the skill or run `trimctx current --source codex` directly. Codex discovery currently scans `~/.codex/sessions/` only.
-
-## Supported Input Formats
+## Supported Inputs
 
 | Format | Status |
-|---|---|
+| --- | --- |
 | Claude Code JSONL | Supported |
-| OpenAI Chat Completion-style JSONL | Supported |
+| OpenAI JSONL | Supported |
 | Codex/Hermes rollout JSONL | Supported |
-| Plain text transcripts | Not supported |
-| Remote APIs or databases | Not supported |
+| Plain text | Not supported |
 
-## Report Decisions
+## Troubleshooting
 
-| Decision | Meaning |
-|---|---|
-| `keep_protected` | High-risk or recent content protected by safety rules |
-| `keep` | Content does not meet candidate thresholds |
-| `compress_candidate` | Possibly low-value content, but not removed by current compressor |
-| `remove_candidate` | Non-protected content that meets the removal threshold |
+### No bound transcript
 
-## Scoring Dimensions
+Pass an explicit file, use `--select`/`--latest`, or install Claude hooks with `trimctx init --with-hooks` and restart Claude Code.
 
-Each message can receive scores across these dimensions:
+### Report output rejected
 
-| Dimension | Weight | Description |
-|---|---:|---|
-| `superseded_score` | 0.30 | Later messages override or correct earlier instructions |
-| `low_reference_score` | 0.25 | The message is not referenced by later context |
-| `age_score` | 0.20 | Older messages receive more decay |
-| `redundancy_score` | 0.15 | The message is similar to nearby content (±3 messages) |
-| `orphan_tool_score` | 0.10 | Tool calls or results are not connected to later context |
-| `low_value_score` | — | Metadata, acknowledgments, or low-information content (independent path, not part of weighted sum) |
+Use `.md` or `.json`, and choose a path different from the input transcript.
 
-Combined formula:
+### Zero remove candidates
 
-```text
-base_rot_score = 0.30 × superseded + 0.25 × low_reference + 0.20 × age + 0.15 × redundancy + 0.10 × orphan_tool
-rot_score = max(base_rot_score, low_value_score) − importance_discount
+This can be a conservative safety result. Review findings and limitations; do not lower internal thresholds from public CLI examples.
+
+### Verify the input is unchanged
+
+```bash
+sha256sum session.jsonl
+trimctx compress session.jsonl -o session.trimmed.jsonl
+sha256sum session.jsonl
 ```
 
-Importance discounts (subtracted from `rot_score` to protect important content):
-
-| Protection signal | Discount |
-|---|---:|
-| Code block, error stack, git diff, test failure | −0.15 |
-| Shell command, architecture/API/config decision | −0.10 |
-| Tool result referenced later | −0.10 |
-| File path | −0.05 |
-| Natural language referencing tool result | −0.05 |
-
-Decision mapping:
-
-```text
-protected => keep_protected
-rot_score >= 0.80 => remove_candidate
-rot_score >= 0.60 => compress_candidate
-otherwise => keep
-```
-
-The default `0.80` removal threshold is deliberately high. Lower it only for private validation runs where you manually review the generated report and can tolerate more aggressive candidates.
-
-Use `summary.score_diagnostics` before changing thresholds or scoring weights. If `compress_candidate` messages are far below the removal threshold and `near_remove_threshold_count` is `0`, the conservative result is likely intentional rather than a missed deletion opportunity.
-
-## Current Limitations
-
-- `compress_candidate` does not rewrite messages into summaries.
-- Token counts are local estimates, not exact model-tokenizer counts.
-- No Web UI, MCP server, or standalone installer is included. Claude Code command/plugin wrappers are included; Codex support is skill/CLI based rather than a verified slash command.
-- Real long-session validation is still ongoing, so review reports before using compressed output as a replacement context.
+The hashes must match.

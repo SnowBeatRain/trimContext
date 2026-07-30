@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { analyzeMessages } from "../src/core/analyzer.js";
 import { createReport } from "../src/core/reporter.js";
 import { LocalHeuristicTokenizer } from "../src/core/tokenizer.js";
 import type { NormalizedMessage, Reason } from "../src/types/message.js";
@@ -28,11 +29,204 @@ function analyzedMessage(id: string, reasons: Reason[]): NormalizedMessage {
       low_value_score: 0,
       rot_score: 0.9
     },
-    reasons
+    reasons,
+    analysis: {
+      kind: "metadata",
+      turn: 0,
+      segment: 0,
+      stable_identifiers: [],
+      evidence: [{
+        code: "low_value_metadata",
+        confidence: "high",
+        message_id: id,
+        source_line: Number(id.replace(/\D/g, "")) || 1,
+        role: "assistant",
+        details: { strength: 0.9 }
+      }]
+    }
   };
 }
 
 describe("createReport", () => {
+  test("assembles an auditable v2 report without executing compression", () => {
+    const duplicate = analyzedMessage("m1", ["duplicate_message"]);
+    duplicate.content = "obsolete duplicate output";
+    duplicate.analysis = {
+      kind: "result",
+      turn: 0,
+      segment: 0,
+      stable_identifiers: [],
+      evidence: [{
+        code: "exact_duplicate",
+        confidence: "high",
+        message_id: "m1",
+        source_line: 1,
+        role: "assistant",
+        related_message_id: "m2",
+        related_source_line: 2,
+        details: { similarity: 1 }
+      }]
+    };
+    const canonical = analyzedMessage("m2", []);
+    canonical.decision = "keep";
+    canonical.rot_score = 0;
+    canonical.scores = { ...canonical.scores, rot_score: 0 };
+    const protectedHighRot = analyzedMessage("m3", ["contains_user_decision"]);
+    protectedHighRot.decision = "keep_protected";
+    protectedHighRot.protected = true;
+    protectedHighRot.rot_score = 0.7;
+    protectedHighRot.scores = { ...protectedHighRot.scores, rot_score: 0.7 };
+
+    const report = createReport([duplicate, canonical, protectedHighRot], "session.jsonl");
+    const messageIds = new Set(report.messages.map((message) => message.id));
+
+    expect(report.schema_version).toBe("trimctx.report.v2");
+    expect(report.compress_candidates).toEqual([]);
+    expect(report.candidate_groups).toEqual(expect.arrayContaining([expect.objectContaining({
+      code: "exact_duplicate",
+      type: "duplicate",
+      related_message_id: "m2",
+      member_message_ids: ["m1"],
+      tokens: duplicate.tokens
+    })]));
+    expect(report.findings.length).toBeGreaterThan(0);
+    expect(report.findings.flatMap((finding) => finding.evidence).every((item) => messageIds.has(item.message_id))).toBe(true);
+    expect(report.review_queue.items.map((item) => item.message_id)).toEqual(["m1", "m3"]);
+    expect(report.review_queue.items[0]?.evidence.length).toBeGreaterThan(0);
+    expect(report.review_queue.items[1]?.default_action).toBe("keep_and_review");
+    expect(report.recommendations.map((item) => item.code)).toEqual(expect.arrayContaining([
+      "write_report",
+      "clarify_continuation",
+      "review_then_compress"
+    ]));
+    expect(report.recommendations.find((item) => item.code === "write_report")?.command).toContain("trimctx report \"session.jsonl\"");
+    expect(report.analysis_meta).toMatchObject({
+      analyzer_version: "evidence-v2",
+      thresholds: { recent_window: 30, remove: 0.8, compress: 0.6 },
+      tokenizer: "local_heuristic",
+      confidence: "medium"
+    });
+
+    const duplicateFinding = report.findings.find((finding) => finding.code === "exact_duplicate");
+    expect(duplicateFinding).toMatchObject({
+      confidence: "high",
+      title: expect.any(String),
+      explanation: expect.any(String),
+      impact: {
+        message_count: 1,
+        tokens: duplicate.tokens,
+        token_ratio: Number((duplicate.tokens / report.summary.total_tokens).toFixed(4))
+      },
+      suggested_action: expect.any(String)
+    });
+    expect(report.findings.find((finding) => finding.type === "limitation")).toMatchObject({
+      confidence: "low",
+      title: expect.any(String),
+      explanation: expect.any(String),
+      impact: { message_count: 0, tokens: 0, token_ratio: 0 },
+      suggested_action: expect.any(String)
+    });
+  });
+
+  test("rejects a remove candidate without decisive evidence", () => {
+    const invalid = analyzedMessage("m9", ["old_message"]);
+    invalid.analysis = {
+      kind: "unknown",
+      turn: 0,
+      segment: 0,
+      stable_identifiers: [],
+      evidence: []
+    };
+
+    expect(() => createReport([invalid], "session.jsonl")).toThrow(/decisive evidence/i);
+  });
+
+  test.each([
+    {
+      name: "medium-confidence decisive evidence",
+      mutate: (candidate: NormalizedMessage) => {
+        candidate.reasons = ["duplicate_message"];
+        candidate.analysis!.evidence = [{
+          code: "similar_duplicate",
+          confidence: "medium",
+          message_id: candidate.id,
+          source_line: candidate.sourceLine,
+          role: candidate.role,
+          details: { similarity: 0.9 }
+        }];
+      },
+      error: /high-confidence decisive evidence/i
+    },
+    {
+      name: "protected message",
+      mutate: (candidate: NormalizedMessage) => {
+        candidate.protected = true;
+        candidate.reasons = ["duplicate_message"];
+        candidate.analysis!.evidence = [{
+          code: "exact_duplicate",
+          confidence: "high",
+          message_id: candidate.id,
+          source_line: candidate.sourceLine,
+          role: candidate.role,
+          details: { similarity: 1 }
+        }];
+      },
+      error: /must not be protected/i
+    },
+    {
+      name: "empty reasons",
+      mutate: (candidate: NormalizedMessage) => {
+        candidate.reasons = [];
+      },
+      error: /at least one reason/i
+    }
+  ])("rejects remove candidate with $name", ({ mutate, error }) => {
+    const invalid = analyzedMessage("m10", ["low_value_metadata"]);
+    mutate(invalid);
+
+    expect(() => createReport([invalid], "session.jsonl")).toThrow(error);
+  });
+
+  test("keeps real analyzer remove candidates backed by decisive evidence", () => {
+    const first = analyzedMessage("m1", []);
+    first.content = "repeatable historical status output";
+    const second = analyzedMessage("m2", []);
+    second.content = "repeatable historical status output";
+    const report = createReport(
+      analyzeMessages([first, second], { recentWindow: 0 }),
+      "session.jsonl",
+      { recentWindow: 0 }
+    );
+    const decisiveCodes = new Set([
+      "low_value_metadata",
+      "exact_duplicate",
+      "superseded",
+      "obsolete_tool_output",
+      "similar_duplicate",
+      "orphan_tool_result"
+    ]);
+
+    expect(report.review_queue.items.some((item) => item.decision === "remove_candidate")).toBe(true);
+    expect(report.review_queue.items
+      .filter((item) => item.decision === "remove_candidate")
+      .every((item) => item.evidence.some((entry) => decisiveCodes.has(entry.code)))).toBe(true);
+  });
+
+  test("uses a conservative analysis fallback for messages without context", () => {
+    const noContext = analyzedMessage("m1", ["old_message"]);
+    noContext.decision = "keep";
+    noContext.analysis = undefined;
+    const report = createReport([noContext], "session.jsonl");
+
+    expect(report.messages[0]?.analysis).toEqual({
+      kind: "unknown",
+      turn: 0,
+      segment: 0,
+      stable_identifiers: [],
+      evidence: []
+    });
+  });
+
   test("summarizes top reasons by count", () => {
     const report = createReport(
       [
@@ -88,6 +282,19 @@ describe("createReport", () => {
 
     expect(report.warnings.join("\n")).toContain("session_compacted");
     expect(report.warnings.join("\n")).toContain("compact_boundary");
+  });
+
+  test("does not warn for OpenAI records that only resemble compact markers", () => {
+    const message = analyzedMessage("m1", ["old_message"]);
+    const report = createReport([
+      {
+        ...message,
+        source: "openai-jsonl",
+        raw: { type: "system", subtype: "away_summary" }
+      }
+    ], "session.jsonl");
+
+    expect(report.warnings.join("\n")).not.toContain("session_compacted");
   });
 
   test("includes analysis warnings for approximate tokens and report-only compression candidates", () => {

@@ -21,7 +21,7 @@ trimctx 读取本地 Claude Code / OpenAI / Codex JSONL 对话文件，分析每
 - 离线分析本地长对话文件。
 - 识别 protected / keep / compress_candidate / remove_candidate。
 - 每条候选都必须有 reason。
-- 输出完整 JSON 报告。
+- 输出面向人工审查的 Markdown 报告和完整 JSON 报告。
 - 输出安全压缩副本。
 - 原始 JSONL 永远不被修改。
 - 默认不调用 LLM，不上传用户数据。
@@ -108,7 +108,9 @@ otherwise => keep
 
 ### FR-5: report
 
-`report` 必须输出完整 JSON，包含：
+`report <file> -o <output>` 只接受 `.md` 或 `.json`。Markdown 用于人工审查；JSON 必须与 `analyze --json` 深度一致，并使用 `trimctx.report.v2`。
+
+v2 JSON 至少包含：
 
 - schema_version
 - input
@@ -116,6 +118,11 @@ otherwise => keep
 - messages
 - remove_candidates
 - warnings
+- assessment
+- findings
+- review_queue
+- recommendations
+- resume
 
 每条 message 必须包含：
 
@@ -125,6 +132,8 @@ otherwise => keep
 - scores
 - decision
 - reasons
+
+Markdown 必须包含结论、健康维度、关键发现、审查队列、Protected 但疑似陈旧、续接状态、限制与安全说明和下一步。证据只展示 message id、line、role 和脱敏且不超过 160 字符的摘要。
 
 ### FR-6: analyze
 
@@ -200,13 +209,15 @@ Phase 0 至少需要 5 个真实 Claude Code 长会话私有样本：
 
 ## 10. 当前优先级
 
-1. `analyze` 默认短摘要。
-2. `analyze --json`。
-3. report top reasons 和 warnings。
-4. JSONL 解析诊断与 unsafe output path 护栏。
-5. Phase 0 多样本验证和 validation summary。
-6. 基于真实样本结果调整 safety/scorer 默认值。
-7. 等 Phase 0 完成后再评估是否需要额外 session discovery / diagnostics 命令。
+当前命令面、Report v2 和集成边界已完成本轮收敛；Phase 0 指标仍作为未来对外宣称自动压缩安全性的正式发布门槛。
+
+1. 保持 `init`、`analyze`、`report`、`new-chat`、`compress` 五个公开命令及现有输出契约。
+2. 保持 `trimctx.report.v2`、Markdown 人工审查报告和原子写入行为稳定。
+3. 保持 tool use/result 结构保护、protected 不删除和原始 transcript 只读。
+4. 使用代表性 Claude Code / Codex 会话复核 assessment、findings、review queue 和 continuation readiness。
+5. 补齐 Phase 0 人工审查指标和真实私有 OpenAI export 验证后，再提高安全承诺等级。
+6. 保持 Windows packed-install、npm 包体和 fresh-install smoke 质量门。
+7. 不扩大自动删除范围，暂不新增 diagnostics 命令、Web UI、MCP 或后台自动化。
 
 ## 11. 文档关系
 

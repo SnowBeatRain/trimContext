@@ -1,149 +1,282 @@
 import { createAnalysisWarnings } from "./diagnostics.js";
+import { createAnalysisMeta, createAnalysisSummary, createTokenizationSummary } from "./report-summary.js";
 import { extractResumeState } from "./resume/extractor.js";
-import type { AnalysisReport, AnalyzedMessage, TokenizationSummary } from "../types/report.js";
-import type { NormalizedMessage, TokenBreakdown } from "../types/message.js";
+import { createAssessment } from "./assessment.js";
+import { resolveAnalysisOptions, type AnalysisOptions } from "./options.js";
+import type {
+  AnalysisReport,
+  AnalyzedMessage,
+  CandidateGroup,
+  Finding,
+  FindingEvidenceRef,
+  Recommendation,
+  ReviewQueueItem
+} from "../types/report.js";
+import type { NormalizedMessage } from "../types/message.js";
+import type { MessageAnalysisContext, SignalCode } from "../types/signals.js";
+import { isCompactBoundaryMessage } from "./signals/context.js";
 
-type ReportForResume = Omit<AnalysisReport, "resume">;
+const GROUP_TYPES: Partial<Record<FindingEvidenceRef["code"], CandidateGroup["type"]>> = {
+  superseded: "superseded",
+  exact_duplicate: "duplicate",
+  similar_duplicate: "duplicate",
+  orphan_tool_result: "tool",
+  obsolete_tool_output: "tool",
+  low_value_metadata: "metadata"
+};
+const DECISIVE_CODES = new Set<SignalCode>([
+  "low_value_metadata",
+  "exact_duplicate",
+  "superseded",
+  "obsolete_tool_output",
+  "similar_duplicate",
+  "orphan_tool_result"
+]);
 
-export function createReport(messages: NormalizedMessage[], file: string): AnalysisReport {
+export function createReport(messages: NormalizedMessage[], file: string, options: AnalysisOptions = {}): AnalysisReport {
   const analyzedMessages = messages.map(toAnalyzedMessage);
-  // Report candidates are derived from analyzed decisions, matching the compressor's source of truth.
   const removeCandidates = analyzedMessages.filter((message) => message.decision === "remove_candidate");
+  const compressCandidates = analyzedMessages.filter((message) => message.decision === "compress_candidate");
   const totalTokens = analyzedMessages.reduce((sum, message) => sum + message.tokens, 0);
   const savingTokens = removeCandidates.reduce((sum, message) => sum + message.tokens, 0);
   const warnings = detectWarnings(messages);
+  const allWarnings = [...warnings, ...createAnalysisWarnings(messages)];
+  const resume = extractResumeState({ messages: analyzedMessages });
+  const candidateGroups = createCandidateGroups(analyzedMessages);
+  const assessment = createAssessment(analyzedMessages, resume, allWarnings);
+  const findings = createFindings(candidateGroups, assessment.limitations, totalTokens);
+  const reviewQueue = createReviewQueue(analyzedMessages);
+  const recommendations = createRecommendations(file, assessment.status, resume.readiness.level, removeCandidates.length);
+  const summary = createAnalysisSummary(analyzedMessages, removeCandidates, totalTokens, savingTokens);
   const tokenization = createTokenizationSummary(analyzedMessages);
-  const reportWithoutResume: ReportForResume = {
-    schema_version: "trimctx.report.v1" as const,
+  const analysisMeta = createAnalysisMeta(tokenization, assessment, resolveAnalysisOptions(options));
+
+  return {
+    schema_version: "trimctx.report.v2",
     input: {
       file,
-      source: messages[0]?.source ?? "openai-jsonl"
+      source: messages[0]?.source ?? "openai-jsonl",
+      session_id: firstSessionId(messages)
     },
-    summary: {
-      total_messages: analyzedMessages.length,
-      total_tokens: totalTokens,
-      remove_candidates: removeCandidates.length,
-      estimated_saving_ratio: totalTokens === 0 ? 0 : Number((savingTokens / totalTokens).toFixed(4)),
-      estimated_saving_tokens: savingTokens,
-      protected_messages: analyzedMessages.filter((message) => message.protected).length,
-      compress_candidates: analyzedMessages.filter((message) => message.decision === "compress_candidate").length,
-      token_estimation: {
-        estimator: tokenization.tokenizer,
-        estimator_version: tokenization.tokenizer === "tiktoken" ? "tiktoken-v1" : "approx-v1",
-        estimated: tokenization.tokenizer !== "tiktoken",
-        confidence: tokenization.confidence,
-        note: tokenization.tokenizer === "tiktoken"
-          ? "Model-specific tokenizer count."
-          : "Zero-dependency local heuristic estimate; not a model-specific tokenizer count."
-      },
-      token_breakdown: sumTokenBreakdown(analyzedMessages),
-      context_pressure: createContextPressure(analyzedMessages, removeCandidates, totalTokens, savingTokens),
-      top_reasons: countTopReasons(analyzedMessages),
-      score_diagnostics: createScoreDiagnostics(analyzedMessages)
-    },
+    summary,
     tokenization,
     phase0_trust: createPhase0TrustStatus(),
     parser_diagnostics: createParserDiagnostics(analyzedMessages),
+    resume,
+    assessment,
+    findings,
+    review_queue: { items: reviewQueue },
+    candidate_groups: candidateGroups,
+    compress_candidates: compressCandidates,
+    recommendations,
+    analysis_meta: analysisMeta,
     messages: analyzedMessages,
     remove_candidates: removeCandidates,
-    warnings: [...warnings, ...createAnalysisWarnings(messages)]
-  };
-  return {
-    ...reportWithoutResume,
-    resume: extractResumeState(reportWithoutResume)
+    warnings: allWarnings
   };
 }
 
-function createTokenizationSummary(messages: AnalyzedMessage[]): TokenizationSummary {
-  const firstMetadata = messages.find((message) => message.token_metadata)?.token_metadata;
-  const estimator = firstMetadata?.estimator === "tiktoken" ? "tiktoken" : "local_heuristic";
-  return {
-    tokenizer: estimator,
-    confidence: firstMetadata?.confidence ?? "medium"
-  };
-}
-
-function emptyTokenBreakdown(): TokenBreakdown {
-  return {
-    cjk_chars: 0,
-    ascii_tokens: 0,
-    latin_words: 0,
-    numbers: 0,
-    symbols: 0,
-    whitespace_runs: 0,
-    code_like_segments: 0,
-    path_like_segments: 0,
-    json_like_segments: 0,
-    line_count: 0,
-    char_count: 0
-  };
-}
-
-function sumTokenBreakdown(messages: AnalyzedMessage[]): TokenBreakdown {
-  return messages.reduce((sum, message) => {
-    const breakdown = message.token_metadata?.breakdown;
-    if (!breakdown) return sum;
+function createCandidateGroups(messages: AnalyzedMessage[]): CandidateGroup[] {
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const groups = new Map<string, { code: CandidateGroup["code"]; type: CandidateGroup["type"]; related?: string; entries: FindingEvidenceRef[] }>();
+  for (const message of [...messages].sort((left, right) => left.sourceLine - right.sourceLine)) {
+    for (const item of message.analysis.evidence) {
+      const type = GROUP_TYPES[item.code];
+      if (!type) continue;
+      const key = `${item.code}:${item.related_message_id ?? "none"}`;
+      const group = groups.get(key) ?? { code: item.code, type, related: item.related_message_id, entries: [] };
+      group.entries.push(toEvidenceRef(item));
+      groups.set(key, group);
+    }
+  }
+  return [...groups.entries()].map(([id, group]) => {
+    const entries = [...group.entries].sort((left, right) => left.source_line - right.source_line || left.message_id.localeCompare(right.message_id));
+    const memberIds = [...new Set(entries.map((entry) => entry.message_id))];
     return {
-      cjk_chars: sum.cjk_chars + breakdown.cjk_chars,
-      ascii_tokens: sum.ascii_tokens + breakdown.ascii_tokens,
-      latin_words: sum.latin_words + breakdown.latin_words,
-      numbers: sum.numbers + breakdown.numbers,
-      symbols: sum.symbols + breakdown.symbols,
-      whitespace_runs: sum.whitespace_runs + breakdown.whitespace_runs,
-      code_like_segments: sum.code_like_segments + breakdown.code_like_segments,
-      path_like_segments: sum.path_like_segments + breakdown.path_like_segments,
-      json_like_segments: sum.json_like_segments + breakdown.json_like_segments,
-      line_count: sum.line_count + breakdown.line_count,
-      char_count: sum.char_count + breakdown.char_count
+      id,
+      type: group.type,
+      code: group.code,
+      ...(group.related ? { related_message_id: group.related } : {}),
+      canonical_message_id: group.related && byId.has(group.related) ? group.related : memberIds[0]!,
+      member_message_ids: memberIds,
+      tokens: memberIds.reduce((sum, messageId) => sum + (byId.get(messageId)?.tokens ?? 0), 0),
+      evidence: entries
     };
-  }, emptyTokenBreakdown());
+  }).sort((left, right) => firstGroupLine(left) - firstGroupLine(right) || left.id.localeCompare(right.id));
 }
 
-function createContextPressure(
-  messages: AnalyzedMessage[],
-  removeCandidates: AnalyzedMessage[],
-  totalTokens: number,
-  savingTokens: number
-): AnalysisReport["summary"]["context_pressure"] {
-  const protectedTokens = messages
-    .filter((message) => message.protected)
-    .reduce((sum, message) => sum + message.tokens, 0);
+function createFindings(groups: CandidateGroup[], limitations: string[], totalTokens: number): Finding[] {
+  const groupFindings: Finding[] = groups.map((group) => {
+    const confidence = highestConfidence(group.evidence.map((entry) => entry.confidence));
+    return {
+      id: `group:${group.id}`,
+      type: group.type,
+      severity: confidence === "high" ? "critical" : "warning",
+      confidence,
+      code: group.code,
+      title: `${titleCase(group.type)} context evidence`,
+      explanation: `${group.code} evidence groups related messages for human review.`,
+      summary: `${group.member_message_ids.length} message(s) grouped by ${group.code}.`,
+      impact: {
+        message_count: group.member_message_ids.length,
+        tokens: group.tokens,
+        token_ratio: ratio(group.tokens, totalTokens)
+      },
+      suggested_action: suggestedAction(group.type),
+      tokens: group.tokens,
+      evidence: group.evidence
+    };
+  });
+  const limitationFindings: Finding[] = limitations.map((limitation) => ({
+    id: `limitation:${limitation}`,
+    type: "limitation",
+    severity: "info",
+    confidence: "low",
+    code: limitation,
+    title: `Assessment limitation: ${limitation}`,
+    explanation: "Coverage limits the confidence of the overall health assessment.",
+    summary: `Assessment limitation: ${limitation}.`,
+    impact: { message_count: 0, tokens: 0, token_ratio: 0 },
+    suggested_action: "collect_more_evidence",
+    tokens: 0,
+    evidence: []
+  }));
+  return [...groupFindings, ...limitationFindings];
+}
+
+function createReviewQueue(messages: AnalyzedMessage[]): ReviewQueueItem[] {
+  return messages
+    .filter((message) => message.decision === "remove_candidate"
+      || message.decision === "compress_candidate"
+      || (message.protected && message.rot_score >= 0.6))
+    .map((message) => {
+      const evidence = message.analysis.evidence.map(toEvidenceRef);
+      if (message.decision === "remove_candidate") {
+        if (message.protected) {
+          throw new Error(`remove_candidate ${message.id} must not be protected`);
+        }
+        if (message.reasons.length === 0) {
+          throw new Error(`remove_candidate ${message.id} must have at least one reason`);
+        }
+        if (!evidence.some((entry) => entry.confidence === "high" && DECISIVE_CODES.has(entry.code as SignalCode))) {
+          throw new Error(`remove_candidate ${message.id} has no high-confidence decisive evidence`);
+        }
+      }
+      const confidence = highestConfidence(evidence.map((entry) => entry.confidence));
+      return {
+        message_id: message.id,
+        source_line: message.sourceLine,
+        role: message.role,
+        decision: message.decision,
+        protected: message.protected,
+        tokens: message.tokens,
+        risk: message.decision === "remove_candidate" ? "high" : message.decision === "compress_candidate" ? "medium" : "low",
+        confidence,
+        reasons: message.reasons,
+        evidence,
+        summary: summarize(message.content),
+        default_action: message.protected
+          ? "keep_and_review"
+          : message.decision === "remove_candidate" ? "remove_after_review" : "compress_after_review"
+      } satisfies ReviewQueueItem;
+    })
+    .sort((left, right) => riskRank(right.risk) - riskRank(left.risk)
+      || confidenceRank(right.confidence) - confidenceRank(left.confidence)
+      || right.tokens - left.tokens
+      || left.source_line - right.source_line
+      || left.message_id.localeCompare(right.message_id));
+}
+
+function createRecommendations(
+  file: string,
+  health: AnalysisReport["assessment"]["status"],
+  readiness: AnalysisReport["resume"]["readiness"]["level"],
+  removeCount: number
+): Recommendation[] {
+  const recommendations: Recommendation[] = [];
+  if (health === "unknown") recommendations.push({
+    code: "write_report",
+    priority: 1,
+    summary: "Write the full JSON report before drawing a health conclusion.",
+    command: `trimctx report ${quotePath(file)} -o report.json`
+  });
+  if (readiness !== "ready") recommendations.push({
+    code: "clarify_continuation",
+    priority: 2,
+    summary: "Clarify the current goal and next step before continuing."
+  });
+  if (health === "degraded" && readiness !== "blocked") recommendations.push({
+    code: "new_chat",
+    priority: 3,
+    summary: "Prepare a reviewed continuation package for a new chat.",
+    command: `trimctx new-chat ${quotePath(file)}`
+  });
+  if (removeCount > 0) recommendations.push({
+    code: "review_then_compress",
+    priority: 4,
+    summary: "Review remove candidates before writing a compressed copy.",
+    command: `trimctx compress ${quotePath(file)} -o trimmed.jsonl`
+  });
+  return recommendations;
+}
+
+function toEvidenceRef(item: AnalyzedMessage["analysis"]["evidence"][number]): FindingEvidenceRef {
   return {
-    estimated_total_tokens: totalTokens,
-    estimated_removable_tokens: savingTokens,
-    estimated_protected_tokens: protectedTokens,
-    remove_candidate_ratio: ratio(savingTokens, totalTokens),
-    protected_token_ratio: ratio(protectedTokens, totalTokens),
-    pressure_level: pressureLevel(totalTokens, removeCandidates.length)
+    message_id: item.message_id,
+    source_line: item.source_line,
+    role: item.role,
+    code: item.code,
+    confidence: item.confidence,
+    ...(item.related_message_id ? { related_message_id: item.related_message_id } : {})
   };
+}
+
+function firstGroupLine(group: CandidateGroup): number {
+  return group.evidence[0]?.source_line ?? Number.MAX_SAFE_INTEGER;
+}
+
+function highestConfidence(values: FindingEvidenceRef["confidence"][]): FindingEvidenceRef["confidence"] {
+  return values.sort((left, right) => confidenceRank(right) - confidenceRank(left))[0] ?? "medium";
+}
+
+function confidenceRank(value: FindingEvidenceRef["confidence"]): number {
+  return value === "high" ? 3 : value === "medium" ? 2 : 1;
+}
+
+function riskRank(value: ReviewQueueItem["risk"]): number {
+  return value === "high" ? 3 : value === "medium" ? 2 : 1;
+}
+
+function suggestedAction(type: CandidateGroup["type"]): Finding["suggested_action"] {
+  if (type === "superseded") return "review_superseded_context";
+  if (type === "duplicate") return "keep_canonical_message";
+  if (type === "tool") return "review_tool_evidence";
+  return "review_metadata";
+}
+
+function titleCase(value: string): string {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
 function ratio(value: number, total: number): number {
   return total === 0 ? 0 : Number((value / total).toFixed(4));
 }
 
-function pressureLevel(totalTokens: number, removeCandidateCount: number): AnalysisReport["summary"]["context_pressure"]["pressure_level"] {
-  if (totalTokens >= 150_000 || removeCandidateCount >= 20) return "high";
-  if (totalTokens >= 50_000 || removeCandidateCount > 0) return "medium";
-  return "low";
+function summarize(content: string): string {
+  const redacted = content
+    .replace(/\b(?:sk|pk|ghp|github_pat|glpat|xox[baprs])-[-A-Za-z0-9_]{12,}\b/g, "[REDACTED]")
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[REDACTED_EMAIL]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return redacted.length <= 160 ? redacted : `${redacted.slice(0, 157)}...`;
 }
 
-function createScoreDiagnostics(messages: AnalyzedMessage[]): AnalysisReport["summary"]["score_diagnostics"] {
-  const rotScores = messages.map((message) => message.rot_score).sort((left, right) => left - right);
+function quotePath(file: string): string {
+  return `"${file.replaceAll("\"", "\\\"")}"`;
+}
 
-  // Diagnostics expose threshold pressure without changing the conservative default thresholds.
-  return {
-    max_rot_score: roundScore(rotScores.at(-1) ?? 0),
-    p90_rot_score: percentile(rotScores, 0.9),
-    near_remove_threshold_count: messages.filter((message) => message.rot_score >= 0.7 && message.rot_score < 0.8).length,
-    protected_high_rot_count: messages.filter((message) => message.protected && message.rot_score >= 0.6).length,
-    decision_score_ranges: {
-      keep: scoreRange(messages.filter((message) => message.decision === "keep")),
-      keep_protected: scoreRange(messages.filter((message) => message.decision === "keep_protected")),
-      compress_candidate: scoreRange(messages.filter((message) => message.decision === "compress_candidate")),
-      remove_candidate: scoreRange(messages.filter((message) => message.decision === "remove_candidate"))
-    }
-  };
+function firstSessionId(messages: NormalizedMessage[]): string | undefined {
+  return messages.find((message) => typeof message.sessionId === "string" && message.sessionId.length > 0)?.sessionId;
 }
 
 function createPhase0TrustStatus(): AnalysisReport["phase0_trust"] {
@@ -185,35 +318,13 @@ function createParserDiagnostics(messages: AnalyzedMessage[]): AnalysisReport["p
   };
 }
 
-function scoreRange(messages: AnalyzedMessage[]): AnalysisReport["summary"]["score_diagnostics"]["decision_score_ranges"]["keep"] {
-  if (messages.length === 0) return { count: 0, min: 0, max: 0, avg: 0 };
-
-  const scores = messages.map((message) => message.rot_score);
-  const sum = scores.reduce((total, score) => total + score, 0);
-  return {
-    count: messages.length,
-    min: roundScore(Math.min(...scores)),
-    max: roundScore(Math.max(...scores)),
-    avg: roundScore(sum / messages.length)
-  };
-}
-
-function percentile(sortedScores: number[], ratio: number): number {
-  if (sortedScores.length === 0) return 0;
-  const index = Math.ceil(sortedScores.length * ratio) - 1;
-  return roundScore(sortedScores[Math.max(0, Math.min(index, sortedScores.length - 1))]);
-}
-
-function roundScore(score: number): number {
-  return Number(score.toFixed(4));
-}
-
 function detectWarnings(messages: NormalizedMessage[]): string[] {
   const warnings: string[] = [];
   const compactSubtypes = messages.flatMap((m) => {
     const raw = m.raw as Record<string, unknown> | undefined;
-    if (!raw || raw.type !== "system") return [];
-    return raw.subtype === "away_summary" || raw.subtype === "compact_boundary" ? [String(raw.subtype)] : [];
+    if (!raw || !isCompactBoundaryMessage(m)) return [];
+    if (raw.type === "compacted") return ["compacted"];
+    return [String(raw.subtype)];
   });
 
   if (compactSubtypes.length > 0) {
@@ -223,26 +334,6 @@ function detectWarnings(messages: NormalizedMessage[]): string[] {
     );
   }
   return warnings;
-}
-
-function countTopReasons(messages: AnalyzedMessage[]): AnalysisReport["summary"]["top_reasons"] {
-  const counts = new Map<string, number>();
-  for (const message of messages) {
-    for (const reason of message.reasons) {
-      counts.set(reason, (counts.get(reason) ?? 0) + 1);
-    }
-  }
-
-  return [...counts.entries()]
-    .sort(([leftReason, leftCount], [rightReason, rightCount]) => {
-      if (rightCount !== leftCount) return rightCount - leftCount;
-      return leftReason.localeCompare(rightReason);
-    })
-    .slice(0, 5)
-    .map(([reason, count]) => ({
-      reason: reason as AnalysisReport["summary"]["top_reasons"][number]["reason"],
-      count
-    }));
 }
 
 function toAnalyzedMessage(message: NormalizedMessage): AnalyzedMessage {
@@ -268,7 +359,18 @@ function toAnalyzedMessage(message: NormalizedMessage): AnalyzedMessage {
       },
     decision: message.decision ?? "keep",
     reasons: message.reasons ?? [],
+    analysis: message.analysis ?? defaultAnalysisContext(),
     timestamp: message.timestamp,
     sessionId: message.sessionId
+  };
+}
+
+function defaultAnalysisContext(): MessageAnalysisContext {
+  return {
+    kind: "unknown",
+    turn: 0,
+    segment: 0,
+    stable_identifiers: [],
+    evidence: []
   };
 }

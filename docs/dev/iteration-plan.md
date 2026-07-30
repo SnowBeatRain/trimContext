@@ -4,7 +4,7 @@
 
 This plan records the team review after the first real Codex/Hermes validation pass and the `score_diagnostics` implementation.
 
-The next iteration should not chase aggressive deletion, installers, hooks, MCP, Web UI, or LLM summarization. The next iteration should make trimctx a trustworthy local context health checker first, then expand toward workflow integration only after safety evidence is strong.
+The next iteration should not chase aggressive deletion, new installer surfaces, additional hook automation, MCP, Web UI, or LLM summarization. Existing packaged integrations should be stabilized and documented without expanding their behavior.
 
 ## Product Positioning
 
@@ -18,7 +18,7 @@ The immediate value is not maximum token savings. The immediate value is helping
 - Which context looks stale, superseded, duplicated, orphaned, or low-value?
 - Which messages are protected and why?
 - Is it safe to generate a compressed copy?
-- Should I continue this session, produce a handoff, or start fresh?
+- Should I continue this session or create a reviewed new-chat package?
 
 ## Team Review Summary
 
@@ -26,7 +26,7 @@ The immediate value is not maximum token savings. The immediate value is helping
 
 - Heavy Claude Code/Codex users would use trimctx for diagnosis and review before trusting it for compression.
 - The product should win on local execution, auditability, no original-file mutation, no default LLM calls, and explainable reasons.
-- The main competitor is not another JSONL compressor; it is built-in compact/resume behavior and manual handoff summaries.
+- The main competitor is not another JSONL compressor; it is built-in compact/resume behavior and manual continuation summaries.
 - Success requires trust before growth: users must believe a zero-deletion result means conservative safety, not failure.
 
 ### Software Architect
@@ -43,14 +43,14 @@ The immediate value is not maximum token savings. The immediate value is helping
 - Any critical false deletion blocks release.
 - Original transcript hashes must remain unchanged after compression.
 - Real transcripts, private reports, and generated validation output must not enter git or npm packages.
-- Hooks, install commands, MCP, Web UI, LLM summarization, and automatic compression should remain deferred.
+- Further hook/install automation, MCP, Web UI, LLM summarization, and automatic compression should remain deferred.
 
 ### Developer Experience Lead
 
 - `analyze` is the front door and should stay short, readable, and actionable.
 - `report` and `analyze --json` should remain the automation and audit paths.
 - Error messages should tell users what was detected, where parsing failed, and what to do next.
-- `resume` should be documented as Claude Code focused until broader discovery is proven necessary.
+- Bound `trimctx`/`analyze` should remain strict current-window analysis; local discovery should be explicit through `analyze --select/--latest`.
 
 ## North Star
 
@@ -129,8 +129,8 @@ Goal: keep the project focused until safety evidence is stronger.
 
 Deferred until after Phase 0 manual review metrics and real private OpenAI export validation are recorded:
 
-- packaged Claude Code install command
-- hooks and status line
+- additional packaged installation modes
+- background hooks and status line expansion
 - MCP server
 - REST API
 - Web UI
@@ -145,27 +145,27 @@ Acceptance:
 - Roadmap and docs consistently state these are later-stage candidates.
 - New work during this phase improves trust, reports, tests, validation, or documentation.
 
-Repository-local Claude Code command/plugin files and the Codex skill wrapper may exist as integration artifacts, but packaged installation, hooks, status line, MCP, Web UI, and automatic active-session compression remain deferred.
+The npm package already contains Claude Code command/plugin files, a Codex skill wrapper, `trimctx init`, and experimental hooks. Stabilize those existing surfaces and disclose that the Stop hook may update the managed section in `.claude/CLAUDE.md`; status line, broader automation, MCP, Web UI, and automatic active-session compression remain deferred.
 
-## Next: v0.3 Handoff and Integration Design
+## Next: v0.3 New-chat and Integration Design
 
 Start only after v0.2 stabilization.
 
-### N1.1 Handoff output
+### N1.1 New-chat output
 
 Goal: help users continue work safely after a long or noisy session.
 
 Current implementation:
 
-- `trimctx handoff <file>` writes a UID-based package under `.trimctx/handoffs/<uid>/`
-- legacy single-file output remains available with `-o handoff.md --next-context next-context.md`
+- `trimctx new-chat <file>` writes a UID-based package under `.trimctx/handoffs/<uid>/`
+- `new-chat` is the only public continuation command
 - deterministic Markdown output, no LLM dependency
 - source JSONL remains unchanged
 
-The handoff includes:
+The new-chat package includes:
 
 - source file and detected format
-- safety summary and score diagnostics
+- health assessment and review metadata
 - continuation rules
 - candidate review queue
 - protected high-rot signals
@@ -174,7 +174,7 @@ The handoff includes:
 
 Acceptance:
 
-- Handoff generation does not require an LLM by default.
+- New-chat generation does not require an LLM by default.
 - Output is clearly separate from destructive compression.
 - Targeted CLI tests cover `handoff.md` and `next-context.md` generation.
 
@@ -186,8 +186,8 @@ Goal: reduce the need to manually find JSONL files without broad scanning.
 
 Tasks:
 
-- Keep `resume` Claude Code focused.
-- Keep `current --source codex` discovery explicit and opt-in.
+- Keep `analyze --latest --source claude` as the explicit Claude Code discovery path.
+- Keep `analyze --latest --source codex` discovery explicit and opt-in.
 - Prefer explicit input paths or documented environment variables over broad home-directory scans.
 - Keep discovery code outside core parser/scorer/compressor modules.
 
@@ -272,16 +272,16 @@ Block completion if any of these happen:
 
 ## Immediate Task Queue
 
-1. Add the manual review rubric and validation summary template improvements.
-2. Refresh the private Phase 0 validation summary with current Claude Code and Codex/Hermes evidence.
-3. Add targeted tests for human summary trust signals and error messages.
-4. Decide whether handoff output should be a new command or a report artifact.
-5. Draft the handoff schema before implementation.
+1. Review Report v2 assessments, findings, and review queues on representative Claude Code and Codex sessions.
+2. Record Phase 0 manual-review metrics and private OpenAI export validation before making stronger compression-safety claims.
+3. Keep Windows packed-install, tarball contents, and fresh-install smoke coverage green.
+4. Preserve the five-command public surface, explicit hook write scope, and read-only original-transcript contract.
+5. Defer new discovery commands, background automation, Web UI, MCP, and more aggressive deletion thresholds.
 
 ## Current Recommendation
 
-The next implementation task should be documentation and validation infrastructure, not scoring-weight changes:
+The current implementation focus is report quality and release evidence, not another product-surface expansion:
 
-1. Add a review rubric for candidates.
-2. Strengthen Phase 0 validation reporting.
-3. Then design `handoff.md` / `next-context.md` as the first user-visible expansion after trust is established.
+1. Validate that structured evidence and health assessments are accurate, explainable, and actionable on real sessions.
+2. Preserve release quality gates and conservative removal behavior while collecting formal trust metrics.
+3. Keep existing integrations explicit about file writes and defer new product surfaces.
