@@ -387,7 +387,7 @@ Expected: exit 0；包含 `dist/cli.js`、Claude export command、Codex skill、
 先计算指定真实 JSONL SHA-256，再运行：
 
 ```powershell
-npx tsx src/cli.ts export "C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-museum\5c574dba-0f62-406b-980b-a098da258ddd.jsonl" -o tmp-real-validation/conversation.md
+npx tsx src/cli.ts export "<sample.jsonl>" -o tmp-real-validation/conversation.md
 ```
 
 再次计算输入 SHA-256，要求完全一致；用 `parseJsonl` 消息数核对 Markdown `### Message` 数；读取首尾事件和文件头，不把正文打印到日志或提交仓库。
