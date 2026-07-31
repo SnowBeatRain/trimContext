@@ -43,7 +43,7 @@ function readPackageVersion(root: string): string {
 }
 
 function findRemovedCommandOperand(args: string[]): string | undefined {
-  const removedCommands = new Set(["current", "handoff", "install-hooks"]);
+  const removedCommands = new Set(["current", "handoff", "install-hooks", "transcript"]);
   const firstOperand = args.find(argument => !argument.startsWith("-"));
   return firstOperand && removedCommands.has(firstOperand) ? firstOperand : undefined;
 }

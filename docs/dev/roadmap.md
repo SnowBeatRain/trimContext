@@ -30,7 +30,7 @@ For the team-reviewed iteration priorities and quality gates, see `docs/dev/iter
    - Write compressed copies.
 
 2. CLI
-   - Expose stable commands for analyze, report, compress, current-session discovery, and deterministic new-chat continuation artifacts.
+   - Expose stable commands for analyze, report, complete normalized transcript export, compress, explicit session discovery, and deterministic new-chat continuation artifacts.
    - Keep default output readable for humans.
    - Keep full JSON available for automation.
    - Treat new diagnostics, automatic active-session mutation, additional hook automation, Web UI, and MCP as later candidates, not the current mainline.
@@ -108,6 +108,7 @@ Make the CLI comfortable for real users, not just internal validation.
 - Human-readable default output for `trimctx analyze <file>`.
 - `trimctx analyze <file> --json` for full JSON output.
 - `trimctx report <file> -o report.md` is the human review path; `.json` and `analyze --json` are the machine-readable paths.
+- `trimctx export [file] -o conversation.md` writes an unredacted parser-normalized event ledger without changing report semantics.
 - `trimctx` and file-less `analyze` use only a trusted hook-bound current-window transcript.
 - `trimctx analyze --select/--latest --source auto|claude|codex` provides explicit local discovery.
 - `trimctx new-chat [file]` writes deterministic UID-based continuation packages without LLM calls.
@@ -172,6 +173,7 @@ Let users use trimctx from inside Claude Code without manually finding JSONL fil
 - Claude Code slash command file for `/trimctx`
 - `/trimctx` read-only assessment command
 - `/trimctx:new-chat` as the only continuation command
+- `/trimctx:export` as the hook-bound current-window full transcript export
 - `/trimctx:compress` for explicit separate-copy compression
 - Explicit hook opt-in through `trimctx init --with-hooks`
 - Safe output locations for generated reports and compressed copies
@@ -287,7 +289,7 @@ Keep the core engine vendor-neutral and expand integrations or heavier detection
 
 The command surface, report pipeline, and integration boundaries are now stabilized for the current iteration. The next phase should validate report quality and accumulate release evidence before adding new discovery or automation surfaces:
 
-1. Keep `init`, `analyze`, `analyze --json`, `report`, `compress`, and `new-chat` as the active CLI surface.
+1. Keep `init`, `analyze`, `report`, `export`, `new-chat`, and `compress` as the six-command public surface; `analyze --json` remains an option on `analyze`.
 2. Review Report v2 assessments, findings, candidate groups, and continuation readiness on representative real sessions.
 3. Record Phase 0 manual-review metrics and private OpenAI export validation before stronger safety claims.
 4. Keep Windows packed-install, npm package smoke tests, hook write-scope disclosure, and original-transcript protections green.
@@ -314,6 +316,7 @@ Before any public release:
 - [ ] Install packed package in a temporary directory.
 - [ ] Run `trimctx analyze` on a sanitized fixture.
 - [ ] Run `trimctx report` on a sanitized fixture.
+- [ ] Run `trimctx export` on a sanitized fixture and confirm the input hash is unchanged.
 - [ ] Run `trimctx compress` on a sanitized fixture.
 - [ ] Confirm original fixture hash is unchanged after compression.
 - [ ] Review package contents from `npm pack --dry-run`.

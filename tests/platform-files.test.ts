@@ -105,4 +105,31 @@ describe("platform files", () => {
     expect(await readFile(output, "utf8")).toBe("existing report\n");
     expect((await readdir(dir)).filter(name => name.includes(".trimctx-"))).toEqual([]);
   });
+
+  test("rejects an input changed after an earlier snapshot but before output preparation", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-"));
+    const input = join(dir, "session.jsonl");
+    const output = join(dir, "conversation.md");
+    await writeFile(input, "original source\n", "utf8");
+    await writeFile(output, "existing transcript\n", "utf8");
+    const inputHandle = await open(input, "r");
+
+    try {
+      const inputSnapshot = await inputHandle.stat();
+      await writeFile(input, "changed source with a different size\n", "utf8");
+
+      await expect(atomicWriteFileDistinctFromInput(
+        inputHandle,
+        output,
+        "replacement transcript\n",
+        "same file",
+        inputSnapshot
+      )).rejects.toThrow("Input file changed while output was being prepared");
+    } finally {
+      await inputHandle.close();
+    }
+
+    expect(await readFile(output, "utf8")).toBe("existing transcript\n");
+    expect((await readdir(dir)).filter(name => name.includes(".trimctx-"))).toEqual([]);
+  });
 });

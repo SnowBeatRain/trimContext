@@ -23,12 +23,14 @@ trimctx init --target user --with-hooks
 1. 分析会话。
 2. 生成并审查 Markdown 报告。
 3. 自动化或深入审计时使用 JSON。
-4. 审查后再生成续聊包或压缩副本。
+4. 只有需要完整对话时才导出全部规范化 transcript。
+5. 审查后再生成续聊包或压缩副本。
 
 ```bash
 trimctx analyze path/to/session.jsonl
 trimctx report path/to/session.jsonl -o report.md
 trimctx report path/to/session.jsonl -o report.json
+trimctx export path/to/session.jsonl -o conversation.md
 trimctx new-chat path/to/session.jsonl
 trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
@@ -73,6 +75,19 @@ Markdown 报告包含：结论和置信度、健康维度、关键发现、审�
 
 报告使用同目录临时文件和原子替换。命令拒绝输入文件及其别名；渲染或写入失败时保留已有报告；替换前会重新检查打开的输入句柄。
 
+## Export
+
+```bash
+trimctx export session.jsonl -o conversation.md
+trimctx export -o conversation.md # 仅限可信的当前窗口绑定
+```
+
+该命令按现有 parser 返回顺序写出每一条 `NormalizedMessage`，不执行 tokenizer、safety、scorer、threshold、report 脱敏、筛选或截断。`trimctx.transcript.v1` 文档保留角色、ID、源行，以及可用的时间戳、父消息、session 和工具关联元数据。
+
+Markdown 默认未脱敏，可能包含系统指令、凭据、本地路径、源码以及完整工具输入或结果。应把它视为私密本地产物，分享前必须审查。它是 parser-normalized transcript，不是原始 JSONL 的逐字节备份：Claude 内容块可能合并，重复流式帧可能去重；Codex 加密 reasoning 和 parser 忽略的运行时 event/turn 记录不会导出。
+
+输出必须以 `.md` 结尾，大小写不敏感。命令拒绝输入文件及其别名，采用原子替换，不把消息正文打印到 stdout，并保持原始 JSONL 只读。省略 `[file]` 时只接受有效的 `TRIMCTX_TRANSCRIPT_PATH` 当前窗口绑定，绝不回退到 latest session。
+
 ## New Chat
 
 ```bash
@@ -90,7 +105,7 @@ trimctx new-chat session.jsonl --out custom-root
 
 显式传入的 `<file>` 始终是命令的数据来源。多窗口环境不要把“最近修改的 session”当成“当前窗口”。
 
-Claude Code 安装 hooks 后，SessionStart 会把该窗口的 `transcript_path` 和 `session_id` 写入该窗口自己的 `CLAUDE_ENV_FILE`，形成 `TRIMCTX_TRANSCRIPT_PATH` / `TRIMCTX_SESSION_ID` 绑定。安装后应重启每个已经打开的 Claude Code 窗口。`/trimctx`、`/trimctx:new-chat` 和 `/trimctx:compress` 都使用绑定路径；缺少绑定时停止，不回退到其他 session。无文件参数的 `trimctx analyze` 还会检查绑定路径可读、确实是文件，并在存在 session ID 时校验它与 transcript 文件名一致。
+Claude Code 安装 hooks 后，SessionStart 会把该窗口的 `transcript_path` 和 `session_id` 写入该窗口自己的 `CLAUDE_ENV_FILE`，形成 `TRIMCTX_TRANSCRIPT_PATH` / `TRIMCTX_SESSION_ID` 绑定。安装后应重启每个已经打开的 Claude Code 窗口。`/trimctx`、`/trimctx:export`、`/trimctx:new-chat` 和 `/trimctx:compress` 都使用绑定路径；缺少绑定时停止，不回退到其他 session。无文件参数的 `trimctx analyze` 和 `trimctx export -o conversation.md` 还会检查绑定路径可读、确实是文件，并在存在 session ID 时校验它与 transcript 文件名一致。
 
 同一项目的多个 Claude Code 窗口共享 `.claude/CLAUDE.md`。Stop hook 的受管状态区块可能由最后停止的窗口更新，但不会改变每个窗口自己的 transcript 绑定。
 
@@ -104,6 +119,7 @@ Codex 当前没有经过验证的自动窗口绑定：
 ```powershell
 trimctx analyze --select --source codex
 trimctx analyze "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+trimctx export "C:\Users\name\.codex\sessions\...\rollout.jsonl" -o conversation.md
 trimctx new-chat "C:\Users\name\.codex\sessions\...\rollout.jsonl"
 ```
 
@@ -127,6 +143,7 @@ trimctx init --client claude --target user --with-hooks
 
 - `/trimctx` 执行 `trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color`。
 - `/trimctx:analyze` 接受显式 JSONL 文件。
+- `/trimctx:export` 把当前会话的未脱敏 transcript 写到 `conversation.md`。
 - `/trimctx:new-chat` 生成当前会话续聊包。
 - `/trimctx:compress` 只在用户明确要求时写出独立副本。
 
@@ -144,7 +161,7 @@ Hooks 写入范围：
 trimctx init --client codex --target user
 ```
 
-使用显式文件、`trimctx analyze --select --source codex` 或 `trimctx analyze --latest --source codex`。多窗口时必须显式确认并传入 JSONL 路径；`--latest` 和 `--select` 都不代表自动当前窗口绑定。包内说明的是 skill/CLI 工作流，不宣称已验证 Codex `/trimctx` slash command 或当前窗口绑定。
+使用显式文件、`trimctx analyze --select --source codex` 或 `trimctx analyze --latest --source codex`。完整导出使用 `trimctx export <file.jsonl> -o conversation.md`，并传入确认后的路径。多窗口时必须显式确认并传入 JSONL 路径；`--latest` 和 `--select` 都不代表自动当前窗口绑定。包内说明的是 skill/CLI 工作流，不宣称已验证 Codex `/trimctx` slash command 或当前窗口绑定。
 
 ## Report v2
 
@@ -170,6 +187,10 @@ JSON 报告是完整审计数据，可能包含消息正文。私有报告不得
 ### 报告输出被拒绝
 
 使用 `.md` 或 `.json`，并选择与输入 transcript 不同的路径。
+
+### Export 输出被拒绝
+
+使用 `.md`，选择与输入 transcript 不同的路径；没有可信当前窗口绑定时显式传入输入文件。
 
 ### remove candidate 为零
 

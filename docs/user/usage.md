@@ -23,12 +23,14 @@ trimctx init --target user --with-hooks
 1. Analyze the session.
 2. Write and review a Markdown report.
 3. Use JSON only for automation or deeper audit.
-4. Create a new-chat package or compressed copy only after review.
+4. Export the complete normalized transcript only when you need the full conversation.
+5. Create a new-chat package or compressed copy only after review.
 
 ```bash
 trimctx analyze path/to/session.jsonl
 trimctx report path/to/session.jsonl -o report.md
 trimctx report path/to/session.jsonl -o report.json
+trimctx export path/to/session.jsonl -o conversation.md
 trimctx new-chat path/to/session.jsonl
 trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
@@ -82,6 +84,19 @@ Displayed evidence contains only message id, source line, role, and a redacted s
 
 Report writes use a same-directory temporary file and atomic replacement. The command rejects the input file and aliases of it, keeps an existing report intact when rendering or writing fails, and rechecks the open input handle before replacement.
 
+## Export
+
+```bash
+trimctx export session.jsonl -o conversation.md
+trimctx export -o conversation.md # trusted current-window binding only
+```
+
+The command writes every `NormalizedMessage` returned by the existing parser in parser order. It does not run tokenization, safety rules, scoring, threshold decisions, report redaction, filtering, or truncation. Message roles, IDs, source lines, and available timestamp, parent, session, and tool metadata remain auditable in the `trimctx.transcript.v1` document.
+
+The Markdown is unredacted and may contain system instructions, credentials, local paths, source code, and complete tool inputs or results. Treat it as a private local artifact and review it before sharing. It is parser-normalized rather than a byte-for-byte JSONL backup: Claude content blocks may be combined and duplicate streaming frames deduplicated; Codex encrypted reasoning and parser-ignored runtime event/turn records are excluded.
+
+Output must end in `.md` (case-insensitive). The command rejects the input file and its aliases, uses atomic replacement, does not print message bodies to stdout, and keeps the original JSONL read-only. Without `[file]`, it accepts only a valid `TRIMCTX_TRANSCRIPT_PATH` current-window binding and never falls back to latest-session discovery.
+
 ## New Chat
 
 ```bash
@@ -105,7 +120,7 @@ Review the package before sharing or pasting it into a new window. It may contai
 
 An explicit `<file>` is always the command's source of truth. In a multi-window environment, do not treat the most recently modified session as proof of the current window.
 
-After Claude Code hooks are installed, SessionStart writes that window's `transcript_path` and `session_id` through its own `CLAUDE_ENV_FILE`, creating `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` bindings. Restart every already-open Claude Code window after installation. `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` use the bound path and stop when it is missing instead of falling back to another session. File-less `trimctx analyze` also checks that the bound path is a readable file and, when a session ID exists, that it matches the transcript filename.
+After Claude Code hooks are installed, SessionStart writes that window's `transcript_path` and `session_id` through its own `CLAUDE_ENV_FILE`, creating `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` bindings. Restart every already-open Claude Code window after installation. `/trimctx`, `/trimctx:export`, `/trimctx:new-chat`, and `/trimctx:compress` use the bound path and stop when it is missing instead of falling back to another session. File-less `trimctx analyze` and `trimctx export -o conversation.md` also check that the bound path is a readable file and, when a session ID exists, that it matches the transcript filename.
 
 Claude Code windows in the same project share `.claude/CLAUDE.md`. The managed status block may be updated by whichever window runs the Stop hook last, but that does not change each window's transcript binding.
 
@@ -119,6 +134,7 @@ Codex does not currently have a verified automatic window binding:
 ```powershell
 trimctx analyze --select --source codex
 trimctx analyze "C:\Users\name\.codex\sessions\...\rollout.jsonl"
+trimctx export "C:\Users\name\.codex\sessions\...\rollout.jsonl" -o conversation.md
 trimctx new-chat "C:\Users\name\.codex\sessions\...\rollout.jsonl"
 ```
 
@@ -144,6 +160,7 @@ After restarting Claude Code:
 
 - `/trimctx` runs `trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color`.
 - `/trimctx:analyze` accepts an explicit JSONL file.
+- `/trimctx:export` writes the unredacted current-session transcript to `conversation.md`.
 - `/trimctx:new-chat` creates the current-session continuation package.
 - `/trimctx:compress` writes a separate copy only after an explicit request.
 
@@ -163,7 +180,7 @@ Install the packaged skill:
 trimctx init --client codex --target user
 ```
 
-Use an explicit file, `trimctx analyze --select --source codex`, or `trimctx analyze --latest --source codex`. With multiple windows, confirm and pass the JSONL path explicitly; neither `--latest` nor `--select` is an automatic current-window binding. The package documents a skill/CLI workflow, not a verified Codex `/trimctx` slash command or verified current-window binding.
+Use an explicit file, `trimctx analyze --select --source codex`, or `trimctx analyze --latest --source codex`. To export the complete conversation, run `trimctx export <file.jsonl> -o conversation.md` with a confirmed path. With multiple windows, pass that path explicitly; neither `--latest` nor `--select` is an automatic current-window binding. The package documents a skill/CLI workflow, not a verified Codex `/trimctx` slash command or verified current-window binding.
 
 ## Report v2
 
@@ -197,6 +214,10 @@ Pass an explicit file, use `--select`/`--latest`, or install Claude hooks with `
 ### Report output rejected
 
 Use `.md` or `.json`, and choose a path different from the input transcript.
+
+### Export output rejected
+
+Use `.md`, choose a path different from the input transcript, and pass an explicit input file when no trusted current-window binding exists.
 
 ### Zero remove candidates
 

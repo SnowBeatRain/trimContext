@@ -64,8 +64,19 @@ trimctx report path/to/session.jsonl -o report.json
 
 - Markdown 面向人工审查，包含结论、健康维度、关键发现、审查队列、protected 陈旧信号、续接状态、限制和下一步。
 - JSON 是完整的 v2 机器可读报告，与 `analyze --json` 一致。
-- Markdown 证据摘要会脱敏并限制长度，但完整 JSON 报告和续聊包仍可能包含原始对话内容，分享前必须审查。
+- Markdown 证据摘要会脱敏并限制长度，但完整 JSON 报告、transcript 导出和续聊包仍可能包含原始对话内容，分享前必须审查。
 - 报告采用原子写入，并拒绝输入文件本身或它的别名。
+
+### 完整会话导出
+
+```bash
+trimctx export path/to/session.jsonl -o conversation.md
+trimctx export -o conversation.md # 仅限可信的当前窗口绑定
+```
+
+`export` 按现有 parser 返回顺序写出每一条规范化消息，不对正文评分、筛选、截断或脱敏。输出是私密的 `trimctx.transcript.v1` Markdown，可能包含系统指令、密钥、路径、源码和完整工具数据，分享前必须审查。
+
+该产物是 parser-normalized transcript，不是原始 JSONL 的逐字节备份。Claude 内容块可能被合并，重复流式帧可能被去重；Codex 加密 reasoning 及 parser 忽略的运行时 event/turn 记录不会进入导出。输出必须以 `.md` 结尾；写入采用原子替换，源 JSONL 始终只读。
 
 ### 新会话续接
 
@@ -107,6 +118,7 @@ Hooks 只通过 `trimctx init --with-hooks` 显式安装。
 
 - `/trimctx`：分析 hooks 绑定的当前 transcript
 - `/trimctx:analyze`：分析显式 JSONL 路径
+- `/trimctx:export`：把 hooks 绑定的当前 transcript 写到 `conversation.md`
 - `/trimctx:new-chat`：为当前 transcript 生成续聊包
 - `/trimctx:compress`：仅在用户明确要求压缩时使用
 
@@ -128,7 +140,7 @@ Hooks 写入范围：
 
 ## Codex
 
-包内提供 Codex skill/CLI 工作流。单窗口发现可使用 `--select` 或 `--latest --source codex`；多窗口时二者都不能自动证明“当前窗口”，必须把确认后的 JSONL 路径显式传给 `analyze`、`report`、`new-chat` 或 `compress`。本项目不宣称已验证 Codex `/trimctx` slash command，也不宣称已验证当前窗口 transcript 绑定。
+包内提供 Codex skill/CLI 工作流。单窗口发现可使用 `--select` 或 `--latest --source codex`；多窗口时二者都不能自动证明“当前窗口”，必须把确认后的 JSONL 路径显式传给 `analyze`、`report`、`export`、`new-chat` 或 `compress`。本项目不宣称已验证 Codex `/trimctx` slash command，也不宣称已验证当前窗口 transcript 绑定。
 
 ## 支持的输入
 

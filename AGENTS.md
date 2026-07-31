@@ -24,6 +24,7 @@ trimctx 是一个本地 AI 长对话上下文精简工具。目标是读取 Clau
 当前主线不是做 Web UI、MCP 或新安装器，而是稳定已验证可行的 v0.2 CLI 和现有集成：
 
 - 保持 `analyze` 短摘要、`report` 完整 JSON 和 `analyze --json` 的现有契约。
+- 将 `export` 作为经批准的有限例外：只导出 parser 识别的全部规范化消息，不改变分析、评分或压缩行为。
 - 修复 Windows/package 发布质量门并保持 npm fresh-install smoke。
 - 明确 SessionStart/Stop hooks 的写入范围，原始 transcript 始终只读。
 - 渐进拆分 CLI、pipeline、session discovery 和共享工具，不调整 scorer/threshold。
@@ -60,17 +61,20 @@ CLI 验证：
 # 核心分析命令
 npx tsx src/cli.ts analyze <file>
 npx tsx src/cli.ts report <file> -o report.json
+npx tsx src/cli.ts export <file> -o conversation.md
 npx tsx src/cli.ts compress <file> -o output.jsonl
 
-# 会话定位命令
-npx tsx src/cli.ts current                         # 只分析 hooks 绑定的当前窗口
+# 会话定位选项
 npx tsx src/cli.ts analyze --select                # 交互选择本地会话
 npx tsx src/cli.ts analyze --latest                # 显式分析最近的 Claude Code 或 Codex 会话
 npx tsx src/cli.ts analyze --latest --source claude
 npx tsx src/cli.ts analyze --latest --source codex
 
-# 交接文档命令
-npx tsx src/cli.ts handoff <file> -o handoff.md --next-context next-context.md
+# 续接命令
+npx tsx src/cli.ts new-chat <file>
+
+# 可信当前窗口绑定可省略 export 输入文件；不回退 latest
+npx tsx src/cli.ts export -o conversation.md
 
 # AI 客户端资产安装
 npx tsx src/cli.ts init                       # 安装 Claude Code 插件 + Codex skill
@@ -100,5 +104,6 @@ C:\Users\kele\.claude\projects\E--xxyWork-heli-ml-museum\5c574dba-0f62-406b-980b
 真实工作流已经由项目负责人确认可行。当前主要问题：
 
 - Windows packed-install 测试必须使用平台正确的 npm 全局目录。
+- 六命令公开面和 Claude/Codex export 资产必须保持 packed-install smoke 通过。
 - CLI 入口和集成代码职责过多，需要在行为测试保护下渐进拆分。
 - hooks 文档必须明确 Stop hook 可能更新 `.claude/CLAUDE.md` 的受管区块。

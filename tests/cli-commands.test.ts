@@ -26,9 +26,10 @@ describe("CLI commands", () => {
     const result = await runCli(["--help"]);
 
     expect(result.code).toBe(0);
-    for (const command of ["init", "analyze", "report", "new-chat", "compress"]) {
+    for (const command of ["init", "analyze", "report", "export", "new-chat", "compress"]) {
       expect(result.stdout).toContain(`${command} [options]`);
     }
+    expect(result.stdout).not.toContain("transcript [options]");
     for (const command of ["current", "handoff", "install-hooks", "hook", "resume"]) {
       expect(result.stdout).not.toContain(`${command} [options]`);
     }

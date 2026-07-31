@@ -83,6 +83,11 @@ npm link
   ```bash
   trimctx report <file.jsonl> -o report.json
   ```
+- Export the parser-normalized conversation as Markdown:
+  ```bash
+  trimctx export <file.jsonl> -o conversation.md
+  ```
+  The original JSONL remains read-only. The Markdown output is unredacted and must be reviewed before sharing.
 - Write a safe compressed copy:
   ```bash
   trimctx compress <file.jsonl> -o trimmed.jsonl
@@ -106,7 +111,8 @@ Codex current-window transcript binding is not verified. When multiple Codex win
 - `--latest --source codex` means the newest local Codex session file, not necessarily the current window.
 - `--select --source codex` is a manual choice, not proof of the current window.
 - Never run file-less `trimctx new-chat` unless an integration has explicitly supplied a trusted `TRIMCTX_TRANSCRIPT_PATH` for this window.
-- Pass the confirmed JSONL path explicitly to `analyze`, `report`, `new-chat`, and `compress` whenever exact window identity matters.
+- Before exporting a transcript, confirm the intended window's JSONL path and pass it explicitly to `trimctx export <file.jsonl> -o conversation.md`.
+- Pass the confirmed JSONL path explicitly to `analyze`, `report`, `export`, `new-chat`, and `compress` whenever exact window identity matters.
 - After `new-chat`, verify `input.file`, `session_id`, and `sha256` in `.trimctx/handoffs/<uid>/manifest.json` before continuing from the package.
 
 ## New-chat UID Handling
@@ -128,6 +134,7 @@ Use `manifest.json` as the source of truth for package metadata and paths. Do no
 - Protected content is never automatically deleted.
 - Only run compression when the user explicitly asks for it.
 - Treat `compress` output as a new artifact; do not write it back into an active AI client session automatically.
+- Treat transcript Markdown as private, unredacted content and review it before sharing.
 - If no trusted current transcript binding or explicit file path is available, ask the user for an explicit JSONL path instead of guessing.
 
 ## Codex Boundary

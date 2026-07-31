@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added `trimctx export [file] -o <conversation.md>` for deterministic, unredacted export of every parser-normalized message, with auditable source metadata and Markdown-safe dynamic fences.
+- Added `/trimctx:export` to the Claude Code plugin and explicit-file export guidance to the Codex skill.
+
+### Changed
+
+- Expanded the public CLI surface from five commands to six while preserving the existing analyze, report, new-chat, and compression contracts.
+- Transcript writes now reuse input-identity checks, a pre-read input snapshot, and atomic replacement so the source JSONL stays read-only and existing outputs survive failures.
+
 ## [0.2.11] - 2026-07-23
 
 ### Added

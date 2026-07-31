@@ -64,8 +64,19 @@ trimctx report path/to/session.jsonl -o report.json
 
 - Markdown is for human review and includes the conclusion, health dimensions, findings, review queue, protected stale signals, continuation status, limitations, and next actions.
 - JSON is the complete machine-readable v2 report and matches `analyze --json`.
-- Evidence summaries are redacted and capped, but full JSON reports and continuation packages can still contain original transcript content. Review artifacts before sharing.
+- Evidence summaries are redacted and capped, but full JSON reports, transcript exports, and continuation packages can contain original transcript content. Review artifacts before sharing.
 - Report writes are atomic and reject the input file or an alias of it.
+
+### Export
+
+```bash
+trimctx export path/to/session.jsonl -o conversation.md
+trimctx export -o conversation.md # trusted current-window binding only
+```
+
+`export` writes every message returned by the existing parser in its original parser order. It does not score, filter, truncate, or redact message bodies. The output is a private `trimctx.transcript.v1` Markdown artifact and may contain system instructions, secrets, paths, source code, and complete tool data; review it before sharing.
+
+This is a parser-normalized transcript, not a byte-for-byte JSONL backup. Claude content blocks may be combined and duplicate streaming frames deduplicated. Codex encrypted reasoning and runtime event/turn records ignored by the parser are not included. Output must end in `.md`; writes are atomic, and the source JSONL remains read-only.
 
 ### New Chat
 
@@ -107,6 +118,7 @@ The packaged plugin provides:
 
 - `/trimctx` for the hook-bound current transcript
 - `/trimctx:analyze` for an explicit JSONL path
+- `/trimctx:export` to write the hook-bound current transcript to `conversation.md`
 - `/trimctx:new-chat` for the current transcript
 - `/trimctx:compress` only after an explicit compression request
 
@@ -128,7 +140,7 @@ Hook write scope is explicit:
 
 ## Codex
 
-The package installs a Codex skill/CLI workflow. For single-window discovery, use `--select` or `--latest --source codex`. With multiple windows, neither mode proves which window is current; pass the confirmed JSONL path explicitly to `analyze`, `report`, `new-chat`, or `compress`. This project does not claim a verified Codex `/trimctx` slash command or verified current-window transcript binding.
+The package installs a Codex skill/CLI workflow. For single-window discovery, use `--select` or `--latest --source codex`. With multiple windows, neither mode proves which window is current; pass the confirmed JSONL path explicitly to `analyze`, `report`, `export`, `new-chat`, or `compress`. This project does not claim a verified Codex `/trimctx` slash command or verified current-window transcript binding.
 
 ## Supported Inputs
 

@@ -22,6 +22,7 @@ trimctx 读取本地 Claude Code / OpenAI / Codex JSONL 对话文件，分析每
 - 识别 protected / keep / compress_candidate / remove_candidate。
 - 每条候选都必须有 reason。
 - 输出面向人工审查的 Markdown 报告和完整 JSON 报告。
+- 输出包含全部规范化消息的未脱敏 Markdown transcript。
 - 输出安全压缩副本。
 - 原始 JSONL 永远不被修改。
 - 默认不调用 LLM，不上传用户数据。
@@ -35,6 +36,7 @@ trimctx 读取本地 Claude Code / OpenAI / Codex JSONL 对话文件，分析每
 - 不默认调用 LLM 或 embedding。
 - 不在 v0.1 做 MCP / REST API / Dashboard。
 - 不追求第一版删得最多。
+- 不把规范化 transcript 宣称为原始 JSONL 的逐字节备份。
 
 ## 6. 功能需求
 
@@ -135,14 +137,26 @@ v2 JSON 至少包含：
 
 Markdown 必须包含结论、健康维度、关键发现、审查队列、Protected 但疑似陈旧、续接状态、限制与安全说明和下一步。证据只展示 message id、line、role 和脱敏且不超过 160 字符的摘要。
 
-### FR-6: analyze
+### FR-6: export
+
+`export [file] -o <conversation.md>` 必须：
+
+- 按 `parseJsonl` 返回顺序导出每条 `NormalizedMessage`。
+- 不经过 tokenizer、safety、scorer、threshold、report 脱敏、筛选或截断。
+- 记录 `trimctx.transcript.v1`、输入路径和 SHA-256、检测格式、可用 session ID、消息数及逐消息审计元数据。
+- 使用动态长度 Markdown 围栏隔离正文中的 Markdown、HTML 和已有代码围栏。
+- 明确产物默认未脱敏、分享前必须审查，并说明它不是 raw JSONL backup。
+- 只接受 `.md` 输出，拒绝输入文件及其别名，保持输入句柄打开并原子写入。
+- 省略 `[file]` 时只使用可信当前窗口绑定，不回退到 latest session。
+
+### FR-7: analyze
 
 当前行为：
 
 - `analyze <file>` 默认输出短摘要。
 - `analyze <file> --json` 输出完整 JSON。
 
-### FR-7: compress
+### FR-8: compress
 
 `compress <file> -o <output.jsonl>` 必须：
 
@@ -211,13 +225,13 @@ Phase 0 至少需要 5 个真实 Claude Code 长会话私有样本：
 
 当前命令面、Report v2 和集成边界已完成本轮收敛；Phase 0 指标仍作为未来对外宣称自动压缩安全性的正式发布门槛。
 
-1. 保持 `init`、`analyze`、`report`、`new-chat`、`compress` 五个公开命令及现有输出契约。
+1. 保持 `init`、`analyze`、`report`、`export`、`new-chat`、`compress` 六个公开命令及现有输出契约；`export` 是经批准的有限新增面。
 2. 保持 `trimctx.report.v2`、Markdown 人工审查报告和原子写入行为稳定。
 3. 保持 tool use/result 结构保护、protected 不删除和原始 transcript 只读。
 4. 使用代表性 Claude Code / Codex 会话复核 assessment、findings、review queue 和 continuation readiness。
 5. 补齐 Phase 0 人工审查指标和真实私有 OpenAI export 验证后，再提高安全承诺等级。
 6. 保持 Windows packed-install、npm 包体和 fresh-install smoke 质量门。
-7. 不扩大自动删除范围，暂不新增 diagnostics 命令、Web UI、MCP 或后台自动化。
+7. 除已批准的 `export` 外不扩大产品面；不扩大自动删除范围，暂不新增 diagnostics 命令、Web UI、MCP 或后台自动化。
 
 ## 11. 文档关系
 

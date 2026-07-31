@@ -5,13 +5,14 @@ import { describe, expect, test } from "vitest";
 const execFileAsync = promisify(execFile);
 
 describe("public CLI surface", () => {
-  test("shows only the five public subcommands", async () => {
+  test("shows only the six public subcommands", async () => {
     const result = await runCli(["--help"]);
 
     expect(result.code).toBe(0);
-    for (const command of ["init", "analyze", "report", "new-chat", "compress"]) {
+    for (const command of ["init", "analyze", "report", "export", "new-chat", "compress"]) {
       expect(result.stdout).toMatch(new RegExp(`^  ${command}\\b`, "m"));
     }
+    expect(result.stdout).not.toMatch(/^  transcript\b/m);
     for (const command of ["current", "handoff", "install-hooks", "hook"]) {
       expect(result.stdout).not.toMatch(new RegExp(`^  ${command}\\b`, "m"));
     }
@@ -63,6 +64,28 @@ describe("public CLI surface", () => {
     expect(result.stdout).not.toContain("--output");
     expect(result.stdout).not.toContain("--next-context");
     expect(result.stdout).not.toContain("--out-dir");
+    expect(result.stdout).not.toContain("--recent-window");
+    expect(result.stdout).not.toContain("--remove-threshold");
+    expect(result.stdout).not.toContain("--compress-threshold");
+  });
+
+  test("rejects the unreleased transcript command", async () => {
+    const result = await runCli(["transcript", "--help"]);
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain("unknown command");
+  });
+
+  test("keeps export focused on a bound or explicit file and Markdown output", async () => {
+    const result = await runCli(["export", "--help"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Usage: trimctx export [options] [file]");
+    expect(result.stdout).toContain("trusted current-window binding");
+    expect(result.stdout).toContain("-o, --output <conversation.md>");
+    expect(result.stdout).not.toContain("--select");
+    expect(result.stdout).not.toContain("--latest");
+    expect(result.stdout).not.toContain("--source");
     expect(result.stdout).not.toContain("--recent-window");
     expect(result.stdout).not.toContain("--remove-threshold");
     expect(result.stdout).not.toContain("--compress-threshold");

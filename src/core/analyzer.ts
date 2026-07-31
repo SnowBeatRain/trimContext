@@ -46,7 +46,7 @@ export function parseJsonl(input: string, file = "<input>"): NormalizedMessage[]
     }
   }
 
-  throw new Error("Unsupported JSONL format");
+  throw new Error(`Unsupported JSONL format: ${file}`);
 }
 
 function looksLikeClaudeCodeRecord(record: Record<string, unknown>): boolean {

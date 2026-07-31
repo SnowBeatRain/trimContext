@@ -57,6 +57,7 @@ v0.1 只证明一件事：规则检测能不能在真实长对话里稳定找出
 | 读取纯文本对话 | 暂不做 | 可作为后续兜底 parser |
 | 分析 token 数 | 做 | 先近似，后续可接 tiktoken |
 | 输出 JSON 报告 | 做 | `report` 命令保留完整机器可读数据 |
+| 输出完整规范化 Markdown transcript | 做 | `export` 独立导出，不改变脱敏健康报告 |
 | 输出终端摘要 | 做 | `analyze` 默认应该短摘要 |
 | 输出压缩副本 | 做 | 永远不改原文件 |
 | 每条建议给 reason | 做 | 必须可解释 |
@@ -77,7 +78,7 @@ v0.1 只证明一件事：规则检测能不能在真实长对话里稳定找出
 | CLI | commander |
 | 测试 | vitest |
 | Tokenizer | 先用 `ApproxTokenizer`，保留后续替换空间 |
-| 输出格式 | JSON + terminal summary |
+| 输出格式 | JSON + Markdown + terminal summary |
 | 存储 | 文件系统 |
 | 数据库 | 不做 |
 | Python | 不做主线 |
@@ -140,7 +141,6 @@ trimctx analyze <file>
 trimctx analyze <file> --json
 trimctx report <file> -o <report.json>
 trimctx compress <file> -o <output.jsonl>
-trimctx current
 ```
 
 交付物：
@@ -163,11 +163,13 @@ trimctx current
 当前主线命令：
 
 ```bash
+trimctx init
 trimctx analyze <file>
 trimctx analyze <file> --json
 trimctx report <file> -o report.json
+trimctx export [file] -o conversation.md
+trimctx new-chat [file]
 trimctx compress <file> -o output.jsonl
-trimctx current
 ```
 
 交付物：
@@ -175,8 +177,9 @@ trimctx current
 - `analyze` 默认输出短摘要。
 - `analyze --json` 输出完整 JSON。
 - `report` 输出完整机器可读报告。
+- `export` 输出 parser 识别的全部规范化消息，默认未脱敏，不是 raw JSONL backup。
 - `compress` 生成安全压缩副本且拒绝覆盖输入文件。
-- `current` 严格分析 hooks 绑定的当前窗口；`analyze --latest --source claude` 显式分析最近 Claude Code session。
+- 无文件 `analyze` 和 `export` 只使用 hooks 绑定的当前窗口；`analyze --latest --source claude` 显式分析最近 Claude Code session。
 - report top reasons 和 warnings。
 - JSONL 解析错误包含可定位的文件和行号。
 - 阈值参数仅作为高级验证/调参选项，不作为普通用户主路径。
@@ -601,22 +604,25 @@ npm run build
 
 ### Task 3: Current CLI Stability
 
-目标：稳定当前已实现命令，不新增额外 CLI surface。
+目标：稳定当前六命令公开面；除经批准的 `export` 外不新增额外 CLI surface。
 
 当前命令：
 
 ```bash
+trimctx init
 trimctx analyze <file>
 trimctx analyze <file> --json
 trimctx report <file> -o report.json
+trimctx export [file] -o conversation.md
+trimctx new-chat [file]
 trimctx compress <file> -o output.jsonl
-trimctx current
 ```
 
 验收：
 
 - 默认 `analyze` 输出短摘要，`--json` 输出完整报告。
 - `report` 与 `analyze --json` 的 JSON 语义一致。
+- `export` 完整保留 parser 消息顺序和正文，原文件 hash 不变，输出只接受 `.md`。
 - `compress` 拒绝覆盖输入文件，且原文件 hash 不变。
 - JSONL 解析错误包含可定位的文件和行号。
 - 阈值参数错误使用用户能理解的 CLI flag 名称。

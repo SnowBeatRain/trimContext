@@ -36,7 +36,8 @@
 - `trimctx init` — 从 npm 包安装 Claude Code 插件和 Codex skill
 - `trimctx` / 不带文件的 `analyze` — 只分析 hooks 绑定的当前窗口；本地发现使用 `analyze --select/--latest`
 - `trimctx new-chat` — 生成确定性 UID 交接包，默认输出 `.trimctx/handoffs/<uid>/`
-- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:new-chat`、`/trimctx:compress`
+- `trimctx export [file] -o conversation.md` — 导出 parser 识别的全部规范化消息，不评分、不脱敏且保持原 JSONL 只读
+- Claude Code 插件（`plugins/trimctx/`）：`/trimctx`、`/trimctx:analyze`、`/trimctx:export`、`/trimctx:new-chat`、`/trimctx:compress`
 - Codex skill（`codex/skills/trimctx/SKILL.md`）
 - GitHub 安装脚本（`install.sh` / `install.ps1`）
 - Markdown 会话健康报告，以及与 `analyze --json` 一致的 v2 JSON 报告
@@ -214,7 +215,7 @@ SessionStart hook 通过 `CLAUDE_ENV_FILE` 写当前会话绑定；Stop hook 可
 ### Step 3：保持发布与集成质量门
 
 - 保持 Windows packed-install、tarball 资产清单和 fresh-install smoke 覆盖。
-- 保持五个公开命令、内部 hook executor 和原始 transcript 只读契约。
+- 保持 `init`、`analyze`、`report`、`export`、`new-chat`、`compress` 六个公开命令、内部 hook executor 和原始 transcript 只读契约。
 - 发布前运行测试、构建和 package contents 检查。
 
 ### Step 4：冻结高风险扩展
@@ -223,7 +224,7 @@ SessionStart hook 通过 `CLAUDE_ENV_FILE` 写当前会话绑定；Stop hook 可
 
 ## 当前结论
 
-项目已完成本轮命令面收敛、evidence-based Report v2、文件写入保护和集成说明更新，进入“复核报告质量并积累正式信任证据”的阶段。
+项目已完成本轮命令面收敛、evidence-based Report v2、文件写入保护和集成说明更新；完整规范化 `export` 命令是经批准的有限例外，不改变评分或压缩边界。项目继续处于“复核报告质量并积累正式信任证据”的阶段。
 
 当前最重要任务：
 

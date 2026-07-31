@@ -53,9 +53,11 @@ export async function atomicWriteFileDistinctFromInput(
   inputHandle: FileHandle,
   outputFile: string,
   data: string,
-  conflictMessage = "Output file must be different from input file"
+  conflictMessage = "Output file must be different from input file",
+  inputSnapshot?: Stats
 ): Promise<void> {
-  const inputStat = await inputHandle.stat();
+  const inputStat = inputSnapshot ?? await inputHandle.stat();
+  await assertInputSnapshotUnchanged(inputHandle, inputStat);
   await assertOutputIsDistinct(inputStat, outputFile, conflictMessage);
 
   const directory = dirname(outputFile);
@@ -69,10 +71,7 @@ export async function atomicWriteFileDistinctFromInput(
     await tempHandle.close();
     tempHandle = undefined;
 
-    const currentInputStat = await inputHandle.stat();
-    if (!sameInputSnapshot(inputStat, currentInputStat)) {
-      throw new Error("Input file changed while output was being prepared");
-    }
+    const currentInputStat = await assertInputSnapshotUnchanged(inputHandle, inputStat);
     await assertOutputIsDistinct(currentInputStat, outputFile, conflictMessage);
 
     try {
@@ -85,6 +84,14 @@ export async function atomicWriteFileDistinctFromInput(
     await tempHandle?.close().catch(() => undefined);
     await rm(tempFile, { force: true }).catch(() => undefined);
   }
+}
+
+async function assertInputSnapshotUnchanged(inputHandle: FileHandle, initial: Stats): Promise<Stats> {
+  const current = await inputHandle.stat();
+  if (!sameInputSnapshot(initial, current)) {
+    throw new Error("Input file changed while output was being prepared");
+  }
+  return current;
 }
 
 function sameInputSnapshot(initial: Stats, current: Stats): boolean {

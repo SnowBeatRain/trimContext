@@ -3,8 +3,10 @@
 This plugin is a thin wrapper around the local `trimctx` CLI.
 
 - Default commands analyze local JSONL session files only; they do not modify original session files.
-- `/trimctx`, `/trimctx:new-chat`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH` from the current Claude Code session.
+- `/trimctx`, `/trimctx:export`, `/trimctx:new-chat`, and `/trimctx:compress` require `TRIMCTX_TRANSCRIPT_PATH` from the current Claude Code session.
 - If `TRIMCTX_TRANSCRIPT_PATH` is missing, ask the user to run `trimctx init --with-hooks` and restart Claude Code.
+- `/trimctx:export` runs `trimctx export "$TRIMCTX_TRANSCRIPT_PATH" -o conversation.md`; it never falls back to the latest session.
+- `conversation.md` is parser-normalized and unredacted. It may contain secrets and full conversation content, so it must be reviewed before sharing.
 - Compression is only allowed through an explicit command that writes a separate output artifact.
 - Never overwrite the active or original session file.
 - Do not claim secrets are redacted automatically; local reports and compressed artifacts may contain original conversation content.

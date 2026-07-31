@@ -6,6 +6,7 @@ Analyze the current Claude Code JSONL conversation from inside Claude Code.
 
 - `/trimctx` - analyze the current Claude Code session when `TRIMCTX_TRANSCRIPT_PATH` is available.
 - `/trimctx:analyze` - analyze an explicitly provided JSONL file path.
+- `/trimctx:export` - export the current Claude Code session to `conversation.md` as parser-normalized Markdown.
 - `/trimctx:new-chat` - create a UID-based new-chat package for the current Claude Code session.
 - `/trimctx:compress` - only when the user explicitly asks to write a compressed copy.
 
@@ -16,7 +17,8 @@ Analyze the current Claude Code JSONL conversation from inside Claude Code.
 - Does not modify original session files.
 - Compression requires explicit user action and writes a separate output file.
 - Current-window commands require Claude hooks. Enable them explicitly with `trimctx init --with-hooks`.
-- `trimctx` requires the current-window hook binding and never falls back to latest-file discovery.
+- `/trimctx` and `/trimctx:export` require the current-window hook binding and never fall back to latest-file discovery.
+- `/trimctx:export` writes `conversation.md`; the parser-normalized output is unredacted and must be reviewed before sharing.
 - SessionStart writes the current binding through `CLAUDE_ENV_FILE`.
 - Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
 - Hooks keep the original JSONL transcript read-only.

@@ -4,7 +4,7 @@
 
 This plan records the team review after the first real Codex/Hermes validation pass and the `score_diagnostics` implementation.
 
-The next iteration should not chase aggressive deletion, new installer surfaces, additional hook automation, MCP, Web UI, or LLM summarization. Existing packaged integrations should be stabilized and documented without expanding their behavior.
+The next iteration should not chase aggressive deletion, new installer surfaces, additional hook automation, MCP, Web UI, or LLM summarization. The complete normalized `export` command is an approved, bounded exception; other packaged integrations should be stabilized without expanding their behavior.
 
 ## Product Positioning
 
@@ -116,6 +116,7 @@ Tasks:
 - Explain that zero `remove_candidate` can be conservative safety behavior.
 - Surface warning counts and parser warnings in the human summary.
 - Keep `analyze --json` and `report` as complete machine-readable paths.
+- Keep `export` as a separate unredacted full-message export; do not merge it into the redacted Markdown health report.
 
 Acceptance:
 
@@ -146,6 +147,8 @@ Acceptance:
 - New work during this phase improves trust, reports, tests, validation, or documentation.
 
 The npm package already contains Claude Code command/plugin files, a Codex skill wrapper, `trimctx init`, and experimental hooks. Stabilize those existing surfaces and disclose that the Stop hook may update the managed section in `.claude/CLAUDE.md`; status line, broader automation, MCP, Web UI, and automatic active-session compression remain deferred.
+
+The approved `trimctx export [file] -o <conversation.md>` exception adds only parser-normalized Markdown export and matching Claude/Codex assets. It does not change scorer, threshold, Report v2, new-chat, compression, discovery, or hook write scope.
 
 ## Next: v0.3 New-chat and Integration Design
 
@@ -275,7 +278,7 @@ Block completion if any of these happen:
 1. Review Report v2 assessments, findings, and review queues on representative Claude Code and Codex sessions.
 2. Record Phase 0 manual-review metrics and private OpenAI export validation before making stronger compression-safety claims.
 3. Keep Windows packed-install, tarball contents, and fresh-install smoke coverage green.
-4. Preserve the five-command public surface, explicit hook write scope, and read-only original-transcript contract.
+4. Preserve the six-command public surface (`init`, `analyze`, `report`, `export`, `new-chat`, `compress`), explicit hook write scope, and read-only original-transcript contract.
 5. Defer new discovery commands, background automation, Web UI, MCP, and more aggressive deletion thresholds.
 
 ## Current Recommendation
@@ -284,4 +287,4 @@ The current implementation focus is report quality and release evidence, not ano
 
 1. Validate that structured evidence and health assessments are accurate, explainable, and actionable on real sessions.
 2. Preserve release quality gates and conservative removal behavior while collecting formal trust metrics.
-3. Keep existing integrations explicit about file writes and defer new product surfaces.
+3. Keep existing integrations explicit about file writes and defer product surfaces beyond the approved transcript export.

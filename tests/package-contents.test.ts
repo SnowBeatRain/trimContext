@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
+import { parseJsonl } from "../src/core/analyzer.js";
 
 const execFileAsync = promisify(execFile);
 const unsafeInstallPipePatterns = [
@@ -74,14 +75,20 @@ describe("package contents", () => {
     expect(files).toContain("plugins/trimctx/commands/trimctx/analyze.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/compress.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/new-chat.md");
+    expect(files).toContain("plugins/trimctx/commands/trimctx/export.md");
+    expect(files).not.toContain("plugins/trimctx/commands/trimctx/transcript.md");
     expect(files).not.toContain("plugins/trimctx/commands/trimctx/handoff.md");
     expect(files).not.toContain("plugins/trimctx/commands/trimctx/resume.md");
     expect(files).toContain("codex/skills/trimctx/SKILL.md");
   }, 30_000);
 
   test("documents the supported analysis and hook entry points in client assets", async () => {
-    const [claudeCommand, pluginReadme, pluginSystem, codexSkill] = await Promise.all([
+    const exportAsset = "plugins/trimctx/commands/trimctx/export.md";
+    await expect(access(exportAsset)).resolves.toBeUndefined();
+
+    const [claudeCommand, exportCommand, pluginReadme, pluginSystem, codexSkill] = await Promise.all([
       readFile("plugins/trimctx/commands/trimctx.md", "utf8"),
+      readFile(exportAsset, "utf8"),
       readFile("plugins/trimctx/README.md", "utf8"),
       readFile("plugins/trimctx/.system", "utf8"),
       readFile("codex/skills/trimctx/SKILL.md", "utf8")
@@ -89,6 +96,9 @@ describe("package contents", () => {
 
     expect(claudeCommand).toContain('trimctx analyze "$TRIMCTX_TRANSCRIPT_PATH" --color');
     expect(claudeCommand).not.toContain("only selects the latest local JSONL file");
+    expect(exportCommand).toContain('trimctx export "$TRIMCTX_TRANSCRIPT_PATH" -o conversation.md');
+    expect(exportCommand).toContain("unredacted");
+    expect(exportCommand).toContain("review");
     expect(pluginReadme).toContain("`trimctx init --with-hooks`");
     expect(pluginReadme).toContain("SessionStart writes the current binding through `CLAUDE_ENV_FILE`");
     expect(pluginReadme).toContain("Stop may update only the trimctx-managed block");
@@ -101,6 +111,7 @@ describe("package contents", () => {
     expect(pluginSystem).not.toContain("trimctx current");
     expect(codexSkill).toContain("trimctx analyze --latest --source codex --color");
     expect(codexSkill).toContain("trimctx report <file.jsonl> -o report.md");
+    expect(codexSkill).toContain("trimctx export <file.jsonl> -o conversation.md");
     expect(codexSkill).not.toContain("trimctx current");
   });
 
@@ -114,6 +125,9 @@ describe("package contents", () => {
     expect(files.some((file) => file.startsWith("dist/core/"))).toBe(false);
     expect(files.some((file) => file.startsWith("dist/adapters/"))).toBe(false);
     expect(files.some((file) => file.startsWith("dist/types/"))).toBe(false);
+    expect(files.some((file) => file.endsWith(".jsonl"))).toBe(false);
+    expect(files.some((file) => file.startsWith("tmp-real-validation/"))).toBe(false);
+    expect(files.some((file) => file.startsWith(".vscode/"))).toBe(false);
     expect(files.filter((file) => file.startsWith("docs/dev/")).sort()).toEqual([
       "docs/dev/requirements.md",
       "docs/dev/roadmap.md"
@@ -167,8 +181,20 @@ describe("package contents", () => {
       const analyzeHelp = await execFileAsync(trimctxBin, ["analyze", "--help"], {
         shell: process.platform === "win32"
       });
+      const exportHelp = await execFileAsync(trimctxBin, ["export", "--help"], {
+        shell: process.platform === "win32"
+      });
+      const transcriptSource = path.resolve("tests", "fixtures", "openai-chat.jsonl");
+      const transcriptOutput = path.join(tempDir, "conversation.md");
+      const transcriptSourceBefore = await readFile(transcriptSource);
+      const transcriptMessages = parseJsonl(transcriptSourceBefore.toString("utf8"), transcriptSource);
+      await execFileAsync(trimctxBin, ["export", transcriptSource, "-o", transcriptOutput], {
+        shell: process.platform === "win32"
+      });
 
       await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "new-chat.md"))).resolves.toBeUndefined();
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "export.md"))).resolves.toBeUndefined();
+      await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "transcript.md"))).rejects.toThrow();
       await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "handoff.md"))).rejects.toThrow();
       await expect(access(path.join(packageRoot, "plugins", "trimctx", "commands", "trimctx", "resume.md"))).rejects.toThrow();
       expect(version.stdout.trim()).toBe(packageJson.version);
@@ -176,9 +202,10 @@ describe("package contents", () => {
       expect(help.stdout).toContain("Commands:");
       expect(help.stdout).toContain("init [options]");
       expect(help.stdout).toContain("analyze [options] [file]");
-      for (const command of ["init", "analyze", "report", "new-chat", "compress"]) {
+      for (const command of ["init", "analyze", "report", "export", "new-chat", "compress"]) {
         expect(help.stdout).toContain(`${command} [options]`);
       }
+      expect(help.stdout).not.toContain("transcript [options]");
       for (const command of ["current", "handoff", "install-hooks", "hook", "session-env"]) {
         expect(help.stdout).not.toContain(`${command} [options]`);
       }
@@ -188,8 +215,24 @@ describe("package contents", () => {
       expect(analyzeHelp.stdout).not.toContain("--recent-window");
       expect(analyzeHelp.stdout).not.toContain("--remove-threshold");
       expect(analyzeHelp.stdout).not.toContain("--compress-threshold");
+      expect(exportHelp.stdout).toContain("Usage: trimctx export [options] [file]");
+      expect(exportHelp.stdout).toContain("trusted current-window binding");
+      expect(exportHelp.stdout).toContain("-o, --output <conversation.md>");
+      const transcriptMarkdown = await readFile(transcriptOutput, "utf8");
+      expect(transcriptMarkdown).toContain("# trimctx Conversation Transcript");
+      expect(transcriptMarkdown.match(/^### Message \d+ - /gm)).toHaveLength(transcriptMessages.length);
+      for (let index = 0; index < transcriptMessages.length; index += 1) {
+        expect(eventSection(transcriptMarkdown, index + 1)).toContain(transcriptMessages[index]!.content);
+      }
+      expect(await readFile(transcriptSource)).toEqual(transcriptSourceBefore);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   }, 60_000);
 });
+
+function eventSection(markdown: string, sequence: number): string {
+  const start = markdown.indexOf(`### Message ${sequence} -`);
+  const next = markdown.indexOf(`\n\n### Message ${sequence + 1} -`, start);
+  return markdown.slice(start, next === -1 ? undefined : next);
+}
