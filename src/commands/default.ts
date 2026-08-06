@@ -2,10 +2,9 @@ import type { Command } from "commander";
 import { formatUserSummary } from "../cli/format-summary.js";
 import { analyzeFile } from "../core/pipeline.js";
 import {
-  hasCurrentSessionBinding,
-  listSessions,
-  resolveBoundSessionFile
-} from "../sessions/discovery.js";
+  listSessions
+} from "../sessions/catalog.js";
+import { hasCurrentSessionBinding, resolveBoundSessionFile } from "../sessions/binding.js";
 import { isInteractiveTerminal, selectSession } from "../sessions/picker.js";
 
 export function registerDefaultCommand(program: Command): void {

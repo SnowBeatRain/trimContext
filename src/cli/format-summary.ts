@@ -1,12 +1,13 @@
 import type { AnalysisReport } from "../types/report.js";
-
-const LIMITATION_LABELS: Record<string, string> = {
-  sample_too_short: "样本过短，证据不足。",
-  protected_coverage_too_high: "protected 内容占比过高，可分析证据不足。",
-  unknown_role_coverage_too_high: "未知角色内容占比过高，角色证据不足。",
-  analyzable_coverage_too_low: "可分析消息占比过低，证据不足。",
-  insufficient_positive_evidence: "正向证据不足，不能判定会话健康。"
-};
+import {
+  assessmentSummaryLabel,
+  confidenceLabel,
+  findingCopy,
+  healthStatusLabel,
+  limitationLabel,
+  missingEvidenceLabel,
+  recommendationSummaryLabel
+} from "../core/report-copy.js";
 
 export function formatAnalysisSummary(report: AnalysisReport, options?: { color?: boolean }): string {
   const lines = [heading("trimctx analysis", options?.color ?? false), ""];
@@ -17,10 +18,10 @@ export function formatAnalysisSummary(report: AnalysisReport, options?: { color?
 
 export function formatUserSummary(report: AnalysisReport, options?: { color?: boolean }): string {
   const lines = [heading("trimctx 看了一下当前会话：", options?.color ?? false), ""];
-  lines.push(`状态: ${report.assessment.status.toUpperCase()}`);
-  lines.push(`置信度: ${report.assessment.confidence.toUpperCase()}`);
+  lines.push(`状态: ${healthStatusLabel(report.assessment.status)}`);
+  lines.push(`置信度: ${confidenceLabel(report.assessment.confidence)}`);
   lines.push(`文件: ${report.input.file}`, "", "原因：");
-  lines.push(`- ${report.assessment.summary}`);
+  lines.push(`- ${assessmentSummaryLabel(report.assessment.summary)}`);
   appendLimitations(lines, report);
   appendFindings(lines, report);
   lines.push(`- 续接缺失: ${missingResumeEvidence(report)}`, "", "下一步：");
@@ -32,11 +33,11 @@ export function formatUserSummary(report: AnalysisReport, options?: { color?: bo
 }
 
 function appendAssessment(lines: string[], report: AnalysisReport): void {
-  lines.push(`状态: ${report.assessment.status.toUpperCase()}`);
-  lines.push(`置信度: ${report.assessment.confidence.toUpperCase()}`);
-  lines.push(`结论: ${report.assessment.summary}`);
+  lines.push(`状态: ${healthStatusLabel(report.assessment.status)}`);
+  lines.push(`置信度: ${confidenceLabel(report.assessment.confidence)}`);
+  lines.push(`结论: ${assessmentSummaryLabel(report.assessment.summary)}`);
   if (report.assessment.status === "unknown") {
-    lines.push("说明: 当前证据不足，不能把会话描述为 clean 或 healthy。");
+    lines.push("说明: 当前证据不足，不能把会话描述为干净或健康。");
   }
   appendLimitations(lines, report);
   lines.push("");
@@ -49,18 +50,19 @@ function appendAssessment(lines: string[], report: AnalysisReport): void {
 
 function appendLimitations(lines: string[], report: AnalysisReport): void {
   for (const limitation of report.assessment.limitations) {
-    lines.push(`限制: ${LIMITATION_LABELS[limitation] ?? limitation}`);
+    lines.push(`限制: ${limitationLabel(limitation)}`);
   }
 }
 
 function appendFindings(lines: string[], report: AnalysisReport): void {
-  const findings = report.findings.slice(0, 2);
+  const findings = report.findings.filter(finding => finding.type !== "limitation").slice(0, 2);
   if (findings.length === 0) {
-    lines.push("发现: 没有高置信发现。");
+    lines.push("发现: 没有高置信风险发现。");
     return;
   }
   for (const finding of findings) {
-    lines.push(`发现: ${finding.title} - ${finding.summary}`);
+    const copy = findingCopy(finding);
+    lines.push(`发现: ${copy.title} - ${copy.summary}`);
   }
 }
 
@@ -70,7 +72,7 @@ function appendFirstRecommendation(lines: string[], report: AnalysisReport): voi
     lines.push("- 暂无额外建议；继续人工审查当前证据。");
     return;
   }
-  lines.push(`- ${recommendation.summary}`);
+  lines.push(`- ${recommendationSummaryLabel(recommendation, report.resume.readiness.missing)}`);
   if (recommendation.command) lines.push(`  ${recommendation.command}`);
 }
 
@@ -86,8 +88,8 @@ function appendReportCommands(lines: string[], report: AnalysisReport): void {
 
 function missingResumeEvidence(report: AnalysisReport): string {
   return report.resume.readiness.missing.length > 0
-    ? report.resume.readiness.missing.join(", ")
-    : "none";
+    ? report.resume.readiness.missing.map(missingEvidenceLabel).join("、")
+    : "无";
 }
 
 function heading(text: string, color: boolean): string {

@@ -94,7 +94,7 @@ Goal: make future scoring and safety changes measurable instead of subjective.
 
 Tasks:
 
-- Define labels: `safe_remove`, `questionable_remove`, `critical_false_delete`, `missed_low_value_noise`, `over_protected`.
+- Define labels: `safe_remove`, `questionable_remove`, `critical_keep`, `protected_keep`, `over_protected`, `missed_low_value_noise`, plus non-locking `needs_summary` and `unclear` evidence labels.
 - Require all `remove_candidate` messages to be manually reviewed during Phase 0.
 - Sample high-token `compress_candidate` messages for over-protection or missed opportunities.
 - Capture before/after metrics after scorer or safety changes.

@@ -4,6 +4,8 @@ import { reasonLabel } from "./reason-labels.js";
 
 const STATE_START = "<!-- TRIMCTX_STATE_START -->";
 const STATE_END = "<!-- TRIMCTX_STATE_END -->";
+const MAX_CONTEXT_GOAL_LENGTH = 220;
+const OMITTED_STATE_MARKER = "[trimctx marker omitted]";
 
 type HealthLevel = "ok" | "moderate" | "heavy";
 
@@ -36,6 +38,30 @@ function formatNextAction(report: AnalysisReport): string {
     return "当前只有 compress_candidate；默认保留，可用 `trimctx new-chat` 生成续接上下文。";
   }
   return "暂无安全删除候选；继续收集样本或运行 `trimctx new-chat` 做交接。";
+}
+
+function formatContextGoal(value: string | undefined): string {
+  const redacted = redactContextStateText(value ?? "")
+    .replaceAll(STATE_START, OMITTED_STATE_MARKER)
+    .replaceAll(STATE_END, OMITTED_STATE_MARKER)
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!redacted) return "未识别";
+  return redacted.length <= MAX_CONTEXT_GOAL_LENGTH
+    ? redacted
+    : `${redacted.slice(0, MAX_CONTEXT_GOAL_LENGTH - 3)}...`;
+}
+
+function redactContextStateText(value: string): string {
+  return value
+    .replace(/\b(?:sk|pk|ghp|github_pat|glpat|xox[baprs])-[-A-Za-z0-9_]{12,}\b/g, "[REDACTED]")
+    .replace(/(https?:\/\/)([^\s/@]+):([^\s/@]+)@/gi, "$1[REDACTED]@")
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[REDACTED_EMAIL]")
+    .replace(/\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+\/-]+={0,2}/gi, "Authorization: Bearer [REDACTED]")
+    .replace(/\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/=]+/gi, "Authorization: Basic [REDACTED]")
+    .replace(/\bBasic\s+[A-Za-z0-9+/=]{8,}/gi, "Basic [REDACTED]")
+    .replace(/\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password|passwd|pwd)\s*[:=]\s*[^\s,;|]+/gi, "$1=[REDACTED]");
 }
 
 export function formatContextState(report: AnalysisReport): string {
@@ -91,7 +117,8 @@ export function formatContextState(report: AnalysisReport): string {
   }
 
   lines.push(`- 信任：Phase0 ${report.phase0_trust.status}（人工标注指标未锁定前不自动删除）`);
-  lines.push(`- 续接：${report.resume.readiness.level.toUpperCase()} ${report.resume.readiness.score}/100，目标 ${report.resume.currentGoal?.text ?? "未识别"}`);
+  const currentGoal = formatContextGoal(report.resume.currentGoal?.text);
+  lines.push(`- 续接：${report.resume.readiness.level.toUpperCase()} ${report.resume.readiness.score}/100，目标 ${currentGoal}`);
   lines.push(`- 建议：${formatNextAction(report)}`);
 
   if (report.warnings.length > 0) {
@@ -108,16 +135,11 @@ export function formatContextState(report: AnalysisReport): string {
 }
 
 export function injectContextStateSection(claudeMdContent: string, stateSection: string): string {
-  const startIndex = claudeMdContent.indexOf(STATE_START);
-  const endIndex = claudeMdContent.indexOf(STATE_END);
-
-  if (startIndex !== -1 && endIndex !== -1) {
-    const before = claudeMdContent.slice(0, startIndex);
-    const after = claudeMdContent.slice(endIndex + STATE_END.length);
-    if (!stateSection) {
-      return `${before.trimEnd()}\n${after.trimStart()}`.trimEnd() + "\n";
-    }
-    return `${before}${stateSection}\n${after}`;
+  const range = contextStateRange(claudeMdContent);
+  if (range) {
+    const before = claudeMdContent.slice(0, range.start);
+    const after = claudeMdContent.slice(range.end);
+    return stateSection ? `${before}${stateSection}${after}` : `${before}${after}`;
   }
 
   if (!stateSection) {
@@ -126,4 +148,31 @@ export function injectContextStateSection(claudeMdContent: string, stateSection:
 
   const separator = claudeMdContent.endsWith("\n") ? "" : "\n";
   return `${claudeMdContent}${separator}\n${stateSection}\n`;
+}
+
+function contextStateRange(content: string): { start: number; end: number } | undefined {
+  const startIndexes = markerIndexes(content, STATE_START);
+  const endIndexes = markerIndexes(content, STATE_END);
+  if (startIndexes.length === 0 && endIndexes.length === 0) return undefined;
+
+  if (startIndexes.length !== 1 || endIndexes.length !== 1 || startIndexes[0]! > endIndexes[0]!) {
+    throw new Error("CLAUDE.md contains ambiguous trimctx state markers");
+  }
+
+  return {
+    start: startIndexes[0]!,
+    end: endIndexes[0]! + STATE_END.length
+  };
+}
+
+function markerIndexes(content: string, marker: string): number[] {
+  const indexes: number[] = [];
+  let offset = 0;
+  while (offset <= content.length - marker.length) {
+    const index = content.indexOf(marker, offset);
+    if (index === -1) break;
+    indexes.push(index);
+    offset = index + marker.length;
+  }
+  return indexes;
 }

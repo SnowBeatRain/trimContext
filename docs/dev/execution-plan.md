@@ -330,51 +330,34 @@ datasets/
 
 ## 10. 人工标注格式
 
-每个 session 对应一个人工标注文件：
+当前 Phase 0 人工标注以 `docs/dev/phase0/manual-label-guide.md` 为准。每个被审查的 report message 写一行 JSONL，文件必须放在私有且 gitignored 的 labels 目录中，例如：
 
 ```text
-datasets/private/labels/session-001.labels.json
+datasets/private/phase0-labels/session-001.labels.jsonl
 ```
 
-格式：
+最小格式：
 
-```json
-{
-  "session_id": "session-001",
-  "labels": [
-    {
-      "message_index": 0,
-      "label": "protected",
-      "reason": "system_or_initial_instruction"
-    },
-    {
-      "message_index": 41,
-      "label": "remove",
-      "reason": "tool_result_no_longer_referenced"
-    },
-    {
-      "message_index": 82,
-      "label": "compress",
-      "reason": "long_but_contains_some_decision"
-    },
-    {
-      "message_index": 140,
-      "label": "keep",
-      "reason": "current_architecture_decision"
-    }
-  ]
-}
+```jsonl
+{"sample_id":"session-001","message_id":"msg-41","decision":"remove_candidate","label":"safe_remove","review_note":"obsolete duplicated tool output"}
+{"sample_id":"session-001","message_id":"msg-82","decision":"compress_candidate","label":"needs_summary","review_note":"large but useful debugging context"}
+{"sample_id":"session-001","message_id":"msg-140","decision":"keep_protected","label":"protected_keep","review_note":"current architecture decision"}
 ```
 
 标签定义：
 
-| 标签 | 含义 | compress 行为 |
+| 标签 | 适用范围 | 含义 |
 | --- | --- | --- |
-| `protected` | 绝不能删 | 永远保留 |
-| `keep` | 应保留 | 保留 |
-| `compress` | 可压缩但不能直接删 | v0.1 先保留 |
-| `remove` | 可删除 | compress 时删除 |
-| `unknown` | 不确定 | 默认保留 |
+| `safe_remove` | `remove_candidate` | 候选可安全删除。 |
+| `questionable_remove` | `remove_candidate` | 可能可删，但证据不足，不计为安全删除。 |
+| `critical_keep` | `remove_candidate` | 候选实际必须保留，计为 critical false deletion。 |
+| `protected_keep` | protected 消息 | 保护正确。 |
+| `over_protected` | protected 消息 | 可能过度保护，只作为调参证据。 |
+| `missed_low_value_noise` | 未 protected 的非删除消息 | 低价值噪声未被充分暴露。 |
+| `needs_summary` | 非删除消息 | 值得保留但未来可能需要总结，非锁定证据。 |
+| `unclear` | 任意被审查消息 | 仅凭 report 无法判断，非锁定证据。 |
+
+`critical_false_delete` 仅作为 `critical_keep` 的旧别名兼容；新标签文件应使用 `critical_keep`。
 
 第一版宁可保守。
 

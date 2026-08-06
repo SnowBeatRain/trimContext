@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { formatCliError } from "./cli/format-error.js";
 import { registerCommands } from "./commands/index.js";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -24,8 +25,7 @@ if (removedCommand) {
 }
 
 program.parseAsync().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`trimctx: ${message}\n`);
+  process.stderr.write(`trimctx: ${formatCliError(error)}\n`);
   process.exitCode = 1;
 });
 

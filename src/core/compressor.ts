@@ -1,8 +1,9 @@
 import { open } from "node:fs/promises";
 import { analyzeMessages, parseJsonl } from "./analyzer.js";
+import { assertPhase0InputSha256 } from "./input-integrity.js";
 import { createReport } from "./reporter.js";
 import { isCompactBoundaryMessage } from "./signals/context.js";
-import { assertDifferentFiles, writeFileDistinctFromInput } from "../platform/files.js";
+import { assertDifferentFiles, atomicWriteFileDistinctFromInput } from "../platform/files.js";
 import type { AnalysisOptions } from "./options.js";
 import type { AnalysisReport } from "../types/report.js";
 import type { NormalizedMessage } from "../types/message.js";
@@ -21,7 +22,10 @@ export async function compressFile(
   await assertDifferentFiles(inputFile, outputFile, "Output file must be different from input file");
   const inputHandle = await open(inputFile, "r");
   try {
-    const input = await inputHandle.readFile("utf8");
+    const inputSnapshot = await inputHandle.stat();
+    const inputBuffer = await inputHandle.readFile();
+    assertPhase0InputSha256(inputBuffer);
+    const input = inputBuffer.toString("utf8");
     const parsed = parseJsonl(input, inputFile);
     const analyzed = analyzeMessages(parsed, options);
     const report = createReport(analyzed, inputFile);
@@ -36,11 +40,12 @@ export async function compressFile(
       ? compressOpenAiLines(input, analyzed, removeIds)
       : compressJsonlLines(input, analyzed, removeIds);
 
-    await writeFileDistinctFromInput(
+    await atomicWriteFileDistinctFromInput(
       inputHandle,
       outputFile,
       output,
-      "Output file must be different from input file"
+      "Output file must be different from input file",
+      inputSnapshot
     );
     return { removedMessages: removeIds.size, report };
   } finally {

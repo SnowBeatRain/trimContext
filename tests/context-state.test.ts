@@ -2,6 +2,10 @@ import { describe, expect, test } from "vitest";
 import { formatContextState, injectContextStateSection } from "../src/core/context-state.js";
 import type { AnalysisReport } from "../src/types/report.js";
 
+const STATE_START = "<!-- TRIMCTX_STATE_START -->";
+const STATE_END = "<!-- TRIMCTX_STATE_END -->";
+const AMBIGUOUS_MARKERS_ERROR = "CLAUDE.md contains ambiguous trimctx state markers";
+
 function makeReport(overrides: Partial<AnalysisReport["summary"]> = {}): AnalysisReport {
   const summary = {
     total_messages: 100,
@@ -196,6 +200,37 @@ describe("formatContextState", () => {
     expect(result).toContain("更新：");
   });
 
+  test("renders transcript-derived goals as bounded marker-safe redacted text", () => {
+    const report = makeReport();
+    report.resume.currentGoal = {
+      ...report.resume.currentGoal!,
+      text: `目标：第一行\n第二行 ${STATE_START} ${STATE_END} Authorization: Bearer hook-secret-value ${"x".repeat(300)}`
+    };
+
+    const result = formatContextState(report);
+    const goalLine = result.split("\n").find(line => line.startsWith("- 续接："));
+    const goalText = goalLine?.split("，目标 ")[1];
+
+    expect(result.split(STATE_START)).toHaveLength(2);
+    expect(result.split(STATE_END)).toHaveLength(2);
+    expect(result.match(/\[trimctx marker omitted\]/g) ?? []).toHaveLength(2);
+    expect(result).toContain("Authorization: Bearer [REDACTED]");
+    expect(result).not.toContain("hook-secret-value");
+    expect(goalLine).toContain("第二行");
+    expect(goalText).toBeDefined();
+    expect(goalText!.length).toBeLessThanOrEqual(220);
+  });
+
+  test("renders a whitespace-only current goal as unidentified", () => {
+    const report = makeReport();
+    report.resume.currentGoal = {
+      ...report.resume.currentGoal!,
+      text: "\u0000\t\r\n "
+    };
+
+    expect(formatContextState(report)).toContain("，目标 未识别");
+  });
+
   test("shows OK health for low rot rate", () => {
     const report = makeReport({ remove_candidates: 0, compress_candidates: 0 });
     const result = formatContextState(report);
@@ -265,5 +300,34 @@ describe("injectContextStateSection", () => {
     const result = injectContextStateSection(content, "");
 
     expect(result).toBe(content);
+  });
+
+  test("preserves every byte outside a replaced managed section", () => {
+    const content = `prefix \t\n${STATE_START}\nold\n${STATE_END}\n\n suffix  \n\n`;
+    const section = `${STATE_START}\nnew\n${STATE_END}`;
+
+    expect(injectContextStateSection(content, section)).toBe(
+      `prefix \t\n${STATE_START}\nnew\n${STATE_END}\n\n suffix  \n\n`
+    );
+  });
+
+  test("preserves every byte outside a removed managed section", () => {
+    const content = `prefix \t\n${STATE_START}\nold\n${STATE_END}\n\n suffix  \n\n`;
+
+    expect(injectContextStateSection(content, "")).toBe("prefix \t\n\n\n suffix  \n\n");
+  });
+
+  test.each([
+    ["lone start marker", `${STATE_START}\nold`],
+    ["lone end marker", `old\n${STATE_END}`],
+    ["reversed markers", `${STATE_END}\nuser content\n${STATE_START}`],
+    ["duplicate start markers", `${STATE_START}\n${STATE_START}\nold\n${STATE_END}`],
+    ["duplicate end markers", `${STATE_START}\nold\n${STATE_END}\n${STATE_END}`],
+    ["multiple managed sections", `${STATE_START}\none\n${STATE_END}\n${STATE_START}\ntwo\n${STATE_END}`]
+  ])("rejects %s for replacement and removal", (_name, content) => {
+    const section = `${STATE_START}\nnew\n${STATE_END}`;
+
+    expect(() => injectContextStateSection(content, section)).toThrow(AMBIGUOUS_MARKERS_ERROR);
+    expect(() => injectContextStateSection(content, "")).toThrow(AMBIGUOUS_MARKERS_ERROR);
   });
 });

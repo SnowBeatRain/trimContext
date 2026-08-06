@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { SessionCandidate } from "../src/sessions/discovery.js";
+import type { SessionCandidate } from "../src/sessions/catalog.js";
 import { formatSessionCandidate, isInteractiveTerminal, selectSession } from "../src/sessions/picker.js";
 
 describe("session picker", () => {

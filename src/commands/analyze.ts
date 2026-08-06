@@ -4,9 +4,9 @@ import { analyzeFile } from "../core/pipeline.js";
 import {
   findLatestSession,
   listSessions,
-  parseSessionSource,
-  resolveBoundSessionFile
-} from "../sessions/discovery.js";
+  parseSessionSource
+} from "../sessions/catalog.js";
+import { resolveBoundSessionFile } from "../sessions/binding.js";
 import { isInteractiveTerminal, selectSession } from "../sessions/picker.js";
 
 interface AnalyzeSelectionOptions {

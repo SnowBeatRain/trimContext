@@ -5,7 +5,7 @@ import type { Command } from "commander";
 import { parseJsonl } from "../core/analyzer.js";
 import { formatTranscriptMarkdown } from "../core/transcript-markdown.js";
 import { assertDifferentFiles, atomicWriteFileDistinctFromInput } from "../platform/files.js";
-import { resolveBoundSessionFile } from "../sessions/discovery.js";
+import { resolveBoundSessionFile } from "../sessions/binding.js";
 
 const OUTPUT_CONFLICT_MESSAGE = "Export output must be different from input file";
 

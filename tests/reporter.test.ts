@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { analyzeMessages } from "../src/core/analyzer.js";
+import { createAnalysisWarnings } from "../src/core/diagnostics.js";
 import { createReport } from "../src/core/reporter.js";
 import { LocalHeuristicTokenizer } from "../src/core/tokenizer.js";
-import type { NormalizedMessage, Reason } from "../src/types/message.js";
+import type { NormalizedMessage, Reason, TokenMetadata } from "../src/types/message.js";
 
 function analyzedMessage(id: string, reasons: Reason[]): NormalizedMessage {
   const tokenizer = new LocalHeuristicTokenizer();
@@ -94,12 +95,16 @@ describe("createReport", () => {
     expect(report.review_queue.items.map((item) => item.message_id)).toEqual(["m1", "m3"]);
     expect(report.review_queue.items[0]?.evidence.length).toBeGreaterThan(0);
     expect(report.review_queue.items[1]?.default_action).toBe("keep_and_review");
+    expect(report.assessment).toMatchObject({
+      status: "degraded",
+      confidence: "medium",
+      limitations: expect.arrayContaining(["sample_too_short"])
+    });
     expect(report.recommendations.map((item) => item.code)).toEqual(expect.arrayContaining([
-      "write_report",
       "clarify_continuation",
       "review_then_compress"
     ]));
-    expect(report.recommendations.find((item) => item.code === "write_report")?.command).toContain("trimctx report \"session.jsonl\"");
+    expect(report.recommendations.find((item) => item.code === "write_report")).toBeUndefined();
     expect(report.analysis_meta).toMatchObject({
       analyzer_version: "evidence-v2",
       thresholds: { recent_window: 30, remove: 0.8, compress: 0.6 },
@@ -126,6 +131,63 @@ describe("createReport", () => {
       impact: { message_count: 0, tokens: 0, token_ratio: 0 },
       suggested_action: expect.any(String)
     });
+  });
+
+  test("aggregates candidate groups into risk-ranked signal findings", () => {
+    const removable = analyzedMessage("m1", ["duplicate_message"]);
+    removable.analysis = analysisEvidence("m1", "exact_duplicate", "m4", "high");
+
+    const keptDuplicate = keptMessage("m2");
+    keptDuplicate.analysis = {
+      ...analysisEvidence("m2", "exact_duplicate", "m5", "high"),
+      evidence: [
+        ...analysisEvidence("m2", "exact_duplicate", "m5", "high").evidence,
+        ...analysisEvidence("m2", "exact_duplicate", "m6", "high").evidence
+      ]
+    };
+
+    const keptSimilar = keptMessage("m3");
+    keptSimilar.analysis = analysisEvidence("m3", "similar_duplicate", "m6", "high");
+
+    const canonicalExact = keptMessage("m4");
+    const canonicalSecond = keptMessage("m5");
+    const canonicalSimilar = keptMessage("m6");
+
+    const compressibleTool = analyzedMessage("m7", ["orphan_tool_result"]);
+    compressibleTool.decision = "compress_candidate";
+    compressibleTool.rot_score = 0.7;
+    compressibleTool.scores = { ...compressibleTool.scores!, rot_score: 0.7 };
+    compressibleTool.analysis = analysisEvidence("m7", "obsolete_tool_output", undefined, "medium");
+
+    const report = createReport([
+      removable,
+      keptDuplicate,
+      keptSimilar,
+      canonicalExact,
+      canonicalSecond,
+      canonicalSimilar,
+      compressibleTool
+    ], "session.jsonl");
+    const signalFindings = report.findings.filter(finding => finding.type !== "limitation");
+    const duplicateFindings = signalFindings.filter(finding => finding.code === "exact_duplicate");
+
+    expect(report.candidate_groups.filter(group => group.code === "exact_duplicate")).toHaveLength(3);
+    expect(duplicateFindings).toHaveLength(1);
+    expect(duplicateFindings[0]).toMatchObject({
+      severity: "critical",
+      impact: {
+        message_count: 2,
+        tokens: removable.tokens! + keptDuplicate.tokens!
+      }
+    });
+    expect(duplicateFindings[0]?.evidence).toHaveLength(3);
+    expect(signalFindings.find(finding => finding.code === "obsolete_tool_output")?.severity).toBe("warning");
+    expect(signalFindings.find(finding => finding.code === "similar_duplicate")?.severity).toBe("info");
+    expect(signalFindings.map(finding => finding.code)).toEqual([
+      "exact_duplicate",
+      "obsolete_tool_output",
+      "similar_duplicate"
+    ]);
   });
 
   test("rejects a remove candidate without decisive evidence", () => {
@@ -187,6 +249,16 @@ describe("createReport", () => {
     expect(() => createReport([invalid], "session.jsonl")).toThrow(error);
   });
 
+  test("rejects a compress candidate without reasons", () => {
+    const invalid = analyzedMessage("m11", []);
+    invalid.decision = "compress_candidate";
+    invalid.analysis = analysisEvidence("m11", "obsolete_tool_output", undefined, "medium");
+
+    expect(() => createReport([invalid], "session.jsonl")).toThrow(
+      /compress_candidate .* at least one reason/i
+    );
+  });
+
   test("keeps real analyzer remove candidates backed by decisive evidence", () => {
     const first = analyzedMessage("m1", []);
     first.content = "repeatable historical status output";
@@ -246,6 +318,8 @@ describe("createReport", () => {
 
   test("warns when Claude Code input contains an away_summary compact signal", () => {
     const message = analyzedMessage("m1", ["old_message"]);
+    message.token_metadata = exactTokenMetadata();
+    message.tokens = message.token_metadata.estimated_tokens;
     const report = createReport(
       [
         {
@@ -262,6 +336,11 @@ describe("createReport", () => {
 
     expect(report.warnings.join("\n")).toContain("session_compacted");
     expect(report.warnings.join("\n")).toContain("away_summary");
+    expect(report.assessment.dimensions.observability).toMatchObject({
+      level: "medium",
+      score: 0.5,
+      evidence_count: 1
+    });
   });
 
   test("warns for compact_boundary signals", () => {
@@ -282,6 +361,16 @@ describe("createReport", () => {
 
     expect(report.warnings.join("\n")).toContain("session_compacted");
     expect(report.warnings.join("\n")).toContain("compact_boundary");
+  });
+
+  test("keeps analysis warnings scoped to tokenization and candidate behavior", () => {
+    const message = analyzedMessage("m1", ["old_message"]);
+    message.source = "claude-code-jsonl";
+    message.raw = { type: "system", subtype: "away_summary" };
+    message.token_metadata = exactTokenMetadata();
+    message.tokens = message.token_metadata.estimated_tokens;
+
+    expect(createAnalysisWarnings([message])).toEqual([]);
   });
 
   test("does not warn for OpenAI records that only resemble compact markers", () => {
@@ -309,6 +398,29 @@ describe("createReport", () => {
     expect(report.warnings.join("\n")).toContain(
       "compress_candidate messages are report-only in this version and are kept during compression."
     );
+    expect(report.assessment.dimensions.observability).toMatchObject({
+      level: "medium",
+      score: 0.5,
+      evidence_count: 1
+    });
+  });
+
+  test("keeps report-only compression notices out of observability evidence", () => {
+    const candidate = analyzedMessage("m1", ["old_message"]);
+    candidate.decision = "compress_candidate";
+    candidate.token_metadata = exactTokenMetadata();
+    candidate.tokens = candidate.token_metadata.estimated_tokens;
+
+    const report = createReport([candidate], "session.jsonl");
+
+    expect(report.warnings).toContain(
+      "compress_candidate messages are report-only in this version and are kept during compression."
+    );
+    expect(report.assessment.dimensions.observability).toMatchObject({
+      level: "low",
+      score: 0,
+      evidence_count: 0
+    });
   });
 
   test("includes score diagnostics for threshold tuning without changing decisions", () => {
@@ -388,27 +500,7 @@ describe("createReport", () => {
 
   test("does not warn about approximate tokens when all messages use exact tokenization", () => {
     const candidate = analyzedMessage("m1", ["old_message"]);
-    candidate.token_metadata = {
-      estimator: "tiktoken",
-      estimator_version: "tiktoken-v1",
-      estimated: false,
-      confidence: "high",
-      estimated_tokens: 8,
-      message_overhead_tokens: 4,
-      breakdown: {
-        cjk_chars: 0,
-        ascii_tokens: 0,
-        latin_words: 1,
-        numbers: 0,
-        symbols: 0,
-        whitespace_runs: 0,
-        code_like_segments: 0,
-        path_like_segments: 0,
-        json_like_segments: 0,
-        line_count: 1,
-        char_count: 4
-      }
-    };
+    candidate.token_metadata = exactTokenMetadata();
     candidate.tokens = 8;
 
     const report = createReport([candidate], "session.jsonl");
@@ -453,3 +545,65 @@ describe("createReport", () => {
     });
   });
 });
+
+function keptMessage(id: string): NormalizedMessage {
+  const message = analyzedMessage(id, []);
+  message.decision = "keep";
+  message.rot_score = 0;
+  message.scores = { ...message.scores!, rot_score: 0 };
+  message.analysis = {
+    kind: "unknown",
+    turn: 0,
+    segment: 0,
+    stable_identifiers: [],
+    evidence: []
+  };
+  return message;
+}
+
+function analysisEvidence(
+  messageId: string,
+  code: NonNullable<NormalizedMessage["analysis"]>["evidence"][number]["code"],
+  relatedMessageId: string | undefined,
+  confidence: NonNullable<NormalizedMessage["analysis"]>["evidence"][number]["confidence"]
+): NonNullable<NormalizedMessage["analysis"]> {
+  return {
+    kind: "result",
+    turn: 0,
+    segment: 0,
+    stable_identifiers: [],
+    evidence: [{
+      code,
+      confidence,
+      message_id: messageId,
+      source_line: Number(messageId.replace(/\D/g, "")) || 1,
+      role: "assistant",
+      ...(relatedMessageId ? { related_message_id: relatedMessageId } : {}),
+      details: {}
+    }]
+  };
+}
+
+function exactTokenMetadata(): TokenMetadata {
+  return {
+    estimator: "tiktoken",
+    estimator_version: "tiktoken-v1",
+    estimated: false,
+    confidence: "high",
+    estimated_tokens: 8,
+    message_overhead_tokens: 4,
+    breakdown: {
+      cjk_chars: 0,
+      ascii_tokens: 0,
+      latin_words: 1,
+      numbers: 0,
+      symbols: 0,
+      whitespace_runs: 0,
+      code_like_segments: 0,
+      path_like_segments: 0,
+      json_like_segments: 0,
+      line_count: 1,
+      char_count: 4
+    }
+  };
+}

@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import type { SessionCandidate } from "./discovery.js";
+import type { SessionCandidate } from "./catalog.js";
 
 export interface SessionPickerAdapter {
   write(text: string): void;

@@ -80,7 +80,7 @@ The Markdown report contains:
 - limitations and safety notes
 - next actions
 
-Displayed evidence contains only message id, source line, role, and a redacted summary capped at 160 characters. Token-like secrets, email addresses, key/value secrets, and Basic Auth credentials are redacted. Markdown table pipes and line breaks are escaped. This narrow display does not mean every generated artifact is safe to share; review it first.
+Displayed evidence contains only message id, source line, role, and a redacted summary capped at 160 characters. Long Markdown review sections show the first 20 items per queue plus an omitted-count note; the complete `review_queue` remains in JSON. Token-like secrets, email addresses, key/value secrets, and Basic Auth credentials are redacted. Markdown table pipes and line breaks are escaped. This narrow display does not mean every generated artifact is safe to share; review it first.
 
 Report writes use a same-directory temporary file and atomic replacement. The command rejects the input file and aliases of it, keeps an existing report intact when rendering or writing fails, and rechecks the open input handle before replacement.
 
@@ -120,7 +120,7 @@ Review the package before sharing or pasting it into a new window. It may contai
 
 An explicit `<file>` is always the command's source of truth. In a multi-window environment, do not treat the most recently modified session as proof of the current window.
 
-After Claude Code hooks are installed, SessionStart writes that window's `transcript_path` and `session_id` through its own `CLAUDE_ENV_FILE`, creating `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` bindings. Restart every already-open Claude Code window after installation. `/trimctx`, `/trimctx:export`, `/trimctx:new-chat`, and `/trimctx:compress` use the bound path and stop when it is missing instead of falling back to another session. File-less `trimctx analyze` and `trimctx export -o conversation.md` also check that the bound path is a readable file and, when a session ID exists, that it matches the transcript filename.
+After Claude Code hooks are installed, SessionStart writes that window's `transcript_path` and optional `session_id` through its own `CLAUDE_ENV_FILE`, creating `TRIMCTX_TRANSCRIPT_PATH` and `TRIMCTX_SESSION_ID` bindings. If a hook input omits `session_id`, SessionStart writes an empty ID binding so an older ID cannot remain paired with the new transcript. Restart every already-open Claude Code window after installation. `/trimctx`, `/trimctx:export`, `/trimctx:new-chat`, and `/trimctx:compress` use the bound path and stop when it is missing instead of falling back to another session. File-less `trimctx analyze` and `trimctx export -o conversation.md` also check that the bound path is a readable file and, when a session ID exists, that it matches the transcript filename.
 
 Claude Code windows in the same project share `.claude/CLAUDE.md`. The managed status block may be updated by whichever window runs the Stop hook last, but that does not change each window's transcript binding.
 
@@ -148,6 +148,8 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 Compression writes a new file and never changes the input. It removes only non-protected `remove_candidate` messages. Protected messages, `keep`, and `compress_candidate` remain in the copy. A candidate is still a review item; a health status does not authorize deletion.
 
+The output uses same-directory atomic replacement. A recoverable write or commit failure keeps an existing compressed copy intact, and a change to the open input after its pre-read snapshot aborts the replacement instead of committing output derived from stale bytes.
+
 ## Claude Code Plugin
 
 Install assets and opt into hooks:
@@ -168,7 +170,8 @@ If `TRIMCTX_TRANSCRIPT_PATH` is missing, current-window commands stop instead of
 
 Hook write scope:
 
-- SessionStart writes `transcript_path` and session binding data through `CLAUDE_ENV_FILE`.
+- SessionStart writes `transcript_path` and session binding data through `CLAUDE_ENV_FILE`; trimctx rejects that target when it is the transcript or an existing filesystem alias of it.
+- Stop analyzes a read-only snapshot. If the transcript has not yet recorded the final reply, it supplements that reply in memory from Claude's `last_assistant_message`; an equivalent newest assistant message is not added twice.
 - Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
 - Original JSONL transcripts remain read-only.
 

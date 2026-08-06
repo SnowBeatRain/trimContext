@@ -112,6 +112,10 @@ otherwise => keep
 
 `report <file> -o <output>` 只接受 `.md` 或 `.json`。Markdown 用于人工审查；JSON 必须与 `analyze --json` 深度一致，并使用 `trimctx.report.v2`。
 
+Phase 0 必须对两个独立成功命令的完整 JSON 值做语义绑定：对象键顺序和格式不计入差异，数组顺序和所有字段值必须一致，不设置字段白名单。私有 canonical SHA-256 只用于本地 runner/review 对账，公开 review 只输出匹配数和固定 issue。
+
+Phase 0 还必须把首次记录的输入 SHA-256 传给 `analyze`、`report` 和 `compress` 子进程，并对每条命令实际解析的同一 Buffer 校验摘要。任一命令消费了不同字节都必须 fail closed，且 report/compress 不得写入新目标；普通 CLI 不设置内部期望摘要时保持现有行为。
+
 v2 JSON 至少包含：
 
 - schema_version
@@ -136,6 +140,8 @@ v2 JSON 至少包含：
 - reasons
 
 Markdown 必须包含结论、健康维度、关键发现、审查队列、Protected 但疑似陈旧、续接状态、限制与安全说明和下一步。证据只展示 message id、line、role 和脱敏且不超过 160 字符的摘要。
+
+当 `recommendations[].code` 为 `clarify_continuation` 时，JSON summary 必须只列出 `resume.readiness.missing` 中已有的固定证据类别；CLI 与 Markdown 必须从同一列表生成中文文案。该绑定不新增 Report v2 字段，也不改变 readiness 提取、权重或阈值。
 
 ### FR-6: export
 
@@ -167,6 +173,8 @@ Markdown 必须包含结论、健康维度、关键发现、审查队列、Prote
 - 不删除 compress_candidate。
 - 只删除非 protected 的 remove_candidate。
 - 拒绝把输出路径写成输入文件本身。
+- 使用同目录原子替换；可恢复的写入失败不得破坏既有输出。
+- 在读取后、提交前输入发生变化时拒绝提交旧快照生成的输出。
 
 如果没有 `-o`，命令必须失败。
 
@@ -207,7 +215,7 @@ Phase 0 至少需要 5 个真实 Claude Code 长会话私有样本：
 - `npm run build` 通过。
 - 至少一个真实 Claude Code 长会话能解析。
 - report summary 字段完整。
-- 每条 remove_candidate 都有 reasons。
+- 每条 `remove_candidate` 和 `compress_candidate` 都有非空 `reasons`。
 - compress 输出新文件。
 - 输入文件 hash 不变。
 - protected 消息不会被删除。
@@ -220,6 +228,12 @@ Phase 0 至少需要 5 个真实 Claude Code 长会话私有样本：
 - protected recall = 100%。
 - critical false deletion = 0。
 - parser success rate >= 95%。
+- 每个成功 analyze/report 的 Report v2 `input.file` 必须与当前 batch 样本绝对路径精确匹配。
+- 每个独立成功的 analyze/report 对必须具有完整 Report v2 语义证据；`phase0:review` 重算当前 report canonical SHA-256 后，`matched_analyze_report_semantics` 必须等于 `expected_analyze_report_pairs`。旧 v2 缺证据必须重跑，公开工件不得输出 digest、字段差异或正文。
+- `phase0-results.json` 使用 `trimctx.phase0.results.v2`；每个样本记录合法 before/after SHA-256，`input_unchanged` 与摘要是否相等严格一致，`input_sha256_bound:true` 证明三条命令已启用首次摘要绑定，每个成功 report 和 compress 产物都记录精确字节 SHA-256。旧 v2 缺少绑定证据时必须保持 `review_required`。
+- 人工 review 读取的 report ID、SHA-256、`input.source` 和 `input.file` 必须与 batch evidence 全部匹配；来源覆盖只统计这些实际成功 report。
+- 人工 review 必须按 results 顺序精确重算 `aggregate.failed_samples`，并拒绝重复 sample、重复成功压缩产物 ID 或其他聚合矛盾。
+- 每个成功 compress 对应的 `.trimmed.jsonl` ID 集合与 SHA-256 必须与 review 时实际读取的普通文件完全一致；工件必须能按同名 report 声明的 source adapter 重读，且规范化消息多重集必须与 report 排除 `remove_candidate` 后的保留集合一致。review 只公开结构/集合/哈希等聚合匹配数和固定 issue，不公开路径、ID、digest、fingerprint、parser 错误或正文；该门不证明 scorer 决策安全，也不替代人工审查。
 
 ## 10. 当前优先级
 

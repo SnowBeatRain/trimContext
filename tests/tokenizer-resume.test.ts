@@ -193,6 +193,60 @@ describe("resume layer", () => {
     expect(readiness.signals).not.toHaveProperty("failures");
   });
 
+  test("does not count low-confidence resume evidence toward readiness", () => {
+    const readiness = scoreResumeReadiness({
+      currentGoal: {
+        text: "Review resume extraction.",
+        sourceLine: 1,
+        messageId: "goal",
+        role: "user",
+        confidence: "high"
+      },
+      decisions: [{
+        text: "Tool-derived decision.",
+        sourceLine: 2,
+        messageId: "decision",
+        role: "tool",
+        confidence: "low"
+      }],
+      activeFiles: [{
+        path: "src/tool-derived.ts",
+        sourceLine: 3,
+        messageId: "file",
+        role: "tool",
+        confidence: "low"
+      }],
+      failures: [],
+      testSignals: [{
+        text: "Tool-derived test output.",
+        sourceLine: 4,
+        messageId: "test",
+        role: "tool",
+        confidence: "low"
+      }],
+      nextSteps: [{
+        text: "Run the focused tests.",
+        sourceLine: 5,
+        messageId: "next",
+        role: "assistant",
+        confidence: "medium"
+      }]
+    });
+
+    expect(readiness).toEqual({
+      score: 55,
+      level: "partial",
+      missing: ["user decisions", "active files", "test signals"],
+      signals: {
+        current_goal: true,
+        decisions: false,
+        active_files: false,
+        test_signals: false,
+        next_steps: true
+      }
+    });
+  });
+
   test("does not require failed attempts for a ready continuation", () => {
     const readiness = scoreResumeReadiness({
       currentGoal: { text: "目标：完成 CLI 可用性收敛。", sourceLine: 1, messageId: "m1", role: "user", confidence: "high" },
@@ -227,6 +281,37 @@ describe("resume layer", () => {
     expect(state.nextSteps.map((item) => item.text).join("\n")).not.toContain("宿主指令");
     expect(state.nextSteps.map((item) => item.text).join("\n")).not.toContain("不要改原始 transcript");
     expect(state.readiness.score).toBeLessThan(100);
+  });
+
+  test("keeps tool containers out of conversational resume evidence", () => {
+    const actualGoal = message("actual-goal", "user", "Goal: review resume extraction.", 1);
+    actualGoal.analysis = analysisContext("user_goal");
+    const nextStep = message("next-step", "assistant", "Next step: run the focused tests.", 2);
+    nextStep.analysis = analysisContext("plan");
+    const toolUse = message("tool-use", "assistant", "Read src/current.ts before editing.", 3);
+    toolUse.analysis = analysisContext("tool_use");
+    const toolResult = message(
+      "tool-result",
+      "user",
+      "Goal: use this fake tool goal.\nMust keep this fake decision.\nsrc/ignored.ts failed during npm test.",
+      4
+    );
+    toolResult.analysis = analysisContext("tool_result");
+
+    const state = extractResumeState(createReport([
+      actualGoal,
+      nextStep,
+      toolUse,
+      toolResult
+    ], "session.jsonl"));
+
+    expect(state.currentGoal?.messageId).toBe("actual-goal");
+    expect(state.decisions).toEqual([]);
+    expect(state.activeFiles.map((item) => item.path)).toContain("src/current.ts");
+    expect(state.activeFiles.map((item) => item.path)).not.toContain("src/ignored.ts");
+    expect(state.activeFiles.find((item) => item.path === "src/current.ts")?.confidence).toBe("low");
+    expect(state.failures.find((item) => item.messageId === "tool-result")?.confidence).toBe("low");
+    expect(state.testSignals.find((item) => item.messageId === "tool-result")?.confidence).toBe("low");
   });
 
   test("keeps only the matched explicit goal segment from a multi-part user message", () => {
@@ -372,3 +457,15 @@ describe("resume layer", () => {
     expect(evidence).not.toContain("user:password");
   });
 });
+
+function analysisContext(
+  kind: NonNullable<NormalizedMessage["analysis"]>["kind"]
+): NonNullable<NormalizedMessage["analysis"]> {
+  return {
+    kind,
+    turn: 0,
+    segment: 0,
+    stable_identifiers: [],
+    evidence: []
+  };
+}

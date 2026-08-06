@@ -16,7 +16,7 @@ export function extractResumeState(report: { messages: AnalyzedMessage[] }): Res
   const evidenceMessages = recentMessages.filter(isResumeEvidenceSource);
   const currentGoal = findCurrentGoal(recentMessages);
   const decisions = collectDecisions(recentMessages);
-  const activeFiles = collectActiveFiles(evidenceMessages);
+  const activeFiles = collectActiveFiles(recentMessages.filter(isActiveFileEvidenceSource));
   const failures = collectEvidence(evidenceMessages, FAILURE_PATTERN);
   const testSignals = collectEvidence(evidenceMessages, TEST_PATTERN);
   const nextSteps = collectTrustedEvidence(recentMessages, NEXT_STEP_PATTERN);
@@ -33,7 +33,9 @@ export function extractResumeState(report: { messages: AnalyzedMessage[] }): Res
 }
 
 function findCurrentGoal(messages: AnalyzedMessage[]): ResumeEvidence | undefined {
-  const userMessages = messages.filter((message) => message.role === "user" && !isMetadata(message));
+  const userMessages = messages.filter(
+    (message) => message.role === "user" && isTrustedBody(message)
+  );
   for (const message of userMessages) {
     const segment = extractSegments(message.content).find((item) => EXPLICIT_GOAL_PATTERN.test(item));
     if (segment) return toEvidence(message, segment, "high");
@@ -51,7 +53,7 @@ function collectEvidence(messages: AnalyzedMessage[], pattern: RegExp): ResumeEv
   for (const message of messages) {
     const segment = extractSegments(message.content).find((item) => pattern.test(item));
     if (!segment) continue;
-    const evidence = toEvidence(message, segment, confidenceForRole(message.role));
+    const evidence = toEvidence(message, segment, confidenceForMessage(message));
     const key = normalizeText(evidence.text);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -89,7 +91,7 @@ function collectActiveFiles(messages: AnalyzedMessage[]): ResumeFileEvidence[] {
         sourceLine: message.sourceLine,
         messageId: message.id,
         role: message.role,
-        confidence: confidenceForRole(message.role)
+        confidence: confidenceForMessage(message)
       });
       if (items.length >= MAX_ITEMS) return items.reverse();
     }
@@ -132,7 +134,9 @@ function isSubstantiveUserSegment(text: string): boolean {
 }
 
 function isTrustedBody(message: AnalyzedMessage): boolean {
-  return (message.role === "user" || message.role === "assistant") && !isMetadata(message);
+  return (message.role === "user" || message.role === "assistant")
+    && !isMetadata(message)
+    && !isToolContainer(message);
 }
 
 function isResumeEvidenceSource(message: AnalyzedMessage): boolean {
@@ -140,17 +144,26 @@ function isResumeEvidenceSource(message: AnalyzedMessage): boolean {
     && !isMetadata(message);
 }
 
+function isActiveFileEvidenceSource(message: AnalyzedMessage): boolean {
+  return isTrustedBody(message) || message.analysis.kind === "tool_use";
+}
+
 function isMetadata(message: AnalyzedMessage): boolean {
   return message.analysis.kind === "metadata";
+}
+
+function isToolContainer(message: AnalyzedMessage): boolean {
+  return message.analysis.kind === "tool_use" || message.analysis.kind === "tool_result";
 }
 
 function isConfirmedAssistantResult(message: AnalyzedMessage): boolean {
   return message.analysis.kind === "result" || /(?:已确认|最终决定|confirmed|completed|implemented|done)/i.test(message.content);
 }
 
-function confidenceForRole(role: AnalyzedMessage["role"]): EvidenceConfidence {
-  if (role === "user") return "high";
-  if (role === "assistant") return "medium";
+function confidenceForMessage(message: AnalyzedMessage): EvidenceConfidence {
+  if (isToolContainer(message)) return "low";
+  if (message.role === "user") return "high";
+  if (message.role === "assistant") return "medium";
   return "low";
 }
 

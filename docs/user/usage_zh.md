@@ -71,7 +71,7 @@ trimctx analyze session.jsonl --json
 
 Markdown 报告包含：结论和置信度、健康维度、关键发现、审查队列、protected 陈旧项、可信续接状态、限制与安全说明、下一步。
 
-展示的 evidence 只包含 message id、source line、role 和最长 160 字符的脱敏摘要。token、邮箱、key/value 密钥和 Basic Auth 凭据会被脱敏，Markdown 表格中的竖线和换行会转义。这不代表所有生成物都能直接分享，分享前仍须审查。
+展示的 evidence 只包含 message id、source line、role 和最长 160 字符的脱敏摘要。较长的 Markdown 审查区段每个队列只展示前 20 条，并提示省略数量；完整 `review_queue` 保留在 JSON 中。token、邮箱、key/value 密钥和 Basic Auth 凭据会被脱敏，Markdown 表格中的竖线和换行会转义。这不代表所有生成物都能直接分享，分享前仍须审查。
 
 报告使用同目录临时文件和原子替换。命令拒绝输入文件及其别名；渲染或写入失败时保留已有报告；替换前会重新检查打开的输入句柄。
 
@@ -105,7 +105,7 @@ trimctx new-chat session.jsonl --out custom-root
 
 显式传入的 `<file>` 始终是命令的数据来源。多窗口环境不要把“最近修改的 session”当成“当前窗口”。
 
-Claude Code 安装 hooks 后，SessionStart 会把该窗口的 `transcript_path` 和 `session_id` 写入该窗口自己的 `CLAUDE_ENV_FILE`，形成 `TRIMCTX_TRANSCRIPT_PATH` / `TRIMCTX_SESSION_ID` 绑定。安装后应重启每个已经打开的 Claude Code 窗口。`/trimctx`、`/trimctx:export`、`/trimctx:new-chat` 和 `/trimctx:compress` 都使用绑定路径；缺少绑定时停止，不回退到其他 session。无文件参数的 `trimctx analyze` 和 `trimctx export -o conversation.md` 还会检查绑定路径可读、确实是文件，并在存在 session ID 时校验它与 transcript 文件名一致。
+Claude Code 安装 hooks 后，SessionStart 会把该窗口的 `transcript_path` 和可选 `session_id` 写入该窗口自己的 `CLAUDE_ENV_FILE`，形成 `TRIMCTX_TRANSCRIPT_PATH` / `TRIMCTX_SESSION_ID` 绑定。若 hook 输入缺少 `session_id`，SessionStart 会写入空 ID 绑定，避免旧 ID 与新 transcript 路径继续组合。安装后应重启每个已经打开的 Claude Code 窗口。`/trimctx`、`/trimctx:export`、`/trimctx:new-chat` 和 `/trimctx:compress` 都使用绑定路径；缺少绑定时停止，不回退到其他 session。无文件参数的 `trimctx analyze` 和 `trimctx export -o conversation.md` 还会检查绑定路径可读、确实是文件，并在存在 session ID 时校验它与 transcript 文件名一致。
 
 同一项目的多个 Claude Code 窗口共享 `.claude/CLAUDE.md`。Stop hook 的受管状态区块可能由最后停止的窗口更新，但不会改变每个窗口自己的 transcript 绑定。
 
@@ -133,6 +133,8 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 压缩只写新文件，不修改输入。它只移除非 protected 的 `remove_candidate`。Protected、`keep` 和 `compress_candidate` 都保留。候选项仍需审查，健康状态不授权删除。
 
+输出使用同目录原子替换。可恢复的写入或提交失败会保留既有压缩副本；如果已打开的输入在读前快照后发生变化，命令会放弃替换，不提交基于旧字节生成的输出。
+
 ## Claude Code 插件
 
 ```bash
@@ -151,7 +153,8 @@ trimctx init --client claude --target user --with-hooks
 
 Hooks 写入范围：
 
-- SessionStart 通过 `CLAUDE_ENV_FILE` 写入 `transcript_path` 和会话绑定数据。
+- SessionStart 通过 `CLAUDE_ENV_FILE` 写入 `transcript_path` 和会话绑定数据；若该目标就是 transcript 或其已有文件系统别名，trimctx 会拒绝写入。
+- Stop 分析只读快照；若 transcript 尚未记录最终回复，会从 Claude 的 `last_assistant_message` 在内存中补齐，最新 assistant 已有等价内容时不会重复加入。
 - Stop 只可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的区块。
 - 原始 JSONL transcript 始终只读。
 

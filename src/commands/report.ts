@@ -1,6 +1,7 @@
 import { open } from "node:fs/promises";
 import { extname } from "node:path";
 import type { Command } from "commander";
+import { assertPhase0InputSha256 } from "../core/input-integrity.js";
 import { analyzeInput } from "../core/pipeline.js";
 import { formatReportMarkdown } from "../core/report-markdown.js";
 import { assertDifferentFiles, atomicWriteFileDistinctFromInput } from "../platform/files.js";
@@ -19,7 +20,9 @@ export function registerReportCommand(program: Command): void {
       }
       const inputHandle = await open(file, "r");
       try {
-        const report = analyzeInput(await inputHandle.readFile("utf8"), file, {});
+        const input = await inputHandle.readFile();
+        assertPhase0InputSha256(input);
+        const report = analyzeInput(input.toString("utf8"), file, {});
         const output = extension === ".md"
           ? formatReportMarkdown(report)
           : `${JSON.stringify(report, null, 2)}\n`;

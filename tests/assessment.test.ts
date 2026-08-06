@@ -101,21 +101,53 @@ describe("createAssessment", () => {
     expect(result.limitations).toContain("sample_too_short");
   });
 
-  test("applies protected and unknown-role observability gates before health labels", async () => {
+  test("keeps low-risk sessions unknown when observability limits block a healthy label", async () => {
     const protectedMessages = Array.from({ length: 10 }, (_, index) =>
       message(`m${index + 1}`, { protected: index < 9 })
     );
     const unknownRoleMessages = Array.from({ length: 6 }, (_, index) =>
       message(`u${index + 1}`, { role: index < 3 ? "unknown" : "assistant" })
     );
+    const partiallyObservableMessages = [
+      message("o1", { role: "system" }),
+      message("o2"),
+      message("o3")
+    ];
 
     const protectedResult = await assess(protectedMessages);
     const unknownRoleResult = await assess(unknownRoleMessages);
+    const partiallyObservableResult = await assess(partiallyObservableMessages);
 
     expect(protectedResult.status).toBe("unknown");
     expect(protectedResult.coverage.protected_ratio).toBe(0.9);
     expect(unknownRoleResult.status).toBe("unknown");
     expect(unknownRoleResult.coverage.unknown_role_ratio).toBe(0.5);
+    expect(partiallyObservableResult.status).toBe("unknown");
+    expect(partiallyObservableResult.dimensions.observability.level).toBe("medium");
+    expect(partiallyObservableResult.limitations).toContain("sample_too_short");
+  });
+
+  test("preserves established risk statuses when observability limitations remain", async () => {
+    const highPressure = Array.from({ length: 10 }, (_, index) =>
+      message(`p${index + 1}`, { protected: index < 9, tokens: 20_000 })
+    );
+    const protectedHighRot = Array.from({ length: 10 }, (_, index) =>
+      message(`r${index + 1}`, {
+        protected: index < 9,
+        rot_score: index === 0 ? 0.7 : 0
+      })
+    );
+
+    const degraded = await assess(highPressure);
+    const attention = await assess(protectedHighRot);
+
+    expect(degraded.status).toBe("degraded");
+    expect(degraded.confidence).toBe("medium");
+    expect(degraded.dimensions.context_pressure.level).toBe("high");
+    expect(degraded.limitations).toContain("protected_coverage_too_high");
+    expect(attention.status).toBe("attention");
+    expect(attention.confidence).toBe("medium");
+    expect(attention.limitations).toContain("protected_coverage_too_high");
   });
 
   test("reports attention when protected high-rot evidence needs review", async () => {

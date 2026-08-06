@@ -16,9 +16,11 @@ describe("analyze CLI", () => {
     });
 
     expect(stdout).toContain("trimctx analysis");
-    expect(stdout).toContain("状态: UNKNOWN");
-    expect(stdout).toContain("置信度: LOW");
+    expect(stdout).toContain("状态: 需关注");
+    expect(stdout).toContain("置信度: 中");
+    expect(stdout).toContain("结论: 检测到需要复核的上下文风险，但尚未达到劣化阈值。");
     expect(stdout).toContain("续接缺失:");
+    expect(stdout).not.toContain("Assessment limitation");
     expect(stdout).toContain("报告:");
     expect(stdout).toContain("-o report.md");
     expect(stdout).toContain("-o report.json");
@@ -33,7 +35,7 @@ describe("analyze CLI", () => {
 
     const report = JSON.parse(stdout) as AnalysisReport;
     expect(report.schema_version).toBe("trimctx.report.v2");
-    expect(report.assessment.status).toBe("unknown");
+    expect(report.assessment.status).toBe("attention");
     expect(report.review_queue.items).toEqual(expect.any(Array));
     expect(report.messages.length).toBeGreaterThan(0);
     expect(report.summary.top_reasons.length).toBeGreaterThan(0);

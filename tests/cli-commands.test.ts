@@ -163,6 +163,44 @@ describe("CLI commands", () => {
     expect(badTarget.stderr).toContain("target must be one of: user, project");
   });
 
+  test("binds analyze, report, and compress to the expected Phase 0 input SHA-256", async () => {
+    const { file, dir } = await writeSessionFixture();
+    const expectedSha256 = await sha256(file);
+    const wrongSha256 = expectedSha256 === "0".repeat(64)
+      ? "1".repeat(64)
+      : "0".repeat(64);
+    const rejectedReport = join(dir, "rejected.report.json");
+    const rejectedCompressed = join(dir, "rejected.trimmed.jsonl");
+    const mismatchEnv = { TRIMCTX_PHASE0_EXPECT_INPUT_SHA256: wrongSha256 };
+
+    const rejectedAnalyze = await runCli(["analyze", file, "--json"], mismatchEnv);
+    const rejectedReportRun = await runCli(["report", file, "-o", rejectedReport], mismatchEnv);
+    const rejectedCompress = await runCli(["compress", file, "-o", rejectedCompressed], mismatchEnv);
+
+    for (const result of [rejectedAnalyze, rejectedReportRun, rejectedCompress]) {
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toContain("Input changed during Phase 0 validation");
+      expect(result.stderr).not.toContain(wrongSha256);
+      expect(result.stdout).toBe("");
+    }
+    expect(await fileExists(rejectedReport)).toBe(false);
+    expect(await fileExists(rejectedCompressed)).toBe(false);
+
+    const acceptedReport = join(dir, "accepted.report.json");
+    const acceptedCompressed = join(dir, "accepted.trimmed.jsonl");
+    const matchedEnv = { TRIMCTX_PHASE0_EXPECT_INPUT_SHA256: expectedSha256 };
+    const acceptedAnalyze = await runCli(["analyze", file, "--json"], matchedEnv);
+    const acceptedReportRun = await runCli(["report", file, "-o", acceptedReport], matchedEnv);
+    const acceptedCompress = await runCli(["compress", file, "-o", acceptedCompressed], matchedEnv);
+
+    expect(acceptedAnalyze.code).toBe(0);
+    expect((JSON.parse(acceptedAnalyze.stdout) as AnalysisReport).input.file).toBe(file);
+    expect(acceptedReportRun.code).toBe(0);
+    expect((JSON.parse(await readFile(acceptedReport, "utf8")) as AnalysisReport).input.file).toBe(file);
+    expect(acceptedCompress.code).toBe(0);
+    expect(await fileExists(acceptedCompressed)).toBe(true);
+  });
+
   test("report writes a full JSON report to the requested output file", async () => {
     const { file, dir } = await writeSessionFixture();
     const output = join(dir, "report.json");
@@ -448,8 +486,8 @@ describe("CLI commands", () => {
     const result = await runCli(["analyze", file]);
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("状态: UNKNOWN");
-    expect(result.stdout).toContain("置信度: LOW");
+    expect(result.stdout).toContain("状态: 未知");
+    expect(result.stdout).toContain("置信度: 低");
     expect(result.stdout).not.toContain("conversation is clean");
     expect(result.stdout).not.toContain("health: OK");
     expect(result.stdout).toContain("trimctx report");

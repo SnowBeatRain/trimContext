@@ -8,35 +8,45 @@ This rubric is used to review `remove_candidate`, `compress_candidate`, and prot
 | --- | --- | --- |
 | `safe_remove` | The message is stale, duplicated, superseded, or low-value, and removing it does not break task continuity. | Counts toward remove-candidate precision after enough agreement. |
 | `questionable_remove` | The message may be removable, but the report metadata is not enough to prove deletion is safe. | Does not count as a safe remove; keep by default and inspect privately if needed. |
-| `critical_false_delete` | The message contains requirements, constraints, decisions, code, commands, failures, credentials placeholders, or context needed later. | Blocking safety finding; do not tune defaults until resolved. |
+| `critical_keep` | The message contains requirements, constraints, decisions, code, commands, failures, credentials placeholders, or context needed later. | Blocking safety finding; do not tune defaults until resolved. |
 | `missed_low_value_noise` | The message is low-value noise that trimctx kept or only marked as report-only. | Evidence for future scorer/safety tuning, not current deletion. |
 | `over_protected` | The message is protected by a conservative rule but appears safe to remove or summarize. | Use only as tuning evidence; do not remove automatically. |
 | `needs_summary` | The content is too valuable to delete but too large/noisy to keep verbatim. | Candidate for future summarization, not current compression deletion. |
 | `unclear` | Reviewer cannot decide from report metadata alone. | Inspect source privately or keep by default. |
+
+`phase0:review` accepts `needs_summary` and `unclear` as review evidence, but they are non-locking labels. They are counted in aggregate review output and excluded from precision, recall, and protected-coverage denominators.
 
 ## Required Review Fields
 
 For every reviewed candidate, record:
 
 - `sample_id`: Private sample alias, not the raw path if it leaks local context.
-- `source_line`: JSONL source line from the report.
+- `message_id`: Report message ID used by `phase0:review`.
 - `decision`: Original trimctx decision.
-- `rot_score`: Reported score.
 - `label`: One of the labels above.
 - `review_note`: Short explanation without raw secrets or long message content.
 
+Useful optional fields:
+
+- `source_line`: JSONL source line from the report.
+- `rot_score`: Reported score.
+
 ## Review Rules
 
-- `remove_candidate precision` is `safe_remove / reviewed remove_candidate`; exclude `unclear` until privately inspected.
+- `remove_candidate precision` is `safe_remove / reviewed remove_candidate`; exclude `needs_summary`, `unclear`, and any label record that is duplicate, missing required audit fields, decision-mismatched, or category-incompatible.
 - Any `questionable_remove` means the current evidence is insufficient for automatic deletion and should not count as precision success.
-- Any `critical_false_delete` is a release-blocking safety finding for the reviewed default behavior.
+- Any `critical_keep` is a release-blocking safety finding for the reviewed default behavior.
 - `protected_recall` requires checking that messages labeled as critical context are protected or kept, not removed.
-- `missed_low_value_noise` and `over_protected` are tuning evidence only; they do not justify changing compression behavior without a separate review.
-- Prefer `unclear` or `critical_false_delete` over optimistic deletion when evidence is incomplete.
+- `missed_low_value_noise`, `over_protected`, and `needs_summary` are tuning evidence only; they do not justify changing compression behavior without a separate review.
+- Prefer `unclear` or `critical_keep` over optimistic deletion when evidence is incomplete.
 - Never paste raw credentials, tokens, passwords, private keys, or connection strings into review notes; write `[REDACTED]`.
 - Treat system/developer instructions, user decisions, architecture/API decisions, shell commands, git diffs, stack traces, and test failures as high-risk by default.
 - A default threshold or weight change requires reviewed evidence across multiple samples, not one anecdote.
 - `compress_candidate` is report-only in the current product and must not be counted as removed content.
+
+`phase0:review` label compatibility is decision-scoped: deletion labels apply only to `remove_candidate`; protected labels apply only to protected messages; `missed_low_value_noise` applies only to unprotected non-remove messages; `needs_summary` applies only to non-remove messages such as `compress_candidate`, `keep`, or protected content; `unclear` is accepted for any reviewed report message.
+
+`critical_false_delete` is accepted as a legacy alias for `critical_keep` in `phase0:review`, but new label files should use `critical_keep`.
 
 ## Minimal Acceptance Counts Before Tuning
 
@@ -44,11 +54,11 @@ Before proposing default scorer changes, collect at least:
 
 - 30 reviewed `remove_candidate` or near-threshold messages.
 - 10 reviewed protected high-rot messages.
-- 0 unresolved `critical_false_delete` findings for the proposed change.
+- 0 unresolved `critical_keep` findings for the proposed change.
 - A written summary explaining expected false-positive and false-negative tradeoffs.
 
 ## Example Row
 
-| sample_id | source_line | decision | rot_score | label | review_note |
-| --- | ---: | --- | ---: | --- | --- |
-| private-a | 42 | compress_candidate | 0.6428 | needs_summary | Large tool output is noisy but may explain later debugging context. |
+| sample_id | message_id | source_line | decision | rot_score | label | review_note |
+| --- | --- | ---: | --- | ---: | --- | --- |
+| private-a | msg-42 | 42 | compress_candidate | 0.6428 | needs_summary | Large tool output is noisy but may explain later debugging context. |

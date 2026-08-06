@@ -29,7 +29,7 @@ const TOOL_CODES = new Set<SignalCode>(["orphan_tool_result", "obsolete_tool_out
 export function createAssessment(
   messages: AnalyzedMessage[],
   resume: ResumeState,
-  warnings: string[] = []
+  observabilityWarnings: string[] = []
 ): Assessment {
   const totalMessages = messages.length;
   const totalTokens = sumTokens(messages);
@@ -75,21 +75,27 @@ export function createAssessment(
     repetition: dimension(levelForRatio(repetitionTokenRatio), repetitionTokenRatio, repetitionMessages.length, `${sumTokens(repetitionMessages)} repeated-context tokens`),
     tool_noise: dimension(levelForRatio(toolNoiseTokenRatio), toolNoiseTokenRatio, toolNoiseMessages.length, `${sumTokens(toolNoiseMessages)} tool-noise tokens`),
     continuation: continuationDimension(resume),
-    observability: observabilityDimension(coverage, warnings)
+    observability: observabilityDimension(coverage, observabilityWarnings)
   };
 
   const unknown = limitations.length > 0;
   const degraded = dimensions.context_pressure.level === "high"
     || highConfidenceRiskSignalCount >= ASSESSMENT_THRESHOLDS.high_confidence_risks_degraded
     || staleTokenRatio >= ASSESSMENT_THRESHOLDS.stale_token_ratio_high;
-  const attention = Object.values(dimensions).some((item) => item.level === "medium") || protectedHighRot.length > 0;
+  const attention = [
+    dimensions.context_pressure,
+    dimensions.stale_context,
+    dimensions.repetition,
+    dimensions.tool_noise,
+    dimensions.continuation
+  ].some((item) => item.level === "medium") || protectedHighRot.length > 0;
   const positiveEvidence = totalMessages >= ASSESSMENT_THRESHOLDS.minimum_messages
     && resume.readiness.level === "ready"
     && Object.values(dimensions).every((item) => item.level === "low");
 
-  if (unknown) return result("unknown", "low", "Insufficient observable evidence for a reliable health label.", dimensions, coverage, limitations);
-  if (degraded) return result("degraded", "high", "Multiple high-confidence or token-weighted risk signals require action.", dimensions, coverage, limitations);
+  if (degraded) return result("degraded", unknown ? "medium" : "high", "Multiple high-confidence or token-weighted risk signals require action.", dimensions, coverage, limitations);
   if (attention) return result("attention", "medium", "Reviewable context risks are present, but evidence does not meet degraded thresholds.", dimensions, coverage, limitations);
+  if (unknown) return result("unknown", "low", "Insufficient observable evidence for a reliable health label.", dimensions, coverage, limitations);
   if (positiveEvidence) return result("healthy", "high", "Sufficient observable evidence indicates low context risk.", dimensions, coverage, limitations);
   return result("unknown", "low", "Positive evidence is insufficient for a healthy label.", dimensions, coverage, ["insufficient_positive_evidence"]);
 }
@@ -113,14 +119,23 @@ function continuationDimension(resume: ResumeState): HealthDimension {
 
 function observabilityDimension(
   coverage: Assessment["coverage"],
-  warnings: string[]
+  observabilityWarnings: string[]
 ): HealthDimension {
-  const score = Math.max(coverage.unknown_role_ratio, 1 - coverage.analyzable_ratio, warnings.length > 0 ? 0.5 : 0);
+  const score = Math.max(
+    coverage.unknown_role_ratio,
+    1 - coverage.analyzable_ratio,
+    observabilityWarnings.length > 0 ? 0.5 : 0
+  );
   const level = coverage.unknown_role_ratio >= ASSESSMENT_THRESHOLDS.unknown_role_ratio_unknown
       || coverage.analyzable_ratio < ASSESSMENT_THRESHOLDS.analyzable_ratio_unknown
     ? "high"
-    : warnings.length > 0 || coverage.unknown_role_ratio > 0.1 || coverage.analyzable_ratio < 0.8 ? "medium" : "low";
-  return dimension(level, score, warnings.length, `${warnings.length} warning(s); role and content coverage measured.`);
+    : observabilityWarnings.length > 0 || coverage.unknown_role_ratio > 0.1 || coverage.analyzable_ratio < 0.8 ? "medium" : "low";
+  return dimension(
+    level,
+    score,
+    observabilityWarnings.length,
+    `${observabilityWarnings.length} warning(s); role and content coverage measured.`
+  );
 }
 
 function dimension(level: HealthDimension["level"], score: number, evidenceCount: number, summary: string): HealthDimension {

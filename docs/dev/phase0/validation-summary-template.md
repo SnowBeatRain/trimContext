@@ -29,6 +29,24 @@ Copy this template when a validation round is complete. Keep raw reports and fil
 | Protected recall | 100% |  |  |  |
 | Remove-candidate precision | >= 70% |  |  |  |
 
+## Manual Review Counts
+
+| Label or metric | Count | Notes |
+| --- | ---: | --- |
+| `safe_remove` |  |  |
+| `questionable_remove` |  |  |
+| `critical_keep` |  |  |
+| `protected_keep` |  |  |
+| Protected reviewed |  |  |
+| Critical protected reviewed |  |  |
+| Non-critical protected reviewed |  |  |
+| Protected sample coverage |  |  |
+| Protected review requirement met |  |  |
+| `over_protected` |  |  |
+| `missed_low_value_noise` |  |  |
+| `needs_summary` |  | Non-locking evidence; excluded from precision/recall/coverage denominators. |
+| `unclear` |  | Non-locking evidence; excluded from precision/recall/coverage denominators. |
+
 ## False Positives
 
 List candidates trimctx wanted to remove but reviewers rejected.

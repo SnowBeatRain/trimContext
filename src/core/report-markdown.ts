@@ -1,4 +1,18 @@
 import type { AnalysisReport, FindingEvidenceRef, ReviewQueueItem } from "../types/report.js";
+import {
+  assessmentSummaryLabel,
+  confidenceLabel,
+  dimensionLevelLabel,
+  dimensionSummaryLabel,
+  findingCopy,
+  healthStatusLabel,
+  limitationLabel,
+  missingEvidenceLabel,
+  readinessLabel,
+  recommendationSummaryLabel,
+  riskLabel,
+  suggestedActionLabel
+} from "./report-copy.js";
 
 const DIMENSION_LABELS: Record<keyof AnalysisReport["assessment"]["dimensions"], string> = {
   context_pressure: "上下文压力",
@@ -8,25 +22,19 @@ const DIMENSION_LABELS: Record<keyof AnalysisReport["assessment"]["dimensions"],
   continuation: "续接完整度",
   observability: "可观测性"
 };
-
-const LIMITATION_LABELS: Record<string, string> = {
-  sample_too_short: "样本过短，无法形成可靠结论。",
-  protected_coverage_too_high: "Protected 内容占比过高，可分析证据不足。",
-  unknown_role_coverage_too_high: "未知角色内容占比过高，角色证据不足。",
-  analyzable_coverage_too_low: "可分析消息占比过低，无法形成可靠结论。",
-  insufficient_positive_evidence: "正向证据不足，不能判定会话健康。"
-};
+const MAX_FINDING_EVIDENCE = 5;
+const MAX_QUEUE_ITEMS = 20;
 
 export function formatReportMarkdown(report: Readonly<AnalysisReport>): string {
   const lines: string[] = ["# trimctx 会话健康报告", ""];
   const queueByMessageId = new Map(report.review_queue.items.map(item => [item.message_id, item]));
 
   lines.push("## 结论", "");
-  lines.push(`- 状态：${report.assessment.status.toUpperCase()}`);
-  lines.push(`- 置信度：${report.assessment.confidence.toUpperCase()}`);
-  lines.push(`- ${safeMarkdownText(report.assessment.summary)}`);
+  lines.push(`- 状态：${healthStatusLabel(report.assessment.status)}`);
+  lines.push(`- 置信度：${confidenceLabel(report.assessment.confidence)}`);
+  lines.push(`- ${safeMarkdownText(assessmentSummaryLabel(report.assessment.summary))}`);
   if (report.assessment.status === "unknown") {
-    lines.push("- 当前证据不足，不能把会话描述为 clean 或 healthy。");
+    lines.push("- 当前证据不足，不能把会话描述为干净或健康。");
   }
   lines.push("");
 
@@ -37,26 +45,32 @@ export function formatReportMarkdown(report: Readonly<AnalysisReport>): string {
     keyof AnalysisReport["assessment"]["dimensions"],
     AnalysisReport["assessment"]["dimensions"][keyof AnalysisReport["assessment"]["dimensions"]]
   ]>) {
-    lines.push(`| ${DIMENSION_LABELS[key]} | ${dimension.level.toUpperCase()} | ${dimension.evidence_count} | ${safeTableText(dimension.summary)} |`);
+    lines.push(`| ${DIMENSION_LABELS[key]} | ${dimensionLevelLabel(dimension.level)} | ${dimension.evidence_count} | ${safeTableText(dimensionSummaryLabel(dimension.summary))} |`);
   }
   lines.push("");
 
   lines.push("## 关键发现", "");
-  if (report.findings.length === 0) {
-    lines.push("没有高置信发现。");
+  const displayFindings = report.findings.filter(finding => finding.type !== "limitation");
+  if (displayFindings.length === 0) {
+    lines.push("没有高置信风险发现。");
   } else {
-    for (const finding of report.findings) {
-      lines.push(`### ${safeMarkdownText(finding.title)}`, "");
-      lines.push(`- 发现：${safeMarkdownText(finding.title)}`);
-      lines.push(`- 依据：${safeMarkdownText(finding.explanation)}`);
+    for (const finding of displayFindings) {
+      const copy = findingCopy(finding);
+      lines.push(`### ${safeMarkdownText(copy.title)}`, "");
+      lines.push(`- 发现：${safeMarkdownText(copy.title)}`);
+      lines.push(`- 依据：${safeMarkdownText(copy.explanation)}`);
       lines.push(`- 影响：${finding.impact.message_count} 条消息，${finding.impact.tokens} tokens`);
-      lines.push(`- 行动：${finding.suggested_action}`);
+      lines.push(`- 行动：${suggestedActionLabel(finding.suggested_action)}`);
       lines.push("- 证据：");
       if (finding.evidence.length === 0) {
         lines.push("  - 无可安全展示的消息证据。");
       } else {
-        for (const evidence of finding.evidence) {
+        for (const evidence of finding.evidence.slice(0, MAX_FINDING_EVIDENCE)) {
           lines.push(`  - ${formatEvidence(evidence, queueByMessageId.get(evidence.message_id))}`);
+        }
+        const omittedEvidence = finding.evidence.length - MAX_FINDING_EVIDENCE;
+        if (omittedEvidence > 0) {
+          lines.push(`  - 另有 ${omittedEvidence} 条证据，请查看 JSON report/candidate_groups。`);
         }
       }
       lines.push("");
@@ -65,7 +79,7 @@ export function formatReportMarkdown(report: Readonly<AnalysisReport>): string {
   lines.push("");
 
   lines.push("## 审查队列", "");
-  renderQueue(lines, report.review_queue.items);
+  renderQueue(lines, report.review_queue.items.filter(item => !item.protected));
   lines.push("");
 
   lines.push("## Protected 但疑似陈旧", "");
@@ -73,9 +87,9 @@ export function formatReportMarkdown(report: Readonly<AnalysisReport>): string {
   lines.push("");
 
   lines.push("## 续接状态", "");
-  lines.push(`- 就绪度：${report.resume.readiness.level.toUpperCase()} (${report.resume.readiness.score}/100)`);
+  lines.push(`- 就绪度：${readinessLabel(report.resume.readiness.level)} (${report.resume.readiness.score}/100)`);
   lines.push(`- 当前目标：${safeMarkdownText(report.resume.currentGoal?.text ?? "未提取到可信目标")}`);
-  lines.push(`- 缺失项：${report.resume.readiness.missing.length > 0 ? report.resume.readiness.missing.map(safeMarkdownText).join("、") : "无"}`);
+  lines.push(`- 缺失项：${report.resume.readiness.missing.length > 0 ? report.resume.readiness.missing.map(missingEvidenceLabel).map(safeMarkdownText).join("、") : "无"}`);
   lines.push(`- 下一步：${safeMarkdownText(report.resume.nextSteps[0]?.text ?? "未提取到可信下一步")}`);
   lines.push("");
 
@@ -84,18 +98,18 @@ export function formatReportMarkdown(report: Readonly<AnalysisReport>): string {
     lines.push("- 未记录额外评估限制。");
   } else {
     for (const limitation of report.assessment.limitations) {
-      lines.push(`- ${LIMITATION_LABELS[limitation] ?? safeMarkdownText(limitation)}`);
+      lines.push(`- ${safeMarkdownText(limitationLabel(limitation))}`);
     }
   }
-  lines.push("- Healthy 仅表示当前证据下风险较低，不构成删除许可。");
-  lines.push("- Unknown 表示证据不足，不表示会话干净或没有风险。");
-  lines.push("- Protected 内容永不自动删除；所有候选项都需要人工审查。");
+  lines.push("- 健康仅表示当前证据下风险较低，不构成删除许可。");
+  lines.push("- 未知表示证据不足，不表示会话干净或没有风险。");
+  lines.push("- 受保护内容永不自动删除；所有候选项都需要人工审查。");
   lines.push("- 原始 JSONL 始终只读，报告和压缩结果必须写入其他文件。");
   lines.push("");
 
   lines.push("## 下一步", "");
   for (const recommendation of [...report.recommendations].sort((left, right) => left.priority - right.priority)) {
-    lines.push(`- ${safeMarkdownText(recommendation.summary)}${recommendation.command ? ` ${safeCodeSpan(recommendation.command)}` : ""}`);
+    lines.push(`- ${safeMarkdownText(recommendationSummaryLabel(recommendation, report.resume.readiness.missing))}${recommendation.command ? ` ${safeCodeSpan(recommendation.command)}` : ""}`);
   }
   lines.push(`- ${safeCodeSpan(`trimctx report ${quotePath(report.input.file)} -o report.md`)}`);
   lines.push(`- ${safeCodeSpan(`trimctx report ${quotePath(report.input.file)} -o report.json`)}`);
@@ -109,8 +123,12 @@ function renderQueue(lines: string[], items: readonly ReviewQueueItem[]): void {
   }
   lines.push("| Message ID | Line | Role | Decision | Protected | Risk | Confidence | 摘要 |");
   lines.push("| --- | ---: | --- | --- | --- | --- | --- | --- |");
-  for (const item of items) {
-    lines.push(`| ${safeTableText(item.message_id)} | ${item.source_line} | ${item.role} | ${item.decision} | ${item.protected ? "yes" : "no"} | ${item.risk} | ${item.confidence} | ${safeSummary(item.summary)} |`);
+  for (const item of items.slice(0, MAX_QUEUE_ITEMS)) {
+    lines.push(`| ${safeTableText(item.message_id)} | ${item.source_line} | ${item.role} | ${item.decision} | ${item.protected ? "是" : "否"} | ${riskLabel(item.risk)} | ${confidenceLabel(item.confidence)} | ${safeSummary(item.summary)} |`);
+  }
+  const omittedItems = items.length - MAX_QUEUE_ITEMS;
+  if (omittedItems > 0) {
+    lines.push(`另有 ${omittedItems} 条消息，请查看 JSON report/review_queue。`);
   }
 }
 

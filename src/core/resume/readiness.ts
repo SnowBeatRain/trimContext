@@ -22,11 +22,11 @@ const MISSING_LABELS: Record<RequiredSignal, string> = {
 
 export function scoreResumeReadiness(state: ResumeSignals): ResumeReadiness {
   const signals: Record<RequiredSignal, boolean> = {
-    current_goal: Boolean(state.currentGoal),
-    decisions: state.decisions.length > 0,
-    active_files: state.activeFiles.length > 0,
-    test_signals: state.testSignals.length > 0,
-    next_steps: state.nextSteps.length > 0
+    current_goal: isTrustedEvidence(state.currentGoal),
+    decisions: state.decisions.some(isTrustedEvidence),
+    active_files: state.activeFiles.some(isTrustedEvidence),
+    test_signals: state.testSignals.some(isTrustedEvidence),
+    next_steps: state.nextSteps.some(isTrustedEvidence)
   };
 
   const score = (Object.entries(READINESS_WEIGHTS) as Array<[RequiredSignal, number]>).reduce(
@@ -45,4 +45,10 @@ export function scoreResumeReadiness(state: ResumeSignals): ResumeReadiness {
     missing,
     signals
   };
+}
+
+function isTrustedEvidence(
+  evidence: { confidence: "low" | "medium" | "high" } | undefined
+): boolean {
+  return evidence !== undefined && evidence.confidence !== "low";
 }

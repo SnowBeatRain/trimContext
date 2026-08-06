@@ -1,9 +1,16 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { basename, join, relative, resolve } from "node:path";
-import { promisify } from "node:util";
+import { mkdir, readdir } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
+import {
+  assertDistinctPhase0Directories,
+  createPhase0RunPlan
+} from "./phase0-run-plan.js";
+import { writePhase0RunArtifacts } from "./phase0-run-output.js";
+import {
+  isPhase0SampleOk,
+  validatePhase0Sample,
+  type Phase0SampleResult
+} from "./phase0-run-sample.js";
 
 interface CliOptions {
   dir: string;
@@ -11,62 +18,43 @@ interface CliOptions {
   timeoutMs: number;
 }
 
-interface SampleResult {
-  sample: string;
-  input_sha256_before: string;
-  input_sha256_after: string;
-  input_unchanged: boolean;
-  analyze: CommandResult;
-  report: CommandResult & { report_file: string };
-  compress: CommandResult & { output_file: string };
-  summary?: unknown;
-  source?: unknown;
-  warnings?: unknown;
-}
-
-interface CommandResult {
-  ok: boolean;
-  exit_code: number;
-  stdout?: string;
-  stderr?: string;
-  error?: string;
-}
-
-const execFileAsync = promisify(execFile);
-
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const inputDir = resolve(options.dir);
   const outputDir = resolve(options.out);
-  await mkdir(outputDir, { recursive: true });
-
+  await assertDistinctPhase0Directories(inputDir, outputDir);
   const files = await listJsonlFiles(inputDir);
-  const results: SampleResult[] = [];
+  const plan = createPhase0RunPlan(files, outputDir);
+  await mkdir(outputDir, { recursive: true });
+  const results: Phase0SampleResult[] = [];
 
-  for (const file of files) {
-    process.stderr.write(`phase0: validating ${relative(process.cwd(), file)}\n`);
-    results.push(await validateSample(file, outputDir, options.timeoutMs));
+  for (const sample of plan) {
+    process.stderr.write(`phase0: validating ${relative(process.cwd(), sample.inputFile)}\n`);
+    results.push(await validatePhase0Sample(sample, options.timeoutMs));
   }
 
   const output = {
-    schema_version: "trimctx.phase0.results.v1",
+    schema_version: "trimctx.phase0.results.v2",
     generated_at: new Date().toISOString(),
     input_dir: inputDir,
     output_dir: outputDir,
     sample_count: results.length,
     aggregate: {
       analyze_ok: results.filter((result) => result.analyze.ok).length,
+      analyze_report_matched: results.filter((result) => result.analyze_report.status === "matched").length,
+      input_sha256_bound: results.filter((result) => result.input_sha256_bound).length,
       report_ok: results.filter((result) => result.report.ok).length,
       compress_ok: results.filter((result) => result.compress.ok).length,
       input_unchanged: results.filter((result) => result.input_unchanged).length,
-      failed_samples: results.filter((result) => !isSampleOk(result)).map((result) => result.sample)
+      failed_samples: results.filter((result) => !isPhase0SampleOk(result)).map((result) => result.sample)
     },
     results
   };
 
-  await writeFile(join(outputDir, "phase0-results.json"), `${JSON.stringify(output, null, 2)}\n`, "utf8");
-  await writeFile(join(outputDir, "validation-summary.md"), formatValidationSummary(output), "utf8");
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  const json = `${JSON.stringify(output, null, 2)}\n`;
+  const markdown = formatValidationSummary(output);
+  await writePhase0RunArtifacts(outputDir, json, markdown);
+  process.stdout.write(json);
 }
 
 function parseArgs(args: string[]): CliOptions {
@@ -129,85 +117,6 @@ async function listJsonlFiles(dir: string): Promise<string[]> {
   return files;
 }
 
-async function validateSample(file: string, outputDir: string, timeoutMs: number): Promise<SampleResult> {
-  const safeName = sanitizeName(basename(file, ".jsonl"));
-  const reportFile = join(outputDir, `${safeName}.report.json`);
-  const compressedFile = join(outputDir, `${safeName}.trimmed.jsonl`);
-  const beforeHash = await sha256(file);
-
-  const analyze = await runCli(["analyze", file, "--json"], timeoutMs);
-  const report = {
-    ...(await runCli(["report", file, "-o", reportFile], timeoutMs)),
-    report_file: reportFile
-  };
-  const compress = {
-    ...(await runCli(["compress", file, "-o", compressedFile], timeoutMs)),
-    output_file: compressedFile
-  };
-  const afterHash = await sha256(file);
-
-  let parsedReport: { summary?: unknown; input?: { source?: unknown }; warnings?: unknown } | undefined;
-  if (report.ok && await exists(reportFile)) {
-    parsedReport = JSON.parse(await readFile(reportFile, "utf8"));
-  } else if (analyze.ok && analyze.stdout) {
-    parsedReport = JSON.parse(analyze.stdout);
-  }
-
-  return {
-    sample: file,
-    input_sha256_before: beforeHash,
-    input_sha256_after: afterHash,
-    input_unchanged: beforeHash === afterHash,
-    analyze: compactCommandResult(analyze),
-    report: { ...compactCommandResult(report), report_file: reportFile },
-    compress: { ...compactCommandResult(compress), output_file: compressedFile },
-    summary: parsedReport?.summary,
-    source: parsedReport?.input?.source,
-    warnings: parsedReport?.warnings
-  };
-}
-
-async function runCli(args: string[], timeoutMs: number): Promise<CommandResult> {
-  try {
-    const { stdout, stderr } = await execFileAsync(process.execPath, ["--import", "tsx", "src/cli.ts", ...args], {
-      cwd: process.cwd(),
-      timeout: timeoutMs,
-      maxBuffer: 10 * 1024 * 1024
-    });
-    return { ok: true, exit_code: 0, stdout, stderr };
-  } catch (error) {
-    const result = error as { code?: number; stdout?: string; stderr?: string; message?: string };
-    return {
-      ok: false,
-      exit_code: typeof result.code === "number" ? result.code : 1,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      error: result.message
-    };
-  }
-}
-
-function compactCommandResult(result: CommandResult): CommandResult {
-  return {
-    ok: result.ok,
-    exit_code: result.exit_code,
-    stderr: result.stderr ? truncate(result.stderr) : undefined,
-    error: result.error ? truncate(result.error) : undefined
-  };
-}
-
-function sanitizeName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120) || "sample";
-}
-
-function truncate(value: string): string {
-  return value.length > 2_000 ? `${value.slice(0, 2_000)}... [truncated]` : value;
-}
-
-function isSampleOk(result: SampleResult): boolean {
-  return result.input_unchanged && result.analyze.ok && result.report.ok && result.compress.ok;
-}
-
 interface Phase0Output {
   schema_version: string;
   generated_at: string;
@@ -216,12 +125,14 @@ interface Phase0Output {
   sample_count: number;
   aggregate: {
     analyze_ok: number;
+    analyze_report_matched: number;
+    input_sha256_bound: number;
     report_ok: number;
     compress_ok: number;
     input_unchanged: number;
     failed_samples: string[];
   };
-  results: SampleResult[];
+  results: Phase0SampleResult[];
 }
 
 function formatValidationSummary(output: Phase0Output): string {
@@ -260,6 +171,8 @@ function formatValidationSummary(output: Phase0Output): string {
   lines.push("| --- | --- |");
   lines.push(`| Samples | ${output.sample_count} |`);
   lines.push(`| Analyze OK | ${output.aggregate.analyze_ok}/${output.sample_count} |`);
+  lines.push(`| Analyze/report semantics matched | ${output.aggregate.analyze_report_matched}/${output.sample_count} |`);
+  lines.push(`| Command inputs SHA-256 bound | ${output.aggregate.input_sha256_bound}/${output.sample_count} |`);
   lines.push(`| Report OK | ${output.aggregate.report_ok}/${output.sample_count} |`);
   lines.push(`| Compress OK | ${output.aggregate.compress_ok}/${output.sample_count} |`);
   lines.push(`| Input unchanged | ${output.aggregate.input_unchanged}/${output.sample_count} |`);
@@ -292,9 +205,17 @@ function formatValidationSummary(output: Phase0Output): string {
   lines.push("| Questionable remove | Pending manual review |");
   lines.push("| Critical false deletion | Pending manual review |");
   lines.push("| Remove candidate precision | Pending manual review |");
+  lines.push("| Protected reviewed | Pending manual review |");
+  lines.push("| Protected keep | Pending manual review |");
   lines.push("| Protected recall | Pending manual review |");
+  lines.push("| Critical protected reviewed | Pending manual review |");
+  lines.push("| Non-critical protected reviewed | Pending manual review |");
+  lines.push("| Protected sample coverage | Pending manual review |");
+  lines.push("| Protected review requirement met | Pending manual review |");
   lines.push("| Over protected | Pending manual review |");
   lines.push("| Missed low-value noise | Pending manual review |");
+  lines.push("| Needs summary | Pending manual review |");
+  lines.push("| Unclear | Pending manual review |");
   lines.push("");
   lines.push("## Known Gaps");
   lines.push("- Real private OpenAI export validation is pending unless this run explicitly includes user-provided OpenAI private samples.");
@@ -313,19 +234,6 @@ function formatValidationSummary(output: Phase0Output): string {
 function numberField(record: Record<string, unknown> | undefined, field: string): number {
   const value = record?.[field];
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-async function sha256(file: string): Promise<string> {
-  return createHash("sha256").update(await readFile(file)).digest("hex");
-}
-
-async function exists(file: string): Promise<boolean> {
-  try {
-    await stat(file);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 main().catch((error: unknown) => {

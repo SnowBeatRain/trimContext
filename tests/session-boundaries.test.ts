@@ -3,6 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import { analyzeFile } from "../src/core/pipeline.js";
+import {
+  findLatestSession as findLatestSessionFromCatalog,
+  listSessions as listSessionsFromCatalog
+} from "../src/sessions/catalog.js";
+import {
+  hasCurrentSessionBinding as hasCurrentSessionBindingFromBinding,
+  resolveBoundSessionFile as resolveBoundSessionFileFromBinding
+} from "../src/sessions/binding.js";
 import { listSessions, parseSessionSource, resolveBoundSessionFile } from "../src/sessions/discovery.js";
 import {
   analyzeFile as analyzeFileFromFacade,
@@ -89,6 +97,17 @@ describe("pipeline and session boundaries", () => {
     expect((await listSessions("codex", home)).map((item) => item.source)).toEqual(["codex"]);
   });
 
+  test("resolves latest sessions through the standalone catalog", async () => {
+    const home = await mkdtemp(join(tmpdir(), "trimctx-session-catalog-"));
+    const claudeDir = join(home, ".claude", "projects", "project-a");
+    await mkdir(claudeDir, { recursive: true });
+    const file = join(claudeDir, "session-a.jsonl");
+    await writeFile(file, "{}\n", "utf8");
+
+    await expect(findLatestSessionFromCatalog("claude", home)).resolves.toBe(file);
+    expect(listSessionsFromCatalog).toBe(listSessions);
+  });
+
   test("resolves only a readable current transcript binding", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-bound-session-"));
     const file = join(dir, "bound-session.jsonl");
@@ -106,6 +125,20 @@ describe("pipeline and session boundaries", () => {
     await expect(resolveBoundSessionFile()).rejects.toThrow("当前窗口尚未绑定");
   });
 
+  test("resolves trusted bindings from an injected environment", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-binding-module-"));
+    const file = join(dir, "bound-session.jsonl");
+    await writeFile(file, "{}\n", "utf8");
+    const env = {
+      TRIMCTX_TRANSCRIPT_PATH: file,
+      TRIMCTX_SESSION_ID: "bound-session"
+    } as NodeJS.ProcessEnv;
+
+    expect(hasCurrentSessionBindingFromBinding(env)).toBe(true);
+    await expect(resolveBoundSessionFileFromBinding(env)).resolves.toBe(file);
+    expect(process.env.TRIMCTX_TRANSCRIPT_PATH).toBe(previousTranscriptPath);
+  });
+
   test("rejects missing and non-file current transcript bindings", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-invalid-bound-session-"));
 
@@ -119,6 +152,7 @@ describe("pipeline and session boundaries", () => {
   test("keeps the legacy core/session facade exports", () => {
     expect(analyzeFileFromFacade).toBe(analyzeFile);
     expect(parseSessionSourceFromFacade).toBe(parseSessionSource);
+    expect(resolveBoundSessionFileFromBinding).toBe(resolveBoundSessionFile);
   });
 });
 

@@ -1,9 +1,16 @@
 import { describe, expect, test } from "vitest";
-import { link, mkdtemp, open, readFile, readdir, symlink, writeFile } from "node:fs/promises";
+import { link, mkdtemp, open, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { assertDifferentFiles, atomicWriteFileDistinctFromInput, sameFile } from "../src/platform/files.js";
+import {
+  appendFileDistinctFromInput,
+  assertDifferentFiles,
+  atomicWriteFile,
+  atomicWriteFileIfUnchanged,
+  atomicWriteFileDistinctFromInput,
+  sameFile
+} from "../src/platform/files.js";
 
 describe("platform files", () => {
   test("treats identical resolved paths as the same file even before the target exists", async () => {
@@ -41,6 +48,164 @@ describe("platform files", () => {
     await expect(assertDifferentFiles(join(dir, "a.jsonl"), join(dir, "b.jsonl"), "same file"))
       .resolves
       .toBeUndefined();
+  });
+
+  test("rejects appending to the input path without changing its bytes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-append-"));
+    const input = join(dir, "session.jsonl");
+    const original = "source transcript\n";
+    await writeFile(input, original, "utf8");
+
+    await expect(appendFileDistinctFromInput(
+      input,
+      input,
+      "binding\n",
+      "same file"
+    )).rejects.toThrow("same file");
+
+    expect(await readFile(input, "utf8")).toBe(original);
+  });
+
+  test("rejects appending through a hardlink to the input", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-append-"));
+    const input = join(dir, "session.jsonl");
+    const output = join(dir, "claude-env.sh");
+    const original = "source transcript\n";
+    await writeFile(input, original, "utf8");
+    await link(input, output);
+
+    await expect(appendFileDistinctFromInput(
+      input,
+      output,
+      "binding\n",
+      "same file"
+    )).rejects.toThrow("same file");
+
+    expect(await readFile(input, "utf8")).toBe(original);
+    expect(await readFile(output, "utf8")).toBe(original);
+  });
+
+  test("appends to a distinct existing file without truncating it", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-append-"));
+    const input = join(dir, "session.jsonl");
+    const output = join(dir, "claude-env.sh");
+    await writeFile(input, "source transcript\n", "utf8");
+    await writeFile(output, "existing binding\n", "utf8");
+
+    await appendFileDistinctFromInput(input, output, "new binding\n", "same file");
+
+    expect(await readFile(input, "utf8")).toBe("source transcript\n");
+    expect(await readFile(output, "utf8")).toBe("existing binding\nnew binding\n");
+  });
+
+  test("creates a distinct missing append target", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-append-"));
+    const input = join(dir, "session.jsonl");
+    const output = join(dir, "claude-env.sh");
+    await writeFile(input, "source transcript\n", "utf8");
+
+    await appendFileDistinctFromInput(input, output, "binding\n", "same file");
+
+    expect(await readFile(input, "utf8")).toBe("source transcript\n");
+    expect(await readFile(output, "utf8")).toBe("binding\n");
+  });
+
+  test("allows a distinct binding when the transcript is not created yet", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-append-"));
+    const input = join(dir, "future-session.jsonl");
+    const output = join(dir, "claude-env.sh");
+
+    await appendFileDistinctFromInput(input, output, "binding\n", "same file");
+
+    await expect(readFile(input)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(output, "utf8")).toBe("binding\n");
+  });
+
+  test("does not create the append target when input path inspection fails", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-append-preflight-"));
+    const output = join(dir, "claude-env.sh");
+
+    await expect(appendFileDistinctFromInput(
+      "invalid\0transcript.jsonl",
+      output,
+      "binding\n"
+    )).rejects.toMatchObject({ code: "ERR_INVALID_ARG_VALUE" });
+
+    await expect(readFile(output)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("atomically creates and replaces ordinary files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-"));
+    const output = join(dir, "settings.json");
+    await writeFile(output, "old\n", "utf8");
+
+    await atomicWriteFile(output, "new\n");
+
+    expect(await readFile(output, "utf8")).toBe("new\n");
+    expect((await readdir(dir)).filter(name => name.includes(".trimctx-"))).toEqual([]);
+  });
+
+  test("atomically replaces a target whose bytes still match the expected snapshot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-cas-"));
+    const output = join(dir, "CLAUDE.md");
+    const expected = Buffer.from("old instructions\n");
+    await writeFile(output, expected);
+
+    await atomicWriteFileIfUnchanged(output, "new instructions\n", expected, "target changed");
+
+    expect(await readFile(output, "utf8")).toBe("new instructions\n");
+    expect((await readdir(dir)).filter(name => name.includes(".trimctx-"))).toEqual([]);
+  });
+
+  test("preserves changed target bytes when conditional atomic replacement conflicts", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-cas-"));
+    const output = join(dir, "CLAUDE.md");
+    const expected = Buffer.from("old instructions\n");
+    await writeFile(output, "concurrent instructions\n", "utf8");
+
+    await expect(atomicWriteFileIfUnchanged(
+      output,
+      "new instructions\n",
+      expected,
+      "target changed"
+    )).rejects.toThrow("target changed");
+
+    expect(await readFile(output, "utf8")).toBe("concurrent instructions\n");
+    expect((await readdir(dir)).filter(name => name.includes(".trimctx-"))).toEqual([]);
+  });
+
+  test("does not recreate a conditional target deleted after its snapshot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-cas-"));
+    const output = join(dir, "CLAUDE.md");
+    const expected = Buffer.from("deleted instructions\n");
+    await writeFile(output, expected);
+    await rm(output);
+
+    await expect(atomicWriteFileIfUnchanged(
+      output,
+      "new instructions\n",
+      expected,
+      "target changed"
+    )).rejects.toThrow("target changed");
+
+    await expect(readFile(output)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(dir)).filter(name => name.includes(".trimctx-"))).toEqual([]);
+  });
+
+  test("preserves a target created after an absent snapshot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-cas-"));
+    const output = join(dir, "CLAUDE.md");
+    await writeFile(output, "concurrent instructions\n", "utf8");
+
+    await expect(atomicWriteFileIfUnchanged(
+      output,
+      "new instructions\n",
+      undefined,
+      "target changed"
+    )).rejects.toThrow("target changed");
+
+    expect(await readFile(output, "utf8")).toBe("concurrent instructions\n");
+    expect((await readdir(dir)).filter(name => name.includes(".trimctx-"))).toEqual([]);
   });
 
   test("atomically replaces an existing output while preserving the input and cleaning temporary files", async () => {

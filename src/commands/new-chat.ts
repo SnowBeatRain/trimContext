@@ -1,15 +1,14 @@
 import type { Command } from "commander";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, open } from "node:fs/promises";
+import { mkdir, open, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { formatHandoff, formatHandoffReadme, formatNextContext } from "../core/handoff.js";
 import { analyzeInput } from "../core/pipeline.js";
 import {
   assertDifferentFiles,
-  pathExists,
   writeFilesDistinctFromInput
 } from "../platform/files.js";
-import { resolveCurrentSessionFile } from "../sessions/discovery.js";
+import { resolveCurrentSessionFile } from "../sessions/binding.js";
 import { resolveInputFile } from "./shared.js";
 
 export interface RegisterNewChatOptions {
@@ -44,9 +43,6 @@ async function writeHandoffPackage(
 
   for (const outputPath of [handoffPath, nextContextPath, manifestPath, reportPath, readmePath]) {
     await assertDifferentFiles(file, outputPath, "Handoff package must be different from input file");
-  }
-  if (await pathExists(packageDir)) {
-    throw new Error(`handoff package already exists: ${packageDir}`);
   }
 
   const inputHandle = await open(file, "r");
@@ -91,16 +87,21 @@ async function writeHandoffPackage(
         context_pressure: report.summary.context_pressure
       }
     };
-
-    await mkdir(packageDir, { recursive: true });
     const conflictMessage = "Handoff package must be different from input file";
-    await writeFilesDistinctFromInput(inputHandle, [
+    const outputs = [
       { file: handoffPath, data: formatHandoff(report), inputConflictMessage: conflictMessage },
       { file: nextContextPath, data: formatNextContext(report), inputConflictMessage: conflictMessage },
       { file: reportPath, data: `${JSON.stringify(report, null, 2)}\n`, inputConflictMessage: conflictMessage },
       { file: manifestPath, data: `${JSON.stringify(manifest, null, 2)}\n`, inputConflictMessage: conflictMessage },
       { file: readmePath, data: formatHandoffReadme(report), inputConflictMessage: conflictMessage }
-    ]);
+    ];
+
+    await createOwnedPackageDirectory(rootDir, packageDir);
+    try {
+      await writeFilesDistinctFromInput(inputHandle, outputs);
+    } catch (error) {
+      await removeFailedPackage(packageDir, error);
+    }
 
     process.stdout.write(`copyable uid: ${uid}\n`);
     process.stdout.write(`uid: ${uid}\n`);
@@ -113,6 +114,30 @@ async function writeHandoffPackage(
   } finally {
     await inputHandle.close();
   }
+}
+
+async function createOwnedPackageDirectory(rootDir: string, packageDir: string): Promise<void> {
+  await mkdir(rootDir, { recursive: true });
+  try {
+    await mkdir(packageDir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(`handoff package already exists: ${packageDir}`, { cause: error });
+    }
+    throw error;
+  }
+}
+
+async function removeFailedPackage(packageDir: string, operationError: unknown): Promise<never> {
+  try {
+    await rm(packageDir, { recursive: true, force: true });
+  } catch (cleanupError) {
+    throw new AggregateError(
+      [operationError, cleanupError],
+      `Failed to create and clean up handoff package: ${packageDir}`
+    );
+  }
+  throw operationError;
 }
 
 function generateHandoffUid(): string {
