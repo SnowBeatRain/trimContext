@@ -19,6 +19,69 @@ afterEach(async () => {
 });
 
 describe("compressor output failure safety", () => {
+  test("rejects duplicate message IDs before replacing an existing compressed copy", async () => {
+    const root = await mkdtemp(join(tmpdir(), "trimctx-compress-duplicate-id-"));
+    const input = join(root, "session.jsonl");
+    const output = join(root, "session.trimmed.jsonl");
+    const existingOutput = "existing compressed copy\n";
+    const originalInput = [
+      JSON.stringify({
+        type: "assistant",
+        uuid: "duplicate",
+        message: { role: "assistant", content: "Use old payment endpoint legacy charge api" }
+      }),
+      JSON.stringify({
+        type: "assistant",
+        uuid: "old-copy",
+        message: { role: "assistant", content: "Use old payment endpoint legacy charge api" }
+      }),
+      ...Array.from({ length: 35 }, (_, index) => JSON.stringify({
+        type: index % 2 === 0 ? "user" : "assistant",
+        uuid: `pad-${index}`,
+        message: {
+          role: index % 2 === 0 ? "user" : "assistant",
+          content: `padding ${index}`
+        }
+      })),
+      JSON.stringify({
+        type: "user",
+        uuid: "duplicate",
+        message: { role: "user", content: "Correction: instead use new billing endpoint" }
+      })
+    ].join("\n");
+    await writeFile(input, originalInput, "utf8");
+    await writeFile(output, existingOutput, "utf8");
+    const inputHash = await sha256(input);
+
+    await expect(compressFile(input, output)).rejects.toThrow(
+      "Cannot compress transcript with 1 duplicate message ID"
+    );
+
+    expect(await sha256(input)).toBe(inputHash);
+    expect(await readFile(input, "utf8")).toBe(originalInput);
+    expect(await readFile(output, "utf8")).toBe(existingOutput);
+    expect(await transactionArtifacts(root)).toEqual([]);
+  });
+
+  test("rejects duplicate message IDs without creating a new compressed copy", async () => {
+    const root = await mkdtemp(join(tmpdir(), "trimctx-compress-duplicate-id-new-"));
+    const input = join(root, "session.jsonl");
+    const output = join(root, "session.trimmed.jsonl");
+    const originalInput = [
+      '{"type":"user","uuid":"duplicate","message":{"role":"user","content":"first"}}',
+      '{"type":"assistant","uuid":"duplicate","message":{"role":"assistant","content":"second"}}'
+    ].join("\n");
+    await writeFile(input, originalInput, "utf8");
+
+    await expect(compressFile(input, output)).rejects.toThrow(
+      "Cannot compress transcript with 1 duplicate message ID"
+    );
+
+    expect(await readFile(input, "utf8")).toBe(originalInput);
+    await expect(readFile(output, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await transactionArtifacts(root)).toEqual([]);
+  });
+
   test("preserves an existing compressed copy when staged writing fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "trimctx-compress-write-failure-"));
     const input = join(root, "session.jsonl");

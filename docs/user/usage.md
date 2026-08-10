@@ -18,6 +18,8 @@ Install Claude hooks only when current-window binding is needed:
 trimctx init --target user --with-hooks
 ```
 
+Hook settings use the absolute Node executable and packaged `dist/cli.js` paths resolved during installation. Rerun `init --with-hooks --force` if either installation moves; stale trimctx-managed hook paths are replaced without removing unrelated hooks. The repository `install.sh` and `install.ps1` scripts update an existing checkout only when its exact Git origin matches, and replace a plugin directory only when the trimctx marker or exact legacy asset fingerprint proves ownership.
+
 ## Recommended Workflow
 
 1. Analyze the session.
@@ -80,7 +82,7 @@ The Markdown report contains:
 - limitations and safety notes
 - next actions
 
-Displayed evidence contains only message id, source line, role, and a redacted summary capped at 160 characters. Long Markdown review sections show the first 20 items per queue plus an omitted-count note; the complete `review_queue` remains in JSON. Token-like secrets, email addresses, key/value secrets, and Basic Auth credentials are redacted. Markdown table pipes and line breaks are escaped. This narrow display does not mean every generated artifact is safe to share; review it first.
+Displayed evidence contains only message id, source line, role, and a redacted summary capped at 160 characters. Long Markdown review sections show the first 20 items per queue plus an omitted-count note; the complete `review_queue` remains in JSON. Standard GitHub and other token-like secrets, authorization headers, email addresses, credential URLs, and key/value secrets are redacted in persisted display summaries. Markdown table pipes and line breaks are escaped. This narrow display does not mean every generated artifact is safe to share; review it first.
 
 Report writes use a same-directory temporary file and atomic replacement. The command rejects the input file and aliases of it, keeps an existing report intact when rendering or writing fails, and rechecks the open input handle before replacement.
 
@@ -148,7 +150,7 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 Compression writes a new file and never changes the input. It removes only non-protected `remove_candidate` messages. Protected messages, `keep`, and `compress_candidate` remain in the copy. A candidate is still a review item; a health status does not authorize deletion.
 
-The output uses same-directory atomic replacement. A recoverable write or commit failure keeps an existing compressed copy intact, and a change to the open input after its pre-read snapshot aborts the replacement instead of committing output derived from stale bytes.
+The output uses same-directory atomic replacement. A recoverable write or commit failure keeps an existing compressed copy intact, and a change to the open input after its pre-read snapshot aborts the replacement instead of committing output derived from stale bytes. Duplicate normalized message IDs also fail closed before a new output is created or an existing output is replaced; `analyze` and `report` remain available for audit.
 
 ## Claude Code Plugin
 
@@ -174,6 +176,8 @@ Hook write scope:
 - Stop analyzes a read-only snapshot. If the transcript has not yet recorded the final reply, it supplements that reply in memory from Claude's `last_assistant_message`; an equivalent newest assistant message is not added twice.
 - Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
 - Original JSONL transcripts remain read-only.
+
+Automatic hook input is capped at 1 MiB. Stop analysis also caps the transcript at 64 MiB and 10,000 normalized messages. An over-limit hook fails before writing a new environment binding or `.claude/CLAUDE.md` managed state. These resource limits do not apply when a user runs an explicit CLI command.
 
 ## Codex Skill
 

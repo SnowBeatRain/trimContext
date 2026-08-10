@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
+import { createHookCommands } from "../src/commands/hook-command.js";
 import type { AnalysisReport } from "../src/types/report.js";
 
 const execFileAsync = promisify(execFile);
@@ -64,11 +65,12 @@ describe("CLI commands", () => {
         Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
       };
     };
+    const commands = createHookCommands(process.cwd());
     expect(settings.hooks?.SessionStart?.some(group =>
-      group.hooks?.some(hook => hook.command === "trimctx hook --session-start")
+      group.hooks?.some(hook => hook.command === commands.sessionStart)
     )).toBe(true);
     expect(settings.hooks?.Stop?.some(group =>
-      group.hooks?.some(hook => hook.command === "trimctx hook")
+      group.hooks?.some(hook => hook.command === commands.stop)
     )).toBe(true);
     expect(result.stdout).toContain("experimental Claude hooks");
   });

@@ -444,7 +444,7 @@ describe("resume layer", () => {
 
   test("redacts common sensitive values from resume evidence", () => {
     const state = extractResumeState(createReport([
-      message("m1", "user", "目标：修复登录 api_key=abc123456789012345 secret: super-secret-token user@example.com。", 1),
+      message("m1", "user", "目标：修复登录 ghp_abcdefghijklmnopqrstuvwxyz1234567890ABCD github_pat_11AA0abcdefghijklmnopqrstuvwxyz1234567890 api_key=abc123456789012345 secret: super-secret-token user@example.com。", 1),
       message("m2", "assistant", "下一步：检查 https://user:password@example.com/private", 2)
     ], "session.jsonl"));
     const evidence = [state.currentGoal?.text, ...state.nextSteps.map((item) => item.text)].join("\n");
@@ -452,6 +452,8 @@ describe("resume layer", () => {
     expect(evidence).toContain("[REDACTED]");
     expect(evidence).toContain("[REDACTED_EMAIL]");
     expect(evidence).not.toContain("abc123456789012345");
+    expect(evidence).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz1234567890ABCD");
+    expect(evidence).not.toContain("github_pat_11AA0abcdefghijklmnopqrstuvwxyz1234567890");
     expect(evidence).not.toContain("super-secret-token");
     expect(evidence).not.toContain("user@example.com");
     expect(evidence).not.toContain("user:password");

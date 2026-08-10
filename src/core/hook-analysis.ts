@@ -1,19 +1,61 @@
-import { readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { analyzeMessages, parseJsonl } from "./analyzer.js";
 import { createReport } from "./reporter.js";
 import type { NormalizedMessage } from "../types/message.js";
 import type { AnalysisReport } from "../types/report.js";
 
 const LAST_ASSISTANT_MESSAGE_ID = "trimctx:hook:last-assistant-message";
+export const MAX_HOOK_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
+export const MAX_HOOK_TRANSCRIPT_MESSAGES = 10_000;
+const HOOK_TRANSCRIPT_READ_CHUNK_BYTES = 64 * 1024;
 
 export async function analyzeClaudeStopFile(
   file: string,
   lastAssistantMessage?: string
 ): Promise<AnalysisReport> {
-  const input = await readFile(file, "utf8");
-  const parsed = parseJsonl(input, file);
-  const messages = supplementLastAssistantMessage(parsed, lastAssistantMessage);
-  return createReport(analyzeMessages(messages), file);
+  const handle = await open(file, "r");
+  try {
+    const snapshot = await handle.stat();
+    if (!snapshot.isFile()) {
+      throw new Error(`Claude Stop transcript must be a regular file: ${file}`);
+    }
+    if (snapshot.size > MAX_HOOK_TRANSCRIPT_BYTES) {
+      throw new Error(`Claude Stop transcript exceeds ${MAX_HOOK_TRANSCRIPT_BYTES} bytes: ${file}`);
+    }
+
+    const input = await readBoundedFile(handle, MAX_HOOK_TRANSCRIPT_BYTES);
+    if (input.byteLength > MAX_HOOK_TRANSCRIPT_BYTES) {
+      throw new Error(`Claude Stop transcript exceeds ${MAX_HOOK_TRANSCRIPT_BYTES} bytes: ${file}`);
+    }
+
+    const parsed = parseJsonl(input.toString("utf8"), file);
+    const messages = supplementLastAssistantMessage(parsed, lastAssistantMessage);
+    if (messages.length > MAX_HOOK_TRANSCRIPT_MESSAGES) {
+      throw new Error(
+        `Claude Stop transcript exceeds ${MAX_HOOK_TRANSCRIPT_MESSAGES} normalized messages`
+      );
+    }
+    return createReport(analyzeMessages(messages), file);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readBoundedFile(handle: FileHandle, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  while (totalBytes <= maxBytes) {
+    const length = Math.min(HOOK_TRANSCRIPT_READ_CHUNK_BYTES, maxBytes + 1 - totalBytes);
+    const buffer = Buffer.allocUnsafe(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, totalBytes);
+    if (bytesRead === 0) break;
+    chunks.push(buffer.subarray(0, bytesRead));
+    totalBytes += bytesRead;
+  }
+
+  return Buffer.concat(chunks, totalBytes);
 }
 
 function supplementLastAssistantMessage(

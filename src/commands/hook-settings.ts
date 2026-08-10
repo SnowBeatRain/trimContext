@@ -1,7 +1,16 @@
-export const TRIMCTX_HOOK_COMMAND = "trimctx hook";
-export const TRIMCTX_SESSION_ENV_COMMAND = "trimctx hook --session-start";
-
 export type HookSettings = Record<string, unknown>;
+
+export const TRIMCTX_MANAGED_HOOK_FLAG = "--trimctx-managed-hook";
+
+export interface HookCommands {
+  sessionStart: string;
+  stop: string;
+}
+
+const LEGACY_HOOK_COMMANDS: HookCommands = {
+  sessionStart: "trimctx hook --session-start",
+  stop: "trimctx hook"
+};
 
 interface HookEntry extends Record<string, unknown> {
   type?: string;
@@ -18,6 +27,7 @@ export type HookSettingsPlan =
 
 export function planHookSettings(
   input: unknown,
+  commands: HookCommands,
   options: { force?: boolean } = {}
 ): HookSettingsPlan {
   const settings = requiredObject(input, "Claude settings");
@@ -26,25 +36,45 @@ export function planHookSettings(
     : requiredObject(settings.hooks, "Claude settings hooks");
   const sessionStartHooks = eventGroups(hooks, "SessionStart");
   const stopHooks = eventGroups(hooks, "Stop");
-  const hasSessionEnvHook = containsHook(sessionStartHooks, TRIMCTX_SESSION_ENV_COMMAND);
-  const hasTrimctxHook = containsHook(stopHooks, TRIMCTX_HOOK_COMMAND);
+  const hasSessionEnvHook = containsHook(sessionStartHooks, commands.sessionStart);
+  const hasTrimctxHook = containsHook(stopHooks, commands.stop);
+  const hasStaleSessionEnvHook = containsStaleManagedHook(
+    sessionStartHooks,
+    commands.sessionStart,
+    "sessionStart"
+  );
+  const hasStaleTrimctxHook = containsStaleManagedHook(stopHooks, commands.stop, "stop");
 
-  if (hasSessionEnvHook && hasTrimctxHook && !options.force) {
+  if (
+    hasSessionEnvHook &&
+    hasTrimctxHook &&
+    !hasStaleSessionEnvHook &&
+    !hasStaleTrimctxHook &&
+    !options.force
+  ) {
     return { status: "already_installed" };
   }
 
-  const newSessionStartHooks = options.force
-    ? removeHookEntries(sessionStartHooks, TRIMCTX_SESSION_ENV_COMMAND)
-    : [...sessionStartHooks];
-  const newStopHooks = options.force
-    ? removeHookEntries(stopHooks, TRIMCTX_HOOK_COMMAND)
-    : [...stopHooks];
+  const newSessionStartHooks = removeOwnedHookEntries(
+    sessionStartHooks,
+    commands.sessionStart,
+    LEGACY_HOOK_COMMANDS.sessionStart,
+    "sessionStart",
+    options.force === true
+  );
+  const newStopHooks = removeOwnedHookEntries(
+    stopHooks,
+    commands.stop,
+    LEGACY_HOOK_COMMANDS.stop,
+    "stop",
+    options.force === true
+  );
 
   if (!hasSessionEnvHook || options.force) {
-    newSessionStartHooks.push(trimctxHookGroup(TRIMCTX_SESSION_ENV_COMMAND));
+    newSessionStartHooks.push(trimctxHookGroup(commands.sessionStart));
   }
   if (!hasTrimctxHook || options.force) {
-    newStopHooks.push(trimctxHookGroup(TRIMCTX_HOOK_COMMAND));
+    newStopHooks.push(trimctxHookGroup(commands.stop));
   }
 
   return {
@@ -60,11 +90,11 @@ export function planHookSettings(
   };
 }
 
-export function plannedHookSettings(): HookSettings {
+export function plannedHookSettings(commands: HookCommands): HookSettings {
   return {
     hooks: {
-      SessionStart: [trimctxHookGroup(TRIMCTX_SESSION_ENV_COMMAND)],
-      Stop: [trimctxHookGroup(TRIMCTX_HOOK_COMMAND)]
+      SessionStart: [trimctxHookGroup(commands.sessionStart)],
+      Stop: [trimctxHookGroup(commands.stop)]
     }
   };
 }
@@ -100,14 +130,53 @@ function containsHook(groups: HookGroup[], command: string): boolean {
   return groups.some((group) => (group.hooks ?? []).some((entry) => isHook(entry, command)));
 }
 
-function removeHookEntries(groups: HookGroup[], command: string): HookGroup[] {
+function removeHookEntries(groups: HookGroup[], shouldRemove: (entry: HookEntry) => boolean): HookGroup[] {
   return groups.flatMap((group) => {
     if (!group.hooks) return [group];
-    const remaining = group.hooks.filter((entry) => !isHook(entry, command));
+    const remaining = group.hooks.filter((entry) => !shouldRemove(entry));
     if (remaining.length === group.hooks.length) return [group];
     if (remaining.length === 0) return [];
     return [{ ...group, hooks: remaining }];
   });
+}
+
+function removeOwnedHookEntries(
+  groups: HookGroup[],
+  currentCommand: string,
+  legacyCommand: string,
+  event: "sessionStart" | "stop",
+  force: boolean
+): HookGroup[] {
+  return removeHookEntries(groups, entry =>
+    isStaleManagedHook(entry, currentCommand, event) ||
+    (force && (isHook(entry, currentCommand) || isHook(entry, legacyCommand)))
+  );
+}
+
+function containsStaleManagedHook(
+  groups: HookGroup[],
+  currentCommand: string,
+  event: "sessionStart" | "stop"
+): boolean {
+  return groups.some(group => (group.hooks ?? []).some(entry =>
+    isStaleManagedHook(entry, currentCommand, event)
+  ));
+}
+
+function isStaleManagedHook(
+  entry: HookEntry,
+  currentCommand: string,
+  event: "sessionStart" | "stop"
+): boolean {
+  return isManagedHook(entry, event) && !isHook(entry, currentCommand);
+}
+
+function isManagedHook(entry: HookEntry, event: "sessionStart" | "stop"): boolean {
+  if (entry.type !== "command" || typeof entry.command !== "string") return false;
+  const suffix = event === "sessionStart"
+    ? ` hook ${TRIMCTX_MANAGED_HOOK_FLAG} --session-start`
+    : ` hook ${TRIMCTX_MANAGED_HOOK_FLAG}`;
+  return entry.command.endsWith(suffix);
 }
 
 function isHook(entry: HookEntry, command: string): boolean {

@@ -1,11 +1,15 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, link, mkdir, readFile, readdir, mkdtemp, writeFile } from "node:fs/promises";
+import { access, link, mkdir, readFile, readdir, mkdtemp, stat, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, test } from "vitest";
+import { createHookCommands } from "../src/commands/hook-command.js";
+
+const MAX_HOOK_INPUT_BYTES = 1024 * 1024;
+const MAX_HOOK_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
 
 const execFileAsync = promisify(execFile);
 const projectRoot = process.cwd();
@@ -13,6 +17,45 @@ const cliPath = join(projectRoot, "src", "cli.ts");
 const tsxImport = pathToFileURL(join(projectRoot, "node_modules", "tsx", "dist", "loader.mjs")).href;
 
 describe("hidden hook integration", () => {
+  test("oversized SessionStart stdin does not create the environment binding", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-hook-input-limit-"));
+    const envFile = join(dir, "claude-env.sh");
+    const privateMarker = "private-hook-input-marker";
+
+    const result = await runCliWithInput(
+      ["hook", "--session-start"],
+      `${" ".repeat(MAX_HOOK_INPUT_BYTES)}${privateMarker}`,
+      { CLAUDE_ENV_FILE: envFile }
+    );
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain(`Claude hook input exceeds ${MAX_HOOK_INPUT_BYTES} bytes`);
+    expect(result.stderr).not.toContain(privateMarker);
+    await expect(readFile(envFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  test("oversized Stop transcript stays unchanged and does not create CLAUDE.md", async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), "trimctx-hook-transcript-limit-"));
+    const transcriptPath = join(projectDir, "session.jsonl");
+    await writeFile(transcriptPath, "private transcript marker", "utf8");
+    await truncate(transcriptPath, MAX_HOOK_TRANSCRIPT_BYTES + 1);
+    const beforeHash = await sha256(transcriptPath);
+
+    const result = await runCliWithInput(
+      ["hook"],
+      `${JSON.stringify({ transcript_path: transcriptPath })}\n`,
+      {},
+      projectDir
+    );
+
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain(`Claude Stop transcript exceeds ${MAX_HOOK_TRANSCRIPT_BYTES} bytes`);
+    expect(result.stderr).not.toContain("private transcript marker");
+    expect(await sha256(transcriptPath)).toBe(beforeHash);
+    expect((await stat(transcriptPath)).size).toBe(MAX_HOOK_TRANSCRIPT_BYTES + 1);
+    await expect(readFile(join(projectDir, ".claude", "CLAUDE.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   test("init --with-hooks writes SessionStart and Stop hooks", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-hooks-"));
     const settingsPath = join(dir, ".claude", "settings.json");
@@ -28,11 +71,12 @@ describe("hidden hook integration", () => {
         Stop: Array<{ hooks: Array<{ type: string; command: string }> }>;
       };
     };
+    const commands = createHookCommands(projectRoot);
     expect(settings.hooks.SessionStart[0].hooks[0]).toEqual({
       type: "command",
-      command: "trimctx hook --session-start"
+      command: commands.sessionStart
     });
-    expect(settings.hooks.Stop[0].hooks[0]).toEqual({ type: "command", command: "trimctx hook" });
+    expect(settings.hooks.Stop[0].hooks[0]).toEqual({ type: "command", command: commands.stop });
   });
 
   test("init --with-hooks preserves existing settings", async () => {
@@ -52,11 +96,12 @@ describe("hidden hook integration", () => {
 
     expect(result.code).toBe(0);
     const settings = await readSettings(settingsPath);
+    const commands = createHookCommands(projectRoot);
     expect(settings.permissions).toEqual({ allow: ["Bash"] });
     expect(countHooks(settings, "SessionStart", "other session start")).toBe(1);
     expect(countHooks(settings, "Stop", "other stop")).toBe(1);
-    expect(countHooks(settings, "SessionStart", "trimctx hook --session-start")).toBe(1);
-    expect(countHooks(settings, "Stop", "trimctx hook")).toBe(1);
+    expect(countHooks(settings, "SessionStart", commands.sessionStart)).toBe(1);
+    expect(countHooks(settings, "Stop", commands.stop)).toBe(1);
   });
 
   test("init --with-hooks rejects invalid settings without overwriting them", async () => {
@@ -105,8 +150,9 @@ describe("hidden hook integration", () => {
     expect((await initWithHooks(dir, ["--force"])).code).toBe(0);
 
     const settings = await readSettings(settingsPath);
-    expect(countHooks(settings, "SessionStart", "trimctx hook --session-start")).toBe(1);
-    expect(countHooks(settings, "Stop", "trimctx hook")).toBe(1);
+    const commands = createHookCommands(projectRoot);
+    expect(countHooks(settings, "SessionStart", commands.sessionStart)).toBe(1);
+    expect(countHooks(settings, "Stop", commands.stop)).toBe(1);
   });
 
   test("init --with-hooks --force preserves unrelated entries in mixed hook groups", async () => {
@@ -131,8 +177,11 @@ describe("hidden hook integration", () => {
 
     expect(result.code).toBe(0);
     const settings = await readSettings(settingsPath);
-    expect(countHooks(settings, "SessionStart", "trimctx hook --session-start")).toBe(1);
-    expect(countHooks(settings, "Stop", "trimctx hook")).toBe(1);
+    const commands = createHookCommands(projectRoot);
+    expect(countHooks(settings, "SessionStart", "trimctx hook --session-start")).toBe(0);
+    expect(countHooks(settings, "Stop", "trimctx hook")).toBe(0);
+    expect(countHooks(settings, "SessionStart", commands.sessionStart)).toBe(1);
+    expect(countHooks(settings, "Stop", commands.stop)).toBe(1);
     expect(countHooks(settings, "SessionStart", "other session start")).toBe(1);
     expect(countHooks(settings, "Stop", "other stop")).toBe(1);
   });
@@ -155,8 +204,10 @@ describe("hidden hook integration", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("dry-run");
-    expect(result.stdout).toContain("trimctx hook --session-start");
-    expect(result.stdout).toContain("trimctx hook");
+    const preview = JSON.parse(result.stdout.slice(result.stdout.indexOf("{"))) as HookSettings;
+    const commands = createHookCommands(projectRoot);
+    expect(countHooks(preview, "SessionStart", commands.sessionStart)).toBe(1);
+    expect(countHooks(preview, "Stop", commands.stop)).toBe(1);
     expect(result.stdout).not.toContain("dummy-secret-value");
     expect(result.stdout).not.toContain("ANTHROPIC_AUTH_TOKEN");
     expect(result.stdout).not.toContain("internal.example.invalid");

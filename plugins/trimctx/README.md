@@ -16,12 +16,15 @@ Analyze the current Claude Code JSONL conversation from inside Claude Code.
 - Does not call an external LLM or upload transcript content.
 - Does not modify original session files.
 - Compression requires explicit user action and writes a separate output file.
+- Compression rejects duplicate normalized message IDs before creating or replacing its output.
 - Current-window commands require Claude hooks. Enable them explicitly with `trimctx init --with-hooks`.
+- Installed hook commands use absolute Node and packaged `dist/cli.js` paths resolved at installation time. Rerun `trimctx init --with-hooks --force` after either path moves; stale trimctx-managed hook paths are replaced without removing unrelated hooks.
 - `/trimctx` and `/trimctx:export` require the current-window hook binding and never fall back to latest-file discovery.
 - `/trimctx:export` writes `conversation.md`; the parser-normalized output is unredacted and must be reviewed before sharing.
 - SessionStart writes the current binding through `CLAUDE_ENV_FILE`.
 - Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
 - Hooks keep the original JSONL transcript read-only.
+- Automatic hook stdin is limited to 1 MiB; Stop transcripts are limited to 64 MiB and 10,000 normalized messages. Explicit CLI commands are not subject to these hook-only limits.
 
 ## Multiple Claude Windows
 

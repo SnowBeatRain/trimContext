@@ -64,7 +64,7 @@ trimctx report path/to/session.jsonl -o report.json
 
 - Markdown 面向人工审查，包含结论、健康维度、关键发现、审查队列、protected 陈旧信号、续接状态、限制和下一步。
 - JSON 是完整的 v2 机器可读报告，与 `analyze --json` 一致。
-- Markdown 证据摘要会脱敏并限制长度，但完整 JSON 报告、transcript 导出和续聊包仍可能包含原始对话内容，分享前必须审查。
+- Markdown 证据摘要会脱敏并限制长度，包括标准 GitHub token 等常见凭据形式；但完整 JSON 报告、transcript 导出和续聊包仍可能包含原始对话内容，分享前必须审查。
 - 报告采用原子写入，并拒绝输入文件本身或它的别名。
 
 ### 完整会话导出
@@ -97,7 +97,7 @@ trimctx new-chat path/to/session.jsonl --out .trimctx/handoffs
 trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
 
-压缩只写新 JSONL，只移除非 protected 的 `remove_candidate`。`keep`、`keep_protected` 和 `compress_candidate` 都会保留。请先审查报告。
+压缩只写新 JSONL，只移除非 protected 的 `remove_candidate`。`keep`、`keep_protected` 和 `compress_candidate` 都会保留。规范化消息 ID 重复时，压缩会在创建或替换输出前失败。请先审查报告。
 
 ### 安装客户端资产
 
@@ -110,7 +110,9 @@ trimctx init --with-hooks --target user
 trimctx init --dry-run --target user
 ```
 
-Hooks 只通过 `trimctx init --with-hooks` 显式安装。
+Hooks 只通过 `trimctx init --with-hooks` 显式安装。写入 settings 的 hook 命令固定使用安装时解析出的 Node 可执行文件和包内 `dist/cli.js` 绝对路径；Node 或包的位置变化后，需要重新运行 `init --with-hooks --force`。过期的 trimctx 受管 hook 路径会被替换，无关 hook 不会被删除。
+
+仓库中的 `install.sh` 和 `install.ps1` 只在已有 checkout 的 Git origin 与请求仓库精确匹配时更新它；已有插件目录也必须由 trimctx marker 或精确的旧版资产指纹证明归属，否则脚本拒绝删除或替换。
 
 ## Claude Code
 
@@ -137,6 +139,8 @@ Hooks 写入范围：
 - SessionStart 通过 `CLAUDE_ENV_FILE` 写入当前 `transcript_path`，供 `TRIMCTX_TRANSCRIPT_PATH` 使用。
 - Stop 只可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的区块。
 - 原始 JSONL transcript 始终只读。
+
+自动 hooks 的 stdin 上限为 1 MiB；Stop 分析还限制 transcript 不超过 64 MiB、规范化消息不超过 10,000 条。超限时不会写入新的绑定或受管状态。这些限制只适用于自动 hook 路径，不限制显式 CLI 命令。
 
 ## Codex
 

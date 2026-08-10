@@ -6,6 +6,7 @@ import type {
   ReviewQueueItem
 } from "../types/report.js";
 import type { SignalCode } from "../types/signals.js";
+import { redactSensitiveText } from "./redaction.js";
 
 const DECISIVE_CODES = new Set<SignalCode>([
   "low_value_metadata",
@@ -103,9 +104,7 @@ function riskRank(value: ReviewQueueItem["risk"]): number {
 }
 
 function summarize(content: string): string {
-  const redacted = content
-    .replace(/\b(?:sk|pk|ghp|github_pat|glpat|xox[baprs])-[-A-Za-z0-9_]{12,}\b/g, "[REDACTED]")
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[REDACTED_EMAIL]")
+  const redacted = redactSensitiveText(content)
     .replace(/\s+/g, " ")
     .trim();
   return redacted.length <= 160 ? redacted : `${redacted.slice(0, 157)}...`;

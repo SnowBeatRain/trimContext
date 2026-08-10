@@ -5,10 +5,25 @@ interface HookInput {
   transcript_path?: string;
 }
 
-export async function readHookInput(): Promise<HookInput> {
+export const MAX_HOOK_INPUT_BYTES = 1024 * 1024;
+
+interface HookInputSource extends AsyncIterable<string | Uint8Array> {
+  destroy?: () => void;
+}
+
+export async function readHookInput(
+  input: HookInputSource = process.stdin
+): Promise<HookInput> {
   const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.from(chunk));
+  let totalBytes = 0;
+  for await (const chunk of input) {
+    const bytes = Buffer.from(chunk);
+    totalBytes += bytes.byteLength;
+    if (totalBytes > MAX_HOOK_INPUT_BYTES) {
+      input.destroy?.();
+      throw new Error(`Claude hook input exceeds ${MAX_HOOK_INPUT_BYTES} bytes`);
+    }
+    chunks.push(bytes);
   }
   return parseHookInput(Buffer.concat(chunks).toString("utf8"));
 }

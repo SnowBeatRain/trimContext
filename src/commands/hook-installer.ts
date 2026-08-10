@@ -1,22 +1,24 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { atomicWriteFile } from "../platform/files.js";
+import { atomicWriteFileIfUnchanged } from "../platform/files.js";
 import {
   planHookSettings,
-  plannedHookSettings
+  plannedHookSettings,
+  type HookCommands
 } from "./hook-settings.js";
 
 export interface InstallHooksOptions {
+  commands: HookCommands;
   force?: boolean;
   dryRun?: boolean;
 }
 
 export async function installHooks(
   settingsPath: string,
-  options: InstallHooksOptions = {}
+  options: InstallHooksOptions
 ): Promise<string[]> {
-  const settings = await readHookSettings(settingsPath);
-  const plan = planHookSettings(settings, { force: options.force });
+  const snapshot = await readHookSettings(settingsPath);
+  const plan = planHookSettings(snapshot.settings, options.commands, { force: options.force });
 
   if (plan.status === "already_installed") {
     return [`experimental Claude hooks already installed in ${settingsPath}`];
@@ -24,27 +26,39 @@ export async function installHooks(
   if (options.dryRun) {
     return [
       `dry-run: would write experimental Claude hooks to ${settingsPath}`,
-      JSON.stringify(plannedHookSettings(), null, 2)
+      JSON.stringify(plannedHookSettings(options.commands), null, 2)
     ];
   }
 
   const output = `${JSON.stringify(plan.settings, null, 2)}\n`;
   await mkdir(dirname(settingsPath), { recursive: true });
-  await atomicWriteFile(settingsPath, output);
+  await atomicWriteFileIfUnchanged(
+    settingsPath,
+    output,
+    snapshot.bytes,
+    "Claude settings changed while hooks were being prepared"
+  );
   return [`installed experimental Claude hooks in ${settingsPath}`];
 }
 
-async function readHookSettings(settingsPath: string): Promise<unknown> {
-  let raw: string;
+interface HookSettingsSnapshot {
+  settings: unknown;
+  bytes: Buffer | undefined;
+}
+
+async function readHookSettings(settingsPath: string): Promise<HookSettingsSnapshot> {
+  let bytes: Buffer;
   try {
-    raw = await readFile(settingsPath, "utf8");
+    bytes = await readFile(settingsPath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { settings: {}, bytes: undefined };
+    }
     throw new Error(`Failed to read Claude settings: ${settingsPath}`, { cause: error });
   }
 
   try {
-    return JSON.parse(raw) as unknown;
+    return { settings: JSON.parse(bytes.toString("utf8")) as unknown, bytes };
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error(`Claude settings JSON is invalid: ${settingsPath}`, { cause: error });

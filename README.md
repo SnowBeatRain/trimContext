@@ -64,7 +64,7 @@ trimctx report path/to/session.jsonl -o report.json
 
 - Markdown is for human review and includes the conclusion, health dimensions, findings, review queue, protected stale signals, continuation status, limitations, and next actions.
 - JSON is the complete machine-readable v2 report and matches `analyze --json`.
-- Evidence summaries are redacted and capped, but full JSON reports, transcript exports, and continuation packages can contain original transcript content. Review artifacts before sharing.
+- Evidence summaries are redacted and capped, including common credential forms such as standard GitHub tokens, but full JSON reports, transcript exports, and continuation packages can contain original transcript content. Review artifacts before sharing.
 - Report writes are atomic and reject the input file or an alias of it.
 
 ### Export
@@ -97,7 +97,7 @@ With multiple windows open, prefer an explicit JSONL path. After Claude Code hoo
 trimctx compress path/to/session.jsonl -o session.trimmed.jsonl
 ```
 
-Compression writes a separate JSONL and removes only non-protected `remove_candidate` messages. `keep`, `keep_protected`, and `compress_candidate` remain in the copy. Review the report first.
+Compression writes a separate JSONL and removes only non-protected `remove_candidate` messages. `keep`, `keep_protected`, and `compress_candidate` remain in the copy. If normalized message IDs are duplicated, compression fails before creating or replacing the output. Review the report first.
 
 ### Install Client Assets
 
@@ -110,7 +110,9 @@ trimctx init --with-hooks --target user
 trimctx init --dry-run --target user
 ```
 
-Hooks are explicit opt-in through `trimctx init --with-hooks`.
+Hooks are explicit opt-in through `trimctx init --with-hooks`. Installed hook commands use the absolute Node executable and packaged `dist/cli.js` paths resolved at install time; rerun `init --with-hooks --force` after moving or replacing either installation. Stale trimctx-managed hook paths are replaced without removing unrelated hooks.
+
+The repository `install.sh` and `install.ps1` scripts update an existing checkout only when its exact Git origin matches the requested repository. They replace an existing plugin directory only when the trimctx marker or the exact legacy asset fingerprint proves ownership; unknown directories are rejected without deletion.
 
 ## Claude Code
 
@@ -137,6 +139,8 @@ Hook write scope is explicit:
 - SessionStart writes the current `transcript_path` through `CLAUDE_ENV_FILE` so `TRIMCTX_TRANSCRIPT_PATH` is available.
 - Stop may update only the trimctx-managed block in the project's `.claude/CLAUDE.md`.
 - The original JSONL transcript remains read-only.
+
+Automatic hooks accept at most 1 MiB of stdin. Stop analysis also accepts at most a 64 MiB transcript and 10,000 normalized messages; over-limit hooks fail before writing a new binding or managed state. These limits apply to the automatic hook path, not explicit CLI commands.
 
 ## Codex
 

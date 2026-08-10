@@ -8,6 +8,7 @@ import type { AnalysisOptions } from "./options.js";
 import type { AnalysisReport } from "../types/report.js";
 import type { NormalizedMessage } from "../types/message.js";
 import { isHighDecisive } from "./rot-metrics.js";
+import { assertUniqueMessageIds } from "./message-identity.js";
 
 export interface CompressResult {
   removedMessages: number;
@@ -28,6 +29,7 @@ export async function compressFile(
     const input = inputBuffer.toString("utf8");
     const parsed = parseJsonl(input, inputFile);
     const analyzed = analyzeMessages(parsed, options);
+    assertUniqueMessageIds(analyzed);
     const report = createReport(analyzed, inputFile);
     // Only non-protected remove candidates are eligible for physical deletion in the output copy.
     const removeIds = new Set(

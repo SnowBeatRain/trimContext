@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { installHooks } from "../src/commands/hook-installer.js";
-import { plannedHookSettings } from "../src/commands/hook-settings.js";
+import { plannedHookSettings, type HookCommands } from "../src/commands/hook-settings.js";
+
+const commands: HookCommands = {
+  sessionStart: "'/absolute/node' '/absolute/dist/cli.js' hook --session-start",
+  stop: "'/absolute/node' '/absolute/dist/cli.js' hook"
+};
 
 describe("Claude hook settings installation", () => {
   test("creates missing settings with both hooks atomically", async () => {
@@ -11,18 +16,18 @@ describe("Claude hook settings installation", () => {
     const settingsDir = join(root, ".claude");
     const settingsPath = join(settingsDir, "settings.json");
 
-    await expect(installHooks(settingsPath)).resolves.toEqual([
+    await expect(installHooks(settingsPath, { commands })).resolves.toEqual([
       `installed experimental Claude hooks in ${settingsPath}`
     ]);
 
-    expect(JSON.parse(await readFile(settingsPath, "utf8"))).toEqual(plannedHookSettings());
+    expect(JSON.parse(await readFile(settingsPath, "utf8"))).toEqual(plannedHookSettings(commands));
     expect((await readdir(settingsDir)).filter((name) => name.includes(".trimctx-"))).toEqual([]);
   });
 
   test("preserves invalid JSON", async () => {
     const settingsPath = await writeSettings("{broken");
 
-    await expect(installHooks(settingsPath)).rejects.toThrow(
+    await expect(installHooks(settingsPath, { commands })).rejects.toThrow(
       `Claude settings JSON is invalid: ${settingsPath}`
     );
     await expect(readFile(settingsPath, "utf8")).resolves.toBe("{broken");
@@ -32,18 +37,18 @@ describe("Claude hook settings installation", () => {
     const content = JSON.stringify({ env: { TOKEN: "secret" }, permissions: { allow: ["Bash"] } });
     const settingsPath = await writeSettings(content);
 
-    const lines = await installHooks(settingsPath, { dryRun: true });
+    const lines = await installHooks(settingsPath, { commands, dryRun: true });
 
     expect(lines.join("\n")).not.toContain("secret");
     expect(lines.join("\n")).not.toContain("permissions");
-    expect(lines.join("\n")).toContain("trimctx hook --session-start");
+    expect(lines.join("\n")).toContain(commands.sessionStart);
     await expect(readFile(settingsPath, "utf8")).resolves.toBe(content);
   });
 
   test("does not treat non-ENOENT read failures as missing settings", async () => {
     const settingsPath = await mkdtemp(join(tmpdir(), "trimctx-hook-settings-directory-"));
 
-    await expect(installHooks(settingsPath)).rejects.toThrow(
+    await expect(installHooks(settingsPath, { commands })).rejects.toThrow(
       `Failed to read Claude settings: ${settingsPath}`
     );
   });

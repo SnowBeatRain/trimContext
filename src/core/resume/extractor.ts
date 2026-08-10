@@ -2,6 +2,7 @@ import { scoreResumeReadiness } from "./readiness.js";
 import type { AnalyzedMessage } from "../../types/report.js";
 import type { ResumeEvidence, ResumeFileEvidence, ResumeState } from "../../types/resume.js";
 import type { EvidenceConfidence } from "../../types/signals.js";
+import { redactSensitiveText } from "../redaction.js";
 
 const EXPLICIT_GOAL_PATTERN = /^(?:目标|goal|task|任务)\s*[：:]/i;
 const DECISION_PATTERN = /(?:必须|不要|不能|确定|决定|改成|保留|不新增|只能|should|must|do not|don't|instead)/i;
@@ -170,14 +171,6 @@ function confidenceForMessage(message: AnalyzedMessage): EvidenceConfidence {
 function summarize(text: string): string {
   const cleaned = redactSensitiveText(text).replace(/\s+/g, " ").trim();
   return cleaned.length <= 220 ? cleaned : `${cleaned.slice(0, 217)}...`;
-}
-
-function redactSensitiveText(text: string): string {
-  return text
-    .replace(/\b(?:sk|pk|ghp|github_pat|glpat|xox[baprs])-[-A-Za-z0-9_]{12,}\b/g, "[REDACTED]")
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[REDACTED_EMAIL]")
-    .replace(/\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|passwd|pwd)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
-    .replace(/(https?:\/\/)([^\s/@]+):([^\s/@]+)@/gi, "$1[REDACTED]@");
 }
 
 function normalizeText(text: string): string {

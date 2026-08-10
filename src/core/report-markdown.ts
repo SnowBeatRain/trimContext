@@ -13,6 +13,7 @@ import {
   riskLabel,
   suggestedActionLabel
 } from "./report-copy.js";
+import { redactSensitiveText } from "./redaction.js";
 
 const DIMENSION_LABELS: Record<keyof AnalysisReport["assessment"]["dimensions"], string> = {
   context_pressure: "上下文压力",
@@ -152,17 +153,6 @@ function safeTableText(value: string): string {
 
 function safeMarkdownText(value: string): string {
   return escapeMarkdownText(redactSensitiveText(value).replace(/\s+/g, " ").trim());
-}
-
-function redactSensitiveText(value: string): string {
-  return value
-    .replace(/\b(?:sk|pk|ghp|github_pat|glpat|xox[baprs])-[-A-Za-z0-9_]{12,}\b/g, "[REDACTED]")
-    .replace(/(https?:\/\/)([^\s/@]+):([^\s/@]+)@/gi, "$1[REDACTED]@")
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[REDACTED_EMAIL]")
-    .replace(/\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+\/-]+={0,2}/gi, "Authorization: Bearer [REDACTED]")
-    .replace(/\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/=]+/gi, "Authorization: Basic [REDACTED]")
-    .replace(/\bBasic\s+[A-Za-z0-9+/=]{8,}/gi, "Basic [REDACTED]")
-    .replace(/\b(api[_-]?key|access[_-]?token|auth[_-]?token|token|secret|password|passwd|pwd)\s*[:=]\s*[^\s,;|]+/gi, "$1=[REDACTED]");
 }
 
 function escapeMarkdownText(value: string): string {

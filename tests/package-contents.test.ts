@@ -70,6 +70,7 @@ describe("package contents", () => {
     expect(files).toContain("install.sh");
     expect(files).toContain("install.ps1");
     expect(files).toContain("plugins/trimctx/.claude-plugin/plugin.json");
+    expect(files).toContain("plugins/trimctx/.trimctx-install-marker");
     expect(files).toContain("plugins/trimctx/.system");
     expect(files).toContain("plugins/trimctx/commands/trimctx.md");
     expect(files).toContain("plugins/trimctx/commands/trimctx/analyze.md");

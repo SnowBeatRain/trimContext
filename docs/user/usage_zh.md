@@ -18,6 +18,8 @@ trimctx init --target user
 trimctx init --target user --with-hooks
 ```
 
+Hook settings 使用安装时解析出的 Node 可执行文件和包内 `dist/cli.js` 绝对路径；Node 或包的位置变化后，需要重新运行 `init --with-hooks --force`，过期的 trimctx 受管 hook 路径会被替换，无关 hook 不会被删除。仓库中的 `install.sh` 和 `install.ps1` 只更新 Git origin 与请求仓库精确匹配的已有 checkout；已有插件目录也必须由 trimctx marker 或精确的旧版资产指纹证明归属。
+
 ## 推荐流程
 
 1. 分析会话。
@@ -71,7 +73,7 @@ trimctx analyze session.jsonl --json
 
 Markdown 报告包含：结论和置信度、健康维度、关键发现、审查队列、protected 陈旧项、可信续接状态、限制与安全说明、下一步。
 
-展示的 evidence 只包含 message id、source line、role 和最长 160 字符的脱敏摘要。较长的 Markdown 审查区段每个队列只展示前 20 条，并提示省略数量；完整 `review_queue` 保留在 JSON 中。token、邮箱、key/value 密钥和 Basic Auth 凭据会被脱敏，Markdown 表格中的竖线和换行会转义。这不代表所有生成物都能直接分享，分享前仍须审查。
+展示的 evidence 只包含 message id、source line、role 和最长 160 字符的脱敏摘要。较长的 Markdown 审查区段每个队列只展示前 20 条，并提示省略数量；完整 `review_queue` 保留在 JSON 中。持久化展示摘要会脱敏标准 GitHub token 等 token、Authorization header、邮箱、凭据 URL 和 key/value 密钥，Markdown 表格中的竖线和换行会转义。这不代表所有生成物都能直接分享，分享前仍须审查。
 
 报告使用同目录临时文件和原子替换。命令拒绝输入文件及其别名；渲染或写入失败时保留已有报告；替换前会重新检查打开的输入句柄。
 
@@ -133,7 +135,7 @@ trimctx compress session.jsonl -o session.trimmed.jsonl
 
 压缩只写新文件，不修改输入。它只移除非 protected 的 `remove_candidate`。Protected、`keep` 和 `compress_candidate` 都保留。候选项仍需审查，健康状态不授权删除。
 
-输出使用同目录原子替换。可恢复的写入或提交失败会保留既有压缩副本；如果已打开的输入在读前快照后发生变化，命令会放弃替换，不提交基于旧字节生成的输出。
+输出使用同目录原子替换。可恢复的写入或提交失败会保留既有压缩副本；如果已打开的输入在读前快照后发生变化，命令会放弃替换，不提交基于旧字节生成的输出。规范化消息 ID 重复时也会在创建新输出或替换既有输出前失败；`analyze` 和 `report` 仍可用于审计。
 
 ## Claude Code 插件
 
@@ -157,6 +159,8 @@ Hooks 写入范围：
 - Stop 分析只读快照；若 transcript 尚未记录最终回复，会从 Claude 的 `last_assistant_message` 在内存中补齐，最新 assistant 已有等价内容时不会重复加入。
 - Stop 只可能更新项目 `.claude/CLAUDE.md` 中由 trimctx 管理的区块。
 - 原始 JSONL transcript 始终只读。
+
+自动 hook 的 stdin 上限为 1 MiB；Stop 分析还限制 transcript 不超过 64 MiB、规范化消息不超过 10,000 条。超限 hook 会在写入新的环境绑定或 `.claude/CLAUDE.md` 受管状态前失败。这些资源限制不适用于用户显式运行的 CLI 命令。
 
 ## Codex Skill
 

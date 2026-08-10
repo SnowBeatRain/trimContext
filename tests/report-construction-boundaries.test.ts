@@ -131,7 +131,7 @@ describe("report review construction", () => {
       "high",
       20
     );
-    removable.content = "contact me@example.com with ghp-1234567890abcdef";
+    removable.content = "ghp_abcdefghijklmnopqrstuvwxyz1234567890ABCD github_pat_11AA0abcdefghijklmnopqrstuvwxyz1234567890 contact me@example.com with ghp-1234567890abcdef";
     const compressible = analyzedMessage(
       "m1",
       1,
@@ -149,7 +149,7 @@ describe("report review construction", () => {
       risk: "high",
       default_action: "remove_after_review"
     });
-    expect(queue[0]?.summary).toBe("contact [REDACTED_EMAIL] with [REDACTED]");
+    expect(queue[0]?.summary).toBe("[REDACTED] [REDACTED] contact [REDACTED_EMAIL] with [REDACTED]");
   });
 
   test("rejects invalid remove candidates through the standalone constructor", () => {

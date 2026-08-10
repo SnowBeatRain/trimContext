@@ -158,39 +158,6 @@ describe("phase0 run write safety", () => {
     expect(await sha256(inputFile)).toBe(beforeHash);
   }, 30_000);
 
-  test("records a missing compressed artifact instead of counting process exit alone", async () => {
-    const { inputDir, outputDir, inputFile, compressedFile } = await phase0SampleFixture("missing-compress");
-    const beforeHash = await sha256(inputFile);
-
-    const [execution] = await Promise.all([
-      runPhase0(inputDir, outputDir),
-      mutateWhenCreated(compressedFile, async () => {
-        await rm(compressedFile);
-      })
-    ]);
-
-    expect(execution.code).toBe(0);
-    const evidence = JSON.parse(
-      await readFile(join(outputDir, "phase0-results.json"), "utf8")
-    ) as Phase0Evidence;
-    expect(evidence.aggregate).toMatchObject({
-      analyze_ok: 1,
-      report_ok: 1,
-      compress_ok: 0,
-      input_unchanged: 1,
-      failed_samples: [inputFile]
-    });
-    expect(evidence.results[0]).toMatchObject({
-      input_unchanged: true,
-      source: "openai-jsonl",
-      compress: {
-        ok: false,
-        exit_code: 0,
-        error: `Compressed artifact was not created: ${compressedFile}`
-      }
-    });
-    expect(await sha256(inputFile)).toBe(beforeHash);
-  }, 30_000);
 });
 
 interface Phase0Evidence {

@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { installHooks } from "./hook-installer.js";
+import { createHookCommands } from "./hook-command.js";
 import { installInitAssets } from "./init-installer.js";
 import { createInitAssets, parseInitClient } from "./init-plan.js";
 import { isInteractiveInput, PromptSession, resolveInitTarget } from "./init-prompt.js";
@@ -55,8 +56,13 @@ async function initClientAssets(options: InitOptions, packageRoot: string): Prom
     const settingsPath = shouldInstallHooks
       ? join(baseDir, ".claude", "settings.json")
       : undefined;
+    const hookCommands = settingsPath ? createHookCommands(packageRoot) : undefined;
     const hookPreflightLines = settingsPath
-      ? await installHooks(settingsPath, { force: options.force, dryRun: true })
+      ? await installHooks(settingsPath, {
+        commands: hookCommands!,
+        force: options.force,
+        dryRun: true
+      })
       : undefined;
 
     lines.push(...await installInitAssets(assets, {
@@ -67,7 +73,7 @@ async function initClientAssets(options: InitOptions, packageRoot: string): Prom
     if (settingsPath && hookPreflightLines) {
       const hookLines = options.dryRun
         ? hookPreflightLines
-        : await installHooks(settingsPath, { force: options.force });
+        : await installHooks(settingsPath, { commands: hookCommands!, force: options.force });
       lines.push(...hookLines.map((line) => `- ${line}`));
     } else if (client === "all" || client === "claude") {
       lines.push("- hooks not installed; rerun `trimctx init --with-hooks --force` to enable Claude current-window binding later.");

@@ -514,8 +514,11 @@ describe("phase0 sample result validation", () => {
     });
     expect(result.analyze.ok).toBe(true);
     expect(result.report.ok).toBe(true);
+    expect(result.input_unchanged).toBe(true);
+    expect(result.input_sha256_after).toBe(result.input_sha256_before);
     expect(result.source).toBe("openai-jsonl");
     expect(isPhase0SampleOk(result)).toBe(false);
+    expect(result.compress).not.toHaveProperty("output_sha256");
   });
 
   test("preserves a failed compress process without inspecting a stale artifact", async () => {

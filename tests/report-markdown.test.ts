@@ -69,7 +69,7 @@ describe("formatReportMarkdown", () => {
       confidence: "high",
       reasons: ["duplicate_message"],
       evidence: report.findings[0]!.evidence,
-      summary: "api_key=abc123456789012345 user@example.com https://user:password@example.com/private Authorization: Basic dXNlcjpwYXNz Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature <img src=x onerror=alert(1)> [click](javascript:alert(1)) | first\nsecond",
+      summary: "ghp_abcdefghijklmnopqrstuvwxyz1234567890ABCD github_pat_11AA0abcdefghijklmnopqrstuvwxyz1234567890 api_key=abc123456789012345 user@example.com https://user:password@example.com/private Authorization: Basic dXNlcjpwYXNz Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature <img src=x onerror=alert(1)> [click](javascript:alert(1)) | first\nsecond",
       default_action: "keep_and_review"
     }] };
     report.resume = {
@@ -141,6 +141,10 @@ describe("formatReportMarkdown", () => {
     expect(markdown).toContain("[REDACTED_EMAIL]");
     expect(markdown).toContain("\\|");
     expect(markdown).not.toContain("abc123456789012345");
+    expect(markdown).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz1234567890ABCD");
+    expect(markdown).not.toContain("github_pat_11AA0abcdefghijklmnopqrstuvwxyz1234567890");
+    expect(markdown).not.toContain("abcdefghijklmnopqrstuvwxyz1234567890ABCD");
+    expect(markdown).not.toContain("11AA0abcdefghijklmnopqrstuvwxyz1234567890");
     expect(markdown).not.toContain("user@example.com");
     expect(markdown).not.toContain("user:password");
     expect(markdown).not.toContain("dXNlcjpwYXNz");

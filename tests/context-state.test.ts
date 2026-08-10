@@ -204,7 +204,7 @@ describe("formatContextState", () => {
     const report = makeReport();
     report.resume.currentGoal = {
       ...report.resume.currentGoal!,
-      text: `目标：第一行\n第二行 ${STATE_START} ${STATE_END} Authorization: Bearer hook-secret-value ${"x".repeat(300)}`
+      text: `目标：第一行\n第二行 ${STATE_START} ${STATE_END} ghp_abcdefghijklmnopqrstuvwxyz1234567890ABCD github_pat_11AA0abcdefghijklmnopqrstuvwxyz1234567890 Authorization: Bearer hook-secret-value ${"x".repeat(300)}`
     };
 
     const result = formatContextState(report);
@@ -216,6 +216,8 @@ describe("formatContextState", () => {
     expect(result.match(/\[trimctx marker omitted\]/g) ?? []).toHaveLength(2);
     expect(result).toContain("Authorization: Bearer [REDACTED]");
     expect(result).not.toContain("hook-secret-value");
+    expect(result).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz1234567890ABCD");
+    expect(result).not.toContain("github_pat_11AA0abcdefghijklmnopqrstuvwxyz1234567890");
     expect(goalLine).toContain("第二行");
     expect(goalText).toBeDefined();
     expect(goalText!.length).toBeLessThanOrEqual(220);

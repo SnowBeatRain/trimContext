@@ -1,7 +1,31 @@
 import { describe, expect, test } from "vitest";
-import { parseHookInput } from "../src/core/hook-input.js";
+import { Readable } from "node:stream";
+import {
+  parseHookInput,
+  readHookInput
+} from "../src/core/hook-input.js";
+
+const MAX_HOOK_INPUT_BYTES = 1024 * 1024;
 
 describe("hook input boundary", () => {
+  test("accepts an input at the byte limit", async () => {
+    await expect(readHookInput(Readable.from([
+      Buffer.alloc(MAX_HOOK_INPUT_BYTES, " ")
+    ]))).resolves.toEqual({});
+  });
+
+  test("rejects stdin immediately after it exceeds the byte limit", async () => {
+    const input = Readable.from([
+      Buffer.alloc(MAX_HOOK_INPUT_BYTES, " "),
+      Buffer.from("private-hook-body")
+    ]);
+
+    await expect(readHookInput(input)).rejects.toThrow(
+      "Claude hook input exceeds 1048576 bytes"
+    );
+    expect(input.destroyed).toBe(true);
+  });
+
   test("keeps validated known fields and ignores unknown fields", () => {
     expect(parseHookInput("   ")).toEqual({});
     expect(parseHookInput(JSON.stringify({
