@@ -217,7 +217,10 @@ export async function appendFileDistinctFromInput(
   }
 }
 
-async function assertInputSnapshotUnchanged(inputHandle: FileHandle, initial: Stats): Promise<Stats> {
+export async function assertInputSnapshotUnchanged(
+  inputHandle: FileHandle,
+  initial: Stats
+): Promise<Stats> {
   const current = await inputHandle.stat();
   if (!sameInputSnapshot(initial, current)) {
     throw new Error("Input file changed while output was being prepared");
@@ -301,21 +304,22 @@ async function fileHandleIdentity(handle: FileHandle): Promise<FileIdentity> {
 }
 
 function toFileIdentity(stats: { dev: bigint | number; ino: bigint | number }): FileIdentity {
-  return {
+  const identity = {
     dev: BigInt(stats.dev),
     ino: BigInt(stats.ino)
   };
+  assertReliableFileIdentity(identity);
+  return identity;
 }
 
 function sameReliableFileIdentity(left: FileIdentity, right: FileIdentity): boolean {
-  return hasReliableFileIdentity(left)
-    && hasReliableFileIdentity(right)
-    && left.dev === right.dev
-    && left.ino === right.ino;
+  return left.dev === right.dev && left.ino === right.ino;
 }
 
-function hasReliableFileIdentity(identity: FileIdentity): boolean {
-  return identity.ino !== 0n;
+function assertReliableFileIdentity(identity: FileIdentity): void {
+  if (identity.ino === 0n) {
+    throw new Error("Filesystem did not provide a reliable file identity");
+  }
 }
 
 function sameResolvedPath(leftFile: string, rightFile: string): boolean {
@@ -375,16 +379,29 @@ export interface DistinctFileOutput {
   outputConflictMessage?: string;
 }
 
+export interface DistinctFileWriteOptions {
+  exclusive?: boolean;
+  mode?: number;
+  inputSnapshot?: Stats;
+}
+
 export async function writeFilesDistinctFromInput(
   inputHandle: FileHandle,
-  outputs: readonly DistinctFileOutput[]
+  outputs: readonly DistinctFileOutput[],
+  options: DistinctFileWriteOptions = {}
 ): Promise<void> {
   const outputHandles: FileHandle[] = [];
   let operationFailed = false;
   let operationError: unknown;
   try {
+    if (options.inputSnapshot !== undefined) {
+      await assertInputSnapshotUnchanged(inputHandle, options.inputSnapshot);
+    }
+    const outputFlags = options.exclusive
+      ? constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL
+      : constants.O_WRONLY | constants.O_CREAT;
     for (const output of outputs) {
-      outputHandles.push(await open(output.file, constants.O_WRONLY | constants.O_CREAT));
+      outputHandles.push(await open(output.file, outputFlags, options.mode));
     }
 
     const [inputIdentity, ...outputIdentities] = await Promise.all([
@@ -412,6 +429,9 @@ export async function writeFilesDistinctFromInput(
     for (let index = 0; index < outputs.length; index += 1) {
       await outputHandles[index].truncate(0);
       await outputHandles[index].writeFile(outputs[index].data, "utf8");
+    }
+    if (options.inputSnapshot !== undefined) {
+      await assertInputSnapshotUnchanged(inputHandle, options.inputSnapshot);
     }
   } catch (error) {
     operationFailed = true;

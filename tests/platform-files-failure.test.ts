@@ -79,6 +79,90 @@ describe("platform file failure handling", () => {
     }
   });
 
+  test("fails closed when path identities use an unreliable zero inode", async () => {
+    const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    vi.mocked(stat).mockResolvedValue({ dev: 1n, ino: 0n } as never);
+
+    try {
+      await expect(sameFile("left.jsonl", "right.jsonl"))
+        .rejects
+        .toThrow("reliable file identity");
+    } finally {
+      vi.mocked(stat).mockImplementation(actualFs.stat);
+    }
+  });
+
+  test("fails closed on an unreliable input identity before atomic output staging", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "trimctx-files-unreliable-atomic-"));
+    const output = join(dir, "conversation.md");
+    const inputHandle = {
+      stat: async (options?: { bigint?: boolean }) => options?.bigint
+        ? ({ dev: 1n, ino: 0n })
+        : ({ dev: 1, ino: 0, size: 10, mtimeMs: 1000, ctimeMs: 1000 })
+    } as unknown as FileHandle;
+
+    try {
+      await expect(atomicWriteFileDistinctFromInput(inputHandle, output, "replacement\n"))
+        .rejects
+        .toThrow("reliable file identity");
+      await expect(access(output)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("fails closed on an unreliable append identity before writing bytes", async () => {
+    const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    const write = vi.fn(async () => undefined);
+    const inputHandle = {
+      stat: async () => ({ dev: 1n, ino: 0n }),
+      close: async () => undefined
+    } as unknown as FileHandle;
+    const outputHandle = {
+      stat: async () => ({ dev: 2n, ino: 2n }),
+      writeFile: write,
+      close: async () => undefined
+    } as unknown as FileHandle;
+    vi.mocked(open)
+      .mockResolvedValueOnce(inputHandle)
+      .mockResolvedValueOnce(outputHandle);
+
+    try {
+      await expect(appendFileDistinctFromInput("input.jsonl", "env.sh", "binding\n"))
+        .rejects
+        .toThrow("reliable file identity");
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(open).mockReset().mockImplementation(actualFs.open);
+    }
+  });
+
+  test("fails closed on an unreliable distinct-writer identity before truncating outputs", async () => {
+    const actualFs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    const truncate = vi.fn(async () => undefined);
+    const write = vi.fn(async () => undefined);
+    const inputHandle = {
+      stat: async () => ({ dev: 1n, ino: 0n })
+    } as unknown as FileHandle;
+    const outputHandle = {
+      stat: async () => ({ dev: 2n, ino: 2n }),
+      truncate,
+      writeFile: write,
+      close: async () => undefined
+    } as unknown as FileHandle;
+    vi.mocked(open).mockResolvedValueOnce(outputHandle);
+
+    try {
+      await expect(writeFilesDistinctFromInput(inputHandle, [
+        { file: "handoff.md", data: "handoff\n" }
+      ])).rejects.toThrow("reliable file identity");
+      expect(truncate).not.toHaveBeenCalled();
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(open).mockReset().mockImplementation(actualFs.open);
+    }
+  });
+
   test("does not delete an unowned temp path when exclusive open fails", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trimctx-files-open-failure-"));
     const output = join(dir, "settings.json");

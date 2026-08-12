@@ -194,10 +194,11 @@
 
 ### New-chat UID package 所有权与失败清理（2026-08-06）
 
-- `new-chat` 在创建 UID 目录前完成 input 读取、分析和五个输出正文构造，再通过 root recursive mkdir 与 package non-recursive mkdir 原子取得目录所有权。
-- `EEXIST` 目录从未归本进程所有，因此只返回既有冲突文案，不读取、修改或清理其中内容；写入失败只递归删除本次 owned UID package，不影响 root 或 sibling package。
-- 写入与 cleanup 同时失败时用 `AggregateError` 保留两类错误和残留目录；五文件 writer 成功返回后 package 视为完整，硬终止、断电和操作系统崩溃仍不提供 journal 或下次启动清理。
-- UID 格式、五文件内容、manifest 路径、成功 stdout、六命令和原 transcript 只读契约均未改变。
+- `new-chat` 在打开 input handle 后保存读前快照，在 root 内创建随机私有 `0700` staging 目录，并以独占创建和 `0600` 权限写入五个文件；写入前后及最终发布前均复核同一 input handle 的快照。
+- 最终 UID 路径在 staging 完成前不可见；发布前复核已保存的 staging `dev/ino`，成功时通过一次同父目录 rename 发布。普通既有目标以及并发出现的非空目录、文件或符号链接不会被读取、修改或清理。
+- 失败清理前重新读取 staging 的可靠 `dev/ino`；路径被替换或身份不可验证时拒绝递归删除，并通过 `AggregateError` 保留 operation 与 cleanup 原因。无法取得初始可靠身份时也在写文件前失败关闭，保留空的私有 staging 供人工恢复。
+- Node.js 未公开 `renameat2(RENAME_NOREPLACE)` 或目录句柄相对寻址，因此这里不是针对可写父目录恶意对手的线性化事务：对手仍可竞态 pathname 解析，且 POSIX 上在 absence check 与 rename 之间并发创建的空目录可能被替换；硬终止、断电和操作系统崩溃也不提供 journal、自动回滚或下次启动清理。
+- UID 格式、五文件内容、manifest 最终路径、成功 stdout、六命令和原 transcript 只读契约均未改变。
 
 ### 共享多输出 writer 的 close 错误保留（2026-08-06）
 

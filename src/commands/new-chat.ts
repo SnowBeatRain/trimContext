@@ -1,11 +1,12 @@
 import type { Command } from "commander";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, open, rm } from "node:fs/promises";
+import { lstat, mkdir, open, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { formatHandoff, formatHandoffReadme, formatNextContext } from "../core/handoff.js";
 import { analyzeInput } from "../core/pipeline.js";
 import {
   assertDifferentFiles,
+  assertInputSnapshotUnchanged,
   writeFilesDistinctFromInput
 } from "../platform/files.js";
 import { resolveCurrentSessionFile } from "../sessions/binding.js";
@@ -47,6 +48,7 @@ async function writeHandoffPackage(
 
   const inputHandle = await open(file, "r");
   try {
+    const inputSnapshot = await inputHandle.stat();
     const input = await inputHandle.readFile();
     const report = analyzeInput(input.toString("utf8"), file, {});
     const inputHash = createHash("sha256").update(input).digest("hex");
@@ -88,19 +90,24 @@ async function writeHandoffPackage(
       }
     };
     const conflictMessage = "Handoff package must be different from input file";
-    const outputs = [
-      { file: handoffPath, data: formatHandoff(report), inputConflictMessage: conflictMessage },
-      { file: nextContextPath, data: formatNextContext(report), inputConflictMessage: conflictMessage },
-      { file: reportPath, data: `${JSON.stringify(report, null, 2)}\n`, inputConflictMessage: conflictMessage },
-      { file: manifestPath, data: `${JSON.stringify(manifest, null, 2)}\n`, inputConflictMessage: conflictMessage },
-      { file: readmePath, data: formatHandoffReadme(report), inputConflictMessage: conflictMessage }
-    ];
-
-    await createOwnedPackageDirectory(rootDir, packageDir);
+    const staging = await createOwnedStagingDirectory(rootDir, uid);
     try {
-      await writeFilesDistinctFromInput(inputHandle, outputs);
+      const outputs = [
+        { file: join(staging.path, "handoff.md"), data: formatHandoff(report), inputConflictMessage: conflictMessage },
+        { file: join(staging.path, "next-context.md"), data: formatNextContext(report), inputConflictMessage: conflictMessage },
+        { file: join(staging.path, "report.json"), data: `${JSON.stringify(report, null, 2)}\n`, inputConflictMessage: conflictMessage },
+        { file: join(staging.path, "manifest.json"), data: `${JSON.stringify(manifest, null, 2)}\n`, inputConflictMessage: conflictMessage },
+        { file: join(staging.path, "README.md"), data: formatHandoffReadme(report), inputConflictMessage: conflictMessage }
+      ];
+      await writeFilesDistinctFromInput(inputHandle, outputs, {
+        exclusive: true,
+        mode: 0o600,
+        inputSnapshot
+      });
+      await assertInputSnapshotUnchanged(inputHandle, inputSnapshot);
+      await publishStagingDirectory(staging, packageDir);
     } catch (error) {
-      await removeFailedPackage(packageDir, error);
+      await removeFailedStaging(staging, error);
     }
 
     process.stdout.write(`copyable uid: ${uid}\n`);
@@ -116,28 +123,103 @@ async function writeHandoffPackage(
   }
 }
 
-async function createOwnedPackageDirectory(rootDir: string, packageDir: string): Promise<void> {
+interface OwnedStagingDirectory {
+  path: string;
+  identity: DirectoryIdentity;
+}
+
+interface DirectoryIdentity {
+  dev: bigint;
+  ino: bigint;
+}
+
+async function createOwnedStagingDirectory(
+  rootDir: string,
+  uid: string
+): Promise<OwnedStagingDirectory> {
   await mkdir(rootDir, { recursive: true });
+  const stagingPath = join(
+    rootDir,
+    `.trimctx-${uid}-${randomBytes(8).toString("hex")}.tmp`
+  );
   try {
-    await mkdir(packageDir);
+    await mkdir(stagingPath, { mode: 0o700 });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new Error(`handoff staging directory already exists: ${stagingPath}`, { cause: error });
+    }
+    throw error;
+  }
+  return {
+    path: stagingPath,
+    identity: await readDirectoryIdentity(stagingPath)
+  };
+}
+
+async function publishStagingDirectory(
+  staging: OwnedStagingDirectory,
+  packageDir: string
+): Promise<void> {
+  // Node does not expose renameat2(RENAME_NOREPLACE). This preflight plus directory rename
+  // preserves ordinary conflicts and non-empty concurrent targets, but is not a hostile-parent CAS:
+  // on POSIX, an empty directory created between this check and rename can still be replaced.
+  await assertOwnedStagingDirectory(staging);
+  if (await directoryEntryExists(packageDir)) {
+    throw new Error(`handoff package already exists: ${packageDir}`);
+  }
+  try {
+    await rename(staging.path, packageDir);
+  } catch (error) {
+    if (await directoryEntryExists(packageDir)) {
       throw new Error(`handoff package already exists: ${packageDir}`, { cause: error });
     }
     throw error;
   }
 }
 
-async function removeFailedPackage(packageDir: string, operationError: unknown): Promise<never> {
+async function removeFailedStaging(
+  staging: OwnedStagingDirectory,
+  operationError: unknown
+): Promise<never> {
   try {
-    await rm(packageDir, { recursive: true, force: true });
+    await assertOwnedStagingDirectory(staging);
+    await rm(staging.path, { recursive: true, force: true });
   } catch (cleanupError) {
     throw new AggregateError(
       [operationError, cleanupError],
-      `Failed to create and clean up handoff package: ${packageDir}`
+      `Failed to create or safely clean up handoff package staging: ${staging.path}`
     );
   }
   throw operationError;
+}
+
+async function assertOwnedStagingDirectory(staging: OwnedStagingDirectory): Promise<void> {
+  const currentIdentity = await readDirectoryIdentity(staging.path);
+  if (!sameDirectoryIdentity(staging.identity, currentIdentity)) {
+    throw new Error(`Refusing operation because staging directory identity changed: ${staging.path}`);
+  }
+}
+
+async function readDirectoryIdentity(path: string): Promise<DirectoryIdentity> {
+  const stats = await lstat(path, { bigint: true });
+  if (!stats.isDirectory() || stats.isSymbolicLink() || stats.ino === 0n) {
+    throw new Error(`Cannot establish reliable staging directory identity: ${path}`);
+  }
+  return { dev: stats.dev, ino: stats.ino };
+}
+
+async function directoryEntryExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function sameDirectoryIdentity(left: DirectoryIdentity, right: DirectoryIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
 }
 
 function generateHandoffUid(): string {

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.3.0] - 2026-08-12
+
 ### Added
 
 - Added `trimctx export [file] -o <conversation.md>` for deterministic, unredacted export of every parser-normalized message, with auditable source metadata and Markdown-safe dynamic fences.
@@ -29,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Codex skill installation guidance now reflects the existing npm release and lists the complete five-file `new-chat` package, including `README.md`.
 - Phase 0 now binds `analyze --json`, `report`, and `compress` to the sample's initial SHA-256 by validating each command's exact input Buffer before parsing or writing a new artifact. Results/review v2 expose only aggregate binding evidence; older v2 evidence without the marker remains review-required, while malformed or inconsistent evidence fails closed.
 - Compression now captures the open input snapshot before reading and commits through same-directory atomic replacement. Input changes during preparation are rejected, and recoverable stage/identity/commit failures preserve an existing compressed copy without changing candidate selection or output bytes.
 - Compression now rejects duplicate normalized message IDs before creating or replacing output, preventing ID-set filtering from deleting the wrong record while leaving analyze/report behavior unchanged.
@@ -44,7 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Init asset installation now stages every selected client before commit, swaps existing trimctx directories through same-parent backups, and rolls back earlier targets when a later copy or rename fails. Restore and cleanup failures retain recoverable artifacts and report all causal errors; forced process termination remains outside the in-process transaction guarantee.
 - Init destination checks now treat only `ENOENT` as a missing asset; permission and other filesystem errors abort before staging instead of being misclassified and surfacing later as unrelated rename failures.
 - Shared path-existence checks used by `new-chat` now propagate permission and I/O failures instead of treating them as a missing UID package directory and continuing into output creation.
-- `new-chat` now claims each UID package with an exclusive directory create and removes only that owned directory when multi-file output fails. Conflicting directories and sibling packages remain untouched, while cleanup failures preserve both causal errors and the residual package for recovery.
+- `new-chat` now writes its five files with private permissions in a private staging directory, rechecks both the opened transcript snapshot and saved staging identity, and publishes the complete package with one directory rename so the final UID path is not partially visible during normal execution. Failed writes clean up only a staging directory whose reliable identity still matches; replacement-path and cleanup failures preserve every cause and retain recoverable artifacts instead of recursively deleting unknown content.
+- File-identity-dependent writers now fail closed when a filesystem reports an unreliable zero inode, before appending, truncating, or committing output bytes. The Node.js path API still cannot provide directory-handle-relative operations, `renameat2(RENAME_NOREPLACE)`, or crash-consistent transactions: a hostile writer with parent-directory access can race path resolution and the final absence check, and abrupt termination can leave a private staging directory.
 - Atomic file writes now track ownership of their random temp path, stop deleting that name after open failure or commit transfer, and aggregate operation, handle-close, and temp-cleanup failures. Residual temp files remain locatable without echoing their potentially sensitive contents.
 - The top-level CLI now recursively formats `AggregateError` leaves in their original order, so init, new-chat, and atomic-write restore or cleanup failures are visible instead of being hidden by the transaction summary; ordinary single-error output is unchanged.
 - `init --with-hooks` now validates malformed, unreadable, or structurally invalid Claude settings before writing any Claude or Codex asset. Real installs still write assets before atomically updating freshly reread settings, while failed preflight leaves both settings and client assets unchanged.

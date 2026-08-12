@@ -37,7 +37,7 @@ less install.sh
 bash install.sh
 ```
 
-If trimctx is published to npm later, global npm install can also be used:
+trimctx is also published on npm, so a global npm install can be used:
 
 ```bash
 npm install -g trimctx
@@ -96,7 +96,7 @@ npm link
   ```bash
   trimctx new-chat <file.jsonl>
   ```
-  This writes `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, and `report.json` by default.
+  This writes `.trimctx/handoffs/<uid>/` with `handoff.md`, `next-context.md`, `manifest.json`, `report.json`, and `README.md` by default.
 
 - Generate new-chat continuation artifacts from a trusted current transcript binding:
   ```bash
